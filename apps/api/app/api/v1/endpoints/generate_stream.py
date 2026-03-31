@@ -103,6 +103,7 @@ async def _stream_pipeline(req: StreamRequest) -> AsyncIterator[str]:
             creative_type=intent["creative_type"],
             style=req.style or "photo",
             extra_context=_ctx,
+            bucket=bucket,
         )
         yield _sse("brief_ready", {
             "visual_concept": brief.get("visual_concept", ""),

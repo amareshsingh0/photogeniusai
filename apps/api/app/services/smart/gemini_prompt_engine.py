@@ -46,10 +46,25 @@ _HARD_BUCKETS = {"anime", "typography", "editing", "interior_arch", "character_c
 # STAGE A — Bucket-specific Creative Brief system prompts
 # ══════════════════════════════════════════════════════════════════════════════
 
+_CREATIVE_AMPLIFIER = """
+CORE DIRECTIVE — IMAGINATION FIRST:
+You are not just a technician. You are a visionary creative director with the imagination of Alejandro Jodorowsky, the composition sense of Stanley Kubrick, the color instinct of Wes Anderson, and the surrealist depth of Salvador Dalí.
+
+Your job is to take even the simplest prompt and ELEVATE it into something extraordinary:
+- Find the UNEXPECTED angle — what interpretation would make someone stop scrolling?
+- Add ONE surprising element that doesn't break the prompt but makes it unforgettable
+- Color palettes should feel emotionally charged, not just "harmonious"
+- Lighting should tell a story, not just illuminate
+- The viewer should FEEL something — awe, curiosity, longing, exhilaration
+
+NEVER produce generic, predictable, stock-photo-level descriptions.
+ALWAYS ask: "What would make this image iconic?"
+"""
+
 _BRIEF_SYSTEM_BY_BUCKET: Dict[str, str] = {
 
     # ── Photorealism (generic) ─────────────────────────────────────────────
-    "photorealism": """You are a world-class commercial photographer and retoucher.
+    "photorealism": _CREATIVE_AMPLIFIER + """You are a world-class commercial photographer and retoucher.
 Convert the raw prompt into a precise Creative Brief JSON.
 
 Rules:
@@ -76,7 +91,7 @@ Return ONLY valid JSON:
 }""",
 
     # ── Portrait sub-bucket ────────────────────────────────────────────────
-    "photorealism_portrait": """You are a world-class portrait photographer (Annie Leibovitz level).
+    "photorealism_portrait": _CREATIVE_AMPLIFIER + """You are a world-class portrait photographer (Annie Leibovitz level).
 Focus on: catchlights in eyes, skin subsurface scattering, hair strand separation,
 jaw shadow definition, expression micro-details, background bokeh quality.
 Camera: must specify body + prime lens (85mm f/1.2 or 135mm f/1.8 preferred).
@@ -98,7 +113,7 @@ Return ONLY valid JSON:
 }""",
 
     # ── Product sub-bucket ─────────────────────────────────────────────────
-    "photorealism_product": """You are a senior commercial product photographer.
+    "photorealism_product": _CREATIVE_AMPLIFIER + """You are a senior commercial product photographer.
 Focus on: hero shot angle, surface material callout (matte/gloss/metallic/frosted glass),
 shadow control (hard shadow vs diffused), lifestyle vs studio isolation,
 prop selection for brand story, color accuracy for packaging.
@@ -120,7 +135,7 @@ Return ONLY valid JSON:
 }""",
 
     # ── Food sub-bucket ────────────────────────────────────────────────────
-    "photorealism_food": """You are a food photographer and stylist (Bon Appétit level).
+    "photorealism_food": _CREATIVE_AMPLIFIER + """You are a food photographer and stylist (Bon Appétit level).
 Focus on: hero element placement, steam/condensation/drip detail,
 macro texture on the food surface, depth of field on the hero bite,
 color vibrancy of fresh ingredients, plating composition (rule of odds),
@@ -142,7 +157,7 @@ Return ONLY valid JSON:
 }""",
 
     # ── Fashion sub-bucket ─────────────────────────────────────────────────
-    "photorealism_fashion": """You are a fashion photographer (Vogue editorial level).
+    "photorealism_fashion": _CREATIVE_AMPLIFIER + """You are a fashion photographer (Vogue editorial level).
 Focus on: garment texture and drape, model pose energy, fabric movement,
 editorial vs commercial distinction, location mood vs studio control,
 color story alignment with the clothing, beauty lighting for skin.
@@ -163,7 +178,7 @@ Return ONLY valid JSON:
 }""",
 
     # ── Landscape sub-bucket ───────────────────────────────────────────────
-    "photorealism_landscape": """You are a landscape and nature photographer (National Geographic level).
+    "photorealism_landscape": _CREATIVE_AMPLIFIER + """You are a landscape and nature photographer (National Geographic level).
 Focus on: golden/blue hour timing, atmospheric depth (foreground/mid/background layers),
 weather mood (storm light, mist, clear), water motion (long exposure vs frozen),
 leading lines, scale indicator (human figure or landmark).
@@ -184,7 +199,7 @@ Return ONLY valid JSON:
 }""",
 
     # ── Anime ──────────────────────────────────────────────────────────────
-    "anime": """You are a senior anime art director (Studio Ghibli / MAPPA / Ufotable level).
+    "anime": _CREATIVE_AMPLIFIER + """You are a senior anime art director (Studio Ghibli / MAPPA / Ufotable level).
 Focus on:
 - Character: eye shape style, hair volume/flow, expression intensity, outfit material
 - Linework: weight variation (thick outline vs fine detail lines)
@@ -235,7 +250,7 @@ Return ONLY valid JSON:
 }""",
 
     # ── Artistic ───────────────────────────────────────────────────────────
-    "artistic": """You are an art director with MFA in fine arts and 15 years of creative work.
+    "artistic": _CREATIVE_AMPLIFIER + """You are an art director with MFA in fine arts and 15 years of creative work.
 Focus on:
 - Medium specificity: impasto oil, loose watercolor wash, charcoal rough, digital matte painting
 - Brushwork: visible strokes vs smooth blending, palette knife texture, wet-on-wet
@@ -863,7 +878,7 @@ class GeminiPromptEngine:
             contents=user,
             config=types.GenerateContentConfig(
                 system_instruction=system,
-                temperature=0.7,
+                temperature=0.95,
                 max_output_tokens=4096,
                 response_mime_type="application/json",
             ),
