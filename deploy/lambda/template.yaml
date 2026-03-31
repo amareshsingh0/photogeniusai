@@ -1,0 +1,120 @@
+# PhotoGenius AI - Lambda Orchestrator + API Gateway (Task 11)
+# Deploy: sam build && sam deploy --guided
+# Requires: SageMaker endpoints (photogenius-*-endpoint), or set env to your endpoint names
+
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Lambda Orchestrator - tier selection, SageMaker invoke, job tracking
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+  StandardEndpoint:
+    Type: String
+    Default: photogenius-standard-endpoint
+  PremiumEndpoint:
+    Type: String
+    Default: photogenius-premium-endpoint
+  PerfectEndpoint:
+    Type: String
+    Default: photogenius-perfect-endpoint
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 300
+    MemorySize: 512
+    Architectures:
+      - x86_64
+
+Resources:
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub photogenius-jobs-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: job_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: job_id
+          KeyType: HASH
+
+  ImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub photogenius-images-${Environment}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  OrchestratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub photogenius-orchestrator-api-${Environment}
+      Handler: orchestrator.lambda_handler
+      CodeUri: .
+      Environment:
+        Variables:
+          JOBS_TABLE: !Ref JobsTable
+          IMAGES_BUCKET: !Ref ImagesBucket
+          STANDARD_ENDPOINT: !Ref StandardEndpoint
+          PREMIUM_ENDPOINT: !Ref PremiumEndpoint
+          PERFECT_ENDPOINT: !Ref PerfectEndpoint
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - S3CrudPolicy:
+            BucketName: !Ref ImagesBucket
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - sagemaker:InvokeEndpoint
+              Resource: "*"
+      Events:
+        PostGenerate:
+          Type: Api
+          Properties:
+            Path: /generate
+            Method: POST
+        OptionsGenerate:
+          Type: Api
+          Properties:
+            Path: /generate
+            Method: OPTIONS
+        GetStatus:
+          Type: Api
+          Properties:
+            Path: /status/{job_id}
+            Method: GET
+        OptionsStatus:
+          Type: Api
+          Properties:
+            Path: /status/{job_id}
+            Method: OPTIONS
+        GetResult:
+          Type: Api
+          Properties:
+            Path: /result/{job_id}
+            Method: GET
+        OptionsResult:
+          Type: Api
+          Properties:
+            Path: /result/{job_id}
+            Method: OPTIONS
+
+Outputs:
+  ApiUrl:
+    Description: API base URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  GenerateUrl:
+    Description: POST /generate
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/generate"
+  JobsTableName:
+    Value: !Ref JobsTable
+  ImagesBucketName:
+    Value: !Ref ImagesBucket

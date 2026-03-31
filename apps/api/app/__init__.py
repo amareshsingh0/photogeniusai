@@ -1,0 +1,1 @@
+"""PhotoGenius AI – FastAPI application."""

@@ -1,0 +1,249 @@
+# PhotoGenius AI - Lambda Orchestrator & API Gateway (CloudFormation)
+# Deploy: aws cloudformation deploy --template-file cloudformation.yaml --stack-name photogenius-orchestrator --capabilities CAPABILITY_NAMED_IAM
+# Then update Lambda code: zip orchestrator.zip orchestrator.py && aws lambda update-function-code --function-name photogenius-orchestrator --zip-file fileb://orchestrator.zip
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "PhotoGenius AI - Lambda Orchestrator & API Gateway"
+
+Parameters:
+  StandardEndpoint:
+    Type: String
+    Description: SageMaker STANDARD endpoint name (match deploy/endpoint_config.yaml)
+    Default: photogenius-standard
+
+  PremiumEndpoint:
+    Type: String
+    Description: SageMaker PREMIUM (two-pass) endpoint name
+    Default: photogenius-two-pass
+
+  PerfectEndpoint:
+    Type: String
+    Description: SageMaker PERFECT endpoint name
+    Default: photogenius-perfect
+
+  CodeS3Bucket:
+    Type: String
+    Description: "(Optional) S3 bucket containing Lambda deployment package (zip). Leave empty to use placeholder and update code after deploy."
+    Default: ""
+
+  CodeS3Key:
+    Type: String
+    Description: "(Optional) S3 key of Lambda zip. Required if CodeS3Bucket is set."
+    Default: ""
+
+Conditions:
+  UseS3Code: !Not [!Equals [!Ref CodeS3Bucket, ""]]
+
+Resources:
+  # S3 Bucket for generated images
+  ImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "photogenius-images-${AWS::AccountId}"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - "*"
+            AllowedMethods:
+              - GET
+            AllowedHeaders:
+              - "*"
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldImages
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # DynamoDB table for job tracking
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: photogenius-jobs
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: job_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: job_id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        Enabled: true
+        AttributeName: ttl
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: PhotoGeniusLambdaOrchestratorRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+
+  LambdaExecutionPolicy:
+    Type: AWS::IAM::Policy
+    DependsOn: LambdaExecutionRole
+    Properties:
+      PolicyName: PhotoGeniusLambdaOrchestratorPolicy
+      Roles:
+        - !Ref LambdaExecutionRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - sagemaker:InvokeEndpoint
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+            Resource: !Sub "${ImagesBucket.Arn}/*"
+          - Effect: Allow
+            Action:
+              - dynamodb:PutItem
+              - dynamodb:GetItem
+              - dynamodb:UpdateItem
+              - dynamodb:Query
+            Resource: !GetAtt JobsTable.Arn
+
+  # Lambda Function
+  OrchestratorFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: LambdaExecutionPolicy
+    Properties:
+      FunctionName: photogenius-orchestrator
+      Runtime: python3.11
+      Handler: orchestrator.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          JOBS_TABLE: !Ref JobsTable
+          IMAGES_BUCKET: !Ref ImagesBucket
+          STANDARD_ENDPOINT: !Ref StandardEndpoint
+          PREMIUM_ENDPOINT: !Ref PremiumEndpoint
+          PERFECT_ENDPOINT: !Ref PerfectEndpoint
+      Code:
+        Fn::If:
+          - UseS3Code
+          - S3Bucket: !Ref CodeS3Bucket
+            S3Key: !Ref CodeS3Key
+          - ZipFile: |
+              import json
+              def lambda_handler(event, context):
+                  return {
+                      "statusCode": 200,
+                      "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
+                      "body": json.dumps({"error": "Deploy Lambda code: zip orchestrator.zip orchestrator.py then aws lambda update-function-code --function-name photogenius-orchestrator --zip-file fileb://orchestrator.zip"})
+                  }
+
+  # API Gateway HTTP API
+  ApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: photogenius-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - "*"
+
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OrchestratorFunction.Arn}/invocations"
+      PayloadFormatVersion: "2.0"
+
+  GenerateRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: "POST /generate"
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  StatusRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: "GET /status/{job_id}"
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  ResultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: "GET /result/{job_id}"
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  OptionsGenerateRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: "OPTIONS /generate"
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  OptionsStatusRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: "OPTIONS /status/{job_id}"
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  OptionsResultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: "OPTIONS /result/{job_id}"
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ApiGateway
+      StageName: prod
+      AutoDeploy: true
+
+  ApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OrchestratorFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*"
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL (append /generate, /status/{job_id}, /result/{job_id})
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
+    Export:
+      Name: PhotoGeniusApiEndpoint
+
+  ImagesBucketName:
+    Description: S3 bucket for generated images
+    Value: !Ref ImagesBucket
+
+  JobsTableName:
+    Description: DynamoDB jobs table
+    Value: !Ref JobsTable
+
+  LambdaFunctionName:
+    Description: Lambda function name (update code with orchestrator.zip if deployed with placeholder)
+    Value: !Ref OrchestratorFunction

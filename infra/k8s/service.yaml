@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: photogenius-web
+spec:
+  selector:
+    app: photogenius-web
+  ports:
+    - port: 80
+      targetPort: 3000
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: photogenius-api
+spec:
+  selector:
+    app: photogenius-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP

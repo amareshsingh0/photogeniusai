@@ -1,0 +1,149 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: EC2 instance to download and stage SDXL models to S3
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    Description: EC2 instance type (t3.medium has good network)
+
+  KeyName:
+    Type: String
+    Default: ""
+    Description: EC2 Key Pair name (optional, for SSH access)
+
+  ModelsBucket:
+    Type: String
+    Default: photogenius-models-dev
+    Description: S3 bucket for model storage
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
+
+Resources:
+  ModelStagingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: PhotoGenius-ModelStaging-Role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      Policies:
+        - PolicyName: SSMAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:*
+                  - ssmmessages:*
+                  - ec2messages:*
+                Resource: "*"
+
+  ModelStagingInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref ModelStagingRole
+
+  ModelStagingInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+      IamInstanceProfile: !Ref ModelStagingInstanceProfile
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 100
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: PhotoGenius-ModelStaging
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -ex
+
+          # Install dependencies
+          yum update -y
+          yum install -y python3-pip aws-cli
+          pip3 install huggingface_hub boto3
+
+          # Create log file
+          exec > >(tee /var/log/model-staging.log) 2>&1
+
+          echo "=== Starting Model Download ==="
+
+          # Use /home/ec2-user which is on root partition (has space)
+          DOWNLOAD_DIR=/home/ec2-user/models
+          mkdir -p $DOWNLOAD_DIR
+          cd $DOWNLOAD_DIR
+
+          echo "Disk space available:"
+          df -h /
+
+          # Download SDXL Turbo (smaller, faster) - FP16 only to save space
+          echo "Downloading SDXL Turbo..."
+          python3 -c "
+          from huggingface_hub import snapshot_download
+          snapshot_download(
+              repo_id='stabilityai/sdxl-turbo',
+              local_dir='$DOWNLOAD_DIR/sdxl-turbo',
+              ignore_patterns=['*.md', '*.txt', 'samples/*', '*.onnx*', '*.bin', '*fp32*']
+          )
+          print('SDXL Turbo downloaded successfully')
+          "
+
+          # Upload to S3 immediately to free space
+          echo "Uploading SDXL Turbo to S3..."
+          aws s3 sync $DOWNLOAD_DIR/sdxl-turbo s3://${ModelsBucket}/models/sdxl-turbo --region us-east-1
+          rm -rf $DOWNLOAD_DIR/sdxl-turbo
+
+          echo "=== SDXL Turbo Complete ==="
+
+          # Download SDXL Base (larger)
+          echo "Downloading SDXL Base..."
+          python3 -c "
+          from huggingface_hub import snapshot_download
+          snapshot_download(
+              repo_id='stabilityai/stable-diffusion-xl-base-1.0',
+              local_dir='$DOWNLOAD_DIR/sdxl-base',
+              ignore_patterns=['*.md', '*.txt', 'samples/*', '*.onnx*', '*.bin', '*fp32*']
+          )
+          print('SDXL Base downloaded successfully')
+          "
+
+          echo "Uploading SDXL Base to S3..."
+          aws s3 sync $DOWNLOAD_DIR/sdxl-base s3://${ModelsBucket}/models/stable-diffusion-xl-base-1.0 --region us-east-1
+          rm -rf $DOWNLOAD_DIR/sdxl-base
+
+          echo "=== All Models Staged to S3 ==="
+
+          # Signal completion
+          aws ssm put-parameter --name "/photogenius/model-staging-complete" --value "true" --type String --overwrite --region us-east-1 || true
+
+          echo "SUCCESS - Models staged. Terminating instance in 2 minutes..."
+          sleep 120
+          shutdown -h now
+
+Outputs:
+  InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref ModelStagingInstance
+
+  LogCommand:
+    Description: Command to check logs
+    Value: !Sub "aws ssm start-session --target ${ModelStagingInstance} --document-name AWS-StartInteractiveCommand --parameters command='tail -f /var/log/model-staging.log'"
+
+  S3ModelsPath:
+    Description: S3 path where models will be staged
+    Value: !Sub "s3://${ModelsBucket}/models/"

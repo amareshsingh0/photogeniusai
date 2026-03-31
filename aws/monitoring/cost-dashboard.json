@@ -1,0 +1,115 @@
+{
+  "widgets": [
+    {
+      "type": "text",
+      "x": 0,
+      "y": 0,
+      "width": 24,
+      "height": 2,
+      "properties": {
+        "markdown": "## Cost Profiling Dashboard\n\nCost per generation: SageMaker + Lambda + S3. Data from `generations.cost_usd` and tier. Target: 30% reduction via smart routing + cache."
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 2,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "CostPerGenerationUsd", { "stat": "Average", "label": "Avg cost/generation ($)" } ],
+          [ "PhotoGenius", "CostPerGenerationUsd", { "stat": "p99", "label": "p99 ($)" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Cost per generation (USD)",
+        "period": 3600
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 2,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "GenerationCostByTier", "Tier", "FAST", { "stat": "Average", "label": "FAST" } ],
+          [ ".", ".", ".", "STANDARD", { "stat": "Average", "label": "STANDARD" } ],
+          [ ".", ".", ".", "PREMIUM", { "stat": "Average", "label": "PREMIUM" } ],
+          [ ".", ".", ".", "PERFECT", { "stat": "Average", "label": "PERFECT" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Average cost by tier",
+        "period": 3600
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 8,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "CacheHitRate", { "stat": "Average", "label": "Cache hit rate" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Cache hit rate (target >15%)",
+        "period": 3600,
+        "yAxis": { "left": { "min": 0, "max": 1 } }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 8,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "GenerationsTotal", { "stat": "Sum", "label": "Generations" } ],
+          [ "PhotoGenius", "CacheHits", { "stat": "Sum", "label": "Cache hits" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Generations vs cache hits",
+        "period": 3600
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 8,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "DailyCostUsd", { "stat": "Sum", "label": "Est. daily cost ($)" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Cost trend over time",
+        "period": 86400
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 14,
+      "width": 24,
+      "height": 4,
+      "properties": {
+        "markdown": "### How to populate these metrics\n\n1. **CostPerGenerationUsd** / **GenerationCostByTier**: Emit from API or a nightly job that reads `generations.cost_usd` and `qualityTierUsed`, then put metric (e.g. CloudWatch PutMetricData with namespace `PhotoGenius`, dimensions Tier).\n2. **CacheHitRate**: Count cache_hit=true vs total in DB or from Lambda logs; emit as 0–1.\n3. **GenerationsTotal** / **CacheHits**: Increment from Lambda or API when saving a generation.\n4. **DailyCostUsd**: Sum of cost_usd per day (e.g. from DB aggregate)."
+      }
+    }
+  ]
+}

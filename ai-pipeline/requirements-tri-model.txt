@@ -1,0 +1,26 @@
+# Tri-Model Anatomy Validation System
+# Install: pip install -r requirements-tri-model.txt
+
+# YOLO for object/person detection
+ultralytics==8.1.0
+
+# MediaPipe for hand/face detection
+mediapipe==0.10.9
+
+# Segment Anything (SAM) - optional, heavy; uncomment when using full SAM
+# pip install segment-anything==1.0
+# segment-anything==1.0
+
+# Additional utilities
+scipy==1.12.0
+scikit-image==0.22.0
+
+# OpenCV (image handling)
+opencv-python>=4.8.0
+
+# Already in main requirements but needed for validator
+Pillow>=10.0.0
+numpy>=1.24.0,<2
+
+# PyTorch required for YOLO (install separately for GPU: pip install torch --index-url https://download.pytorch.org/whl/cu118)
+# torch>=2.0.0

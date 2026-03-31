@@ -1,0 +1,16 @@
+# Base model pilot: dataset curation and evaluation
+# Install in ai-pipeline venv or base_model dir: pip install -r requirements.txt
+
+# Quality filter and dedup
+Pillow>=10.0.0
+numpy>=1.24,<2
+imagehash>=4.3.0
+
+# BLIP-2 captions (optional)
+transformers>=4.44.0
+torch>=2.0.0
+accelerate>=0.30.0
+
+# Fine-tuning (use with separate venv or GPU node)
+# diffusers>=0.30.0
+# peft>=0.12.0

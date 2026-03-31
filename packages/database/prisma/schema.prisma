@@ -1,0 +1,859 @@
+// PhotoGenius AI – Complete Production Schema
+// PostgreSQL 15+ / Prisma 5.8.0+
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==================== ENUMS ====================
+
+enum UserTier {
+  FREE
+  FAST
+  PRO
+  PREMIUM
+}
+
+enum GenerationMode {
+  REALISM
+  CREATIVE
+  ROMANTIC
+  CINEMATIC
+  FASHION
+  COOL_EDGY
+  ARTISTIC
+  MAX_SURPRISE
+}
+
+enum TrainingStatus {
+  PENDING
+  VALIDATING
+  PREPROCESSING
+  TRAINING
+  COMPLETED
+  FAILED
+}
+
+enum SafetyStage {
+  PRE_GENERATION
+  POST_GENERATION
+}
+
+enum SafetyAction {
+  ALLOW
+  QUARANTINE
+  BLOCK
+}
+
+enum TransactionType {
+  SUBSCRIPTION
+  CREDIT_PACK
+  REFUND
+  BONUS
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum AbuseReportStatus {
+  PENDING
+  UNDER_REVIEW
+  ACTION_TAKEN
+  DISMISSED
+  FALSE_REPORT
+}
+
+enum GalleryModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+}
+
+enum ChallengeStatus {
+  DRAFT
+  ACTIVE
+  VOTING
+  ENDED
+}
+
+enum TemplatePriceType {
+  FREE
+  PREMIUM
+}
+
+// ==================== MAIN MODELS ====================
+
+model User {
+  id              String  @id @default(uuid()) @db.Uuid
+  email           String  @unique @db.VarChar(255)
+  clerkId         String  @unique @db.VarChar(255)
+  name            String? @db.VarChar(255)
+  profileImageUrl String? @db.Text
+
+  // Subscription & Credits
+  tier                 UserTier  @default(FREE)
+  creditsBalance       Int       @default(15)
+  stripeCustomerId     String?   @unique @db.VarChar(255)
+  stripeSubscriptionId String?   @unique @db.VarChar(255)
+  subscriptionEndsAt   DateTime? @db.Timestamptz
+
+  // Safety & Moderation
+  isBanned     Boolean   @default(false)
+  banReason    String?   @db.Text
+  bannedAt     DateTime? @db.Timestamptz
+  strikes      Int       @default(0)
+  lastStrikeAt DateTime? @db.Timestamptz
+
+  // Usage Stats
+  totalGenerations  Int       @default(0)
+  totalCreditsSpent Int       @default(0)
+  lastGenerationAt  DateTime? @db.Timestamptz
+
+  // Preferences
+  preferences Json? @db.JsonB
+
+  // Location & Device
+  lastLoginIp        String?   @db.VarChar(45)
+  lastLoginUserAgent String?   @db.Text
+  lastLoginAt        DateTime? @db.Timestamptz
+
+  // Timestamps
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  // Profile (community)
+  bio             String?   @db.VarChar(500)
+  displayName     String?   @db.VarChar(100)
+  allowTrainingExport Boolean @default(false) // Data flywheel opt-in
+
+  // Relationships
+  identities           Identity[]
+  generations          Generation[]
+  consentRecords       ConsentRecord[]
+  preferencePairs      PreferencePair[]
+  transactions         Transaction[]
+  reportedAbuseReports AbuseReport[]    @relation("Reporter")
+  safetyAuditLogs      SafetyAuditLog[]
+  conversations        Conversation[]
+  galleryLikes         GalleryLike[]
+  galleryComments      GalleryComment[]
+  promptTemplates      PromptTemplate[]
+  templateRatings      TemplateRating[]
+  templatePurchases    TemplatePurchase[]
+  challengeSubmissions ChallengeSubmission[]
+  challengeVotes       ChallengeVote[]
+  dataContributions    DataContribution[]
+  following            Follow[]           @relation("Following")
+  followers            Follow[]           @relation("Followers")
+  activities           Activity[]
+
+  @@index([email])
+  @@index([clerkId])
+  @@index([tier])
+  @@index([isBanned])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Identity {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Identity Info
+  name        String  @db.VarChar(100)
+  description String? @db.VarChar(500)
+  triggerWord String  @default("sks") @db.VarChar(20)
+
+  // Training Data
+  referencePhotoUrls  Json @db.JsonB // Array of S3 URLs
+  referencePhotoCount Int  @default(0)
+
+  // LoRA & Embedding
+  loraFilePath  String? @db.Text // S3 URL to .safetensors
+  loraFileSize  Int? // Bytes
+  faceEmbedding Json?   @db.JsonB // 512-dim vector for InstantID
+
+  // Training Status
+  trainingStatus      TrainingStatus @default(PENDING)
+  trainingProgress    Int            @default(0) // 0-100
+  trainingStartedAt   DateTime?      @db.Timestamptz
+  trainingCompletedAt DateTime?      @db.Timestamptz
+  trainingError       String?        @db.Text
+  trainingLogs        Json?          @db.JsonB
+
+  // Quality Metrics
+  qualityScore         Float? @db.DoublePrecision // 0-1
+  faceConsistencyScore Float? @db.DoublePrecision // 0-1
+
+  // Consent
+  consentGiven     Boolean   @default(false)
+  consentTimestamp DateTime? @db.Timestamptz
+  consentIpAddress String?   @db.VarChar(45)
+  consentUserAgent String?   @db.Text
+  consentVersion   String?   @db.VarChar(20)
+
+  // Usage
+  totalGenerations Int       @default(0)
+  lastUsedAt       DateTime? @db.Timestamptz
+
+  // Soft Delete
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime? @db.Timestamptz
+
+  // Timestamps
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  // Relationships
+  generations Generation[]
+
+  @@index([userId])
+  @@index([trainingStatus])
+  @@index([isDeleted])
+  @@index([createdAt])
+  @@map("identities")
+}
+
+/// Biometric compliance: who accessed which identity (audit trail)
+model IdentityAccessAuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  identityId String   @db.Uuid
+  userId     String   @db.Uuid
+  action     String   @db.VarChar(50) // VIEW, EXPORT, DELETE, TRAIN
+  ipAddress  String?  @db.VarChar(45)
+  userAgent  String?  @db.Text
+  timestamp  DateTime @default(now()) @db.Timestamptz
+
+  @@index([identityId])
+  @@index([userId])
+  @@index([timestamp])
+  @@map("identity_access_audit_logs")
+}
+
+model Generation {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  identityId String?   @db.Uuid
+  identity   Identity? @relation(fields: [identityId], references: [id], onDelete: Restrict)
+
+  // Generation Config
+  mode           GenerationMode
+  originalPrompt String         @db.VarChar(1000)
+  enhancedPrompt String?        @db.Text
+  negativePrompt String?        @db.Text
+
+  // Generation Parameters
+  numInferenceSteps Int     @default(30)
+  guidanceScale     Float   @default(7.5) @db.DoublePrecision
+  seed              BigInt?
+  width             Int     @default(1024)
+  height            Int     @default(1024)
+
+  // Output
+  outputUrls        Json    @db.JsonB // Array of S3 URLs
+  selectedOutputUrl String? @db.Text // User's favorite
+  thumbnailUrl      String? @db.Text
+
+  // Quality Scores
+  faceMatchScore Float? @db.DoublePrecision // 0-100
+  aestheticScore Float? @db.DoublePrecision // 0-100
+  technicalScore Float? @db.DoublePrecision // 0-100
+  overallScore   Float? @db.DoublePrecision // 0-100
+
+  // Safety
+  preGenSafetyPassed  Boolean @default(false)
+  preGenViolations    Json?   @db.JsonB
+  postGenSafetyPassed Boolean @default(false)
+  postGenViolations   Json?   @db.JsonB
+
+  // Quarantine
+  isQuarantined    Boolean   @default(false)
+  quarantineReason String?   @db.Text
+  quarantinedAt    DateTime? @db.Timestamptz
+  reviewedBy       String?   @db.Uuid
+  reviewedAt       DateTime? @db.Timestamptz
+
+  // Credits & Billing
+  creditsUsed Int
+  costUsd     Float?   @db.DoublePrecision // Cost profiling: SageMaker + Lambda + S3 per generation
+  qualityTierUsed String? @db.VarChar(20)  // FAST | STANDARD | PREMIUM | PERFECT (for cost/tier analytics)
+  cacheHit   Boolean   @default(false)     // True if served from semantic prompt cache ($0 inference)
+
+  // Performance
+  generationTimeSeconds Float?  @db.DoublePrecision
+  gpuType               String? @db.VarChar(50)
+
+  // Metadata
+  metadata Json? @db.JsonB
+  correlationId String? @db.VarChar(64) // Full-stack tracing: X-Request-ID
+
+  // User Actions
+  isFavorite    Boolean @default(false)
+  downloadCount Int     @default(0)
+  sharedCount   Int     @default(0)
+  userRating   Int?    // 1-5 optional rating for training quality
+
+  // Training data export (set from user consent at creation time; GDPR/CCPA)
+  allowTrainingDataExport Boolean @default(false)
+
+  // Public Gallery (opt-in)
+  isPublic           Boolean   @default(false)
+  publishedAt        DateTime? @db.Timestamptz
+  galleryCategory    String?   @db.VarChar(50)   // portrait, landscape, fashion, etc.
+  galleryStyle       String?   @db.VarChar(50)   // cinematic, artistic, etc.
+  galleryModeration  GalleryModerationStatus? @default(PENDING)
+  galleryLikesCount  Int       @default(0)
+  galleryCommentsCount Int     @default(0)
+
+  // Soft Delete
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime? @db.Timestamptz
+
+  // Timestamps
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  // Relationships
+  abuseReports        AbuseReport[]
+  preferencePairsAsA  PreferencePair[] @relation("GenA")
+  preferencePairsAsB  PreferencePair[] @relation("GenB")
+  galleryLikes        GalleryLike[]
+  galleryComments     GalleryComment[]
+  challengeSubmissions ChallengeSubmission[]
+  dataContributions   DataContribution[]
+
+  // Composite index: covers the primary gallery query (userId + isDeleted + ORDER BY createdAt DESC)
+  @@index([userId, isDeleted, createdAt(sort: Desc)])
+  @@index([userId])
+  @@index([identityId])
+  @@index([mode])
+  @@index([createdAt])
+  @@index([isQuarantined])
+  @@index([isDeleted])
+  @@index([correlationId])
+  @@index([isPublic])
+  @@index([publishedAt])
+  @@index([galleryModeration])
+  @@index([galleryCategory])
+  @@index([galleryStyle])
+  @@map("generations")
+}
+
+/// RLHF: pairwise preference (image A vs image B); source = thumbs, save, delete, download, variants
+model PreferencePair {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  prompt        String   @db.VarChar(1000)
+  imageAUrl     String   @db.Text
+  imageBUrl     String   @db.Text
+  preferred     String   @db.VarChar(10) // A | B | EQUAL
+  source        String   @db.VarChar(50) // EXPLICIT_THUMBS | SAVE_GALLERY | DELETE | DOWNLOAD | REQUEST_VARIANTS
+  strength      Float?   @db.DoublePrecision // 0-1 optional (e.g. strong positive for download)
+
+  generationIdA String?  @db.Uuid
+  generationIdB String?  @db.Uuid
+  generationA   Generation? @relation("GenA", fields: [generationIdA], references: [id], onDelete: SetNull)
+  generationB   Generation? @relation("GenB", fields: [generationIdB], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime @default(now()) @db.Timestamptz
+
+  @@index([userId])
+  @@index([source])
+  @@index([createdAt])
+  @@map("preference_pairs")
+}
+
+model ConsentRecord {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Consent Data
+  consentVersion    String  @db.VarChar(20)
+  checkboxesChecked Json    @db.JsonB // Array of boolean (legacy)
+  consentText       String? @db.Text
+
+  // Granular controls (GDPR/CCPA/EU AI Act)
+  allowTraining Boolean @default(false) // Opt-in to use generations for model improvement
+  allowShowcase Boolean @default(false) // Opt-in to showcase in marketing/gallery
+  creditsGranted Boolean @default(false) // One-time +100 credits granted for opt-in
+
+  // Legal Info
+  ipAddress   String  @db.VarChar(45)
+  userAgent   String  @db.Text
+  geoLocation String? @db.VarChar(100)
+
+  // Context
+  identityId String? @db.Uuid
+  pageUrl    String? @db.Text
+
+  // Timestamps
+  timestamp   DateTime  @default(now()) @db.Timestamptz
+  withdrawnAt DateTime? @db.Timestamptz // GDPR right to withdraw
+
+  @@index([userId])
+  @@index([ipAddress])
+  @@index([timestamp])
+  @@index([allowTraining])
+  @@map("consent_records")
+}
+
+model SafetyAuditLog {
+  id BigInt @id @default(autoincrement())
+
+  // Context
+  userId       String? @db.Uuid
+  user         User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  generationId String? @db.Uuid
+
+  // Event Details
+  eventType String       @db.VarChar(100) // PRE_GEN_BLOCK, POST_GEN_QUARANTINE, etc.
+  stage     SafetyStage
+  action    SafetyAction
+
+  // Check Results
+  violations Json? @db.JsonB
+  scores     Json? @db.JsonB
+
+  // Content
+  originalPrompt String? @db.Text
+  imageUrl       String? @db.Text
+
+  // Network
+  ipAddress String? @db.VarChar(45)
+  userAgent String? @db.Text
+
+  // Auto-Deletion
+  expiresAt DateTime @db.Timestamptz // 180 days retention
+
+  // Timestamp
+  timestamp DateTime @default(now()) @db.Timestamptz
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([timestamp])
+  @@index([expiresAt])
+  @@map("safety_audit_logs")
+}
+
+model Transaction {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Transaction Details
+  type   TransactionType
+  status TransactionStatus @default(PENDING)
+
+  // Amount
+  amount   Int // In cents
+  currency String @default("USD") @db.VarChar(3)
+
+  // Credits
+  creditsAdded  Int?
+  creditsBefore Int?
+  creditsAfter  Int?
+
+  // Payment Gateway
+  stripePaymentIntentId String? @unique @db.VarChar(255)
+  stripeInvoiceId       String? @unique @db.VarChar(255)
+  razorpayOrderId       String? @unique @db.VarChar(255)
+  razorpayPaymentId     String? @unique @db.VarChar(255)
+
+  // Product Info
+  productId   String? @db.VarChar(100)
+  productName String? @db.VarChar(255)
+
+  // Metadata
+  metadata Json? @db.JsonB
+
+  // Failure Info
+  failureReason String? @db.Text
+
+  // Timestamps
+  createdAt   DateTime  @default(now()) @db.Timestamptz
+  completedAt DateTime? @db.Timestamptz
+  refundedAt  DateTime? @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @db.Timestamptz
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+/// Idempotency for Stripe webhooks: one row per processed event.
+model StripeWebhookEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  eventId     String   @unique @db.VarChar(255)
+  eventType   String   @db.VarChar(100)
+  processedAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([eventId])
+  @@index([eventType])
+  @@map("stripe_webhook_events")
+}
+
+model AbuseReport {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Reporter
+  reporterUserId String? @db.Uuid
+  reporter       User?   @relation("Reporter", fields: [reporterUserId], references: [id], onDelete: SetNull)
+  reporterIp     String? @db.VarChar(45)
+  reporterEmail  String? @db.VarChar(255)
+
+  // Reported Content
+  generationId String     @db.Uuid
+  generation   Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+
+  // Report Details
+  reason      String  @db.VarChar(100) // NSFW, CHILD, CELEBRITY, HATE, etc.
+  description String? @db.Text
+  severity    String? @db.VarChar(50)
+
+  // Status
+  status AbuseReportStatus @default(PENDING)
+
+  // Review
+  reviewedBy  String?   @db.Uuid
+  reviewNotes String?   @db.Text
+  reviewedAt  DateTime? @db.Timestamptz
+
+  // Action Taken
+  actionTaken     String? @db.Text
+  userStrikeAdded Boolean @default(false)
+  contentRemoved  Boolean @default(false)
+  userBanned      Boolean @default(false)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([generationId])
+  @@index([reporterUserId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("abuse_reports")
+}
+
+model SystemConfig {
+  id          String  @id @default(uuid()) @db.Uuid
+  key         String  @unique @db.VarChar(100)
+  value       Json    @db.JsonB
+  description String? @db.Text
+  isPublic    Boolean @default(false)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([key])
+  @@map("system_config")
+}
+
+model AdminUser {
+  id    String @id @default(uuid()) @db.Uuid
+  email String @unique @db.VarChar(255)
+  name  String @db.VarChar(255)
+  role  String @db.VarChar(50) // SUPER_ADMIN, MODERATOR, SUPPORT
+
+  // Permissions
+  permissions Json @db.JsonB
+
+  // Auth
+  passwordHash String    @db.Text
+  lastLoginAt  DateTime? @db.Timestamptz
+
+  // Status
+  isActive Boolean @default(true)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([email])
+  @@map("admin_users")
+}
+
+model AuditLog {
+  id BigInt @id @default(autoincrement())
+
+  // Actor
+  actorType  String  @db.VarChar(50) // USER, ADMIN, SYSTEM
+  actorId    String? @db.Uuid
+  actorEmail String? @db.VarChar(255)
+
+  // Action
+  action     String  @db.VarChar(100)
+  resource   String  @db.VarChar(100)
+  resourceId String? @db.Uuid
+
+  // Details
+  details Json? @db.JsonB
+
+  // Context
+  ipAddress String? @db.VarChar(45)
+  userAgent String? @db.Text
+
+  // Timestamp
+  timestamp DateTime @default(now()) @db.Timestamptz
+
+  @@index([actorId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+model Conversation {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Context for generation continuity
+  context Json? @db.JsonB // Generation context (lastParams, lastResults, etc.)
+
+  // Status
+  active Boolean @default(true)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  // Relationships
+  messages ConversationMessage[]
+
+  @@index([userId])
+  @@index([active])
+  @@index([updatedAt])
+  @@map("conversations")
+}
+
+model ConversationMessage {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Message content
+  role    String  @db.VarChar(20) // user/assistant
+  content String  @db.Text
+
+  // Images (array of URLs)
+  images Json? @db.JsonB
+
+  // Metadata (params, costs, etc.)
+  metadata Json? @db.JsonB
+
+  // Timestamp
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("conversation_messages")
+}
+
+// ==================== COMMUNITY & GALLERY ====================
+
+model GalleryLike {
+  id           String     @id @default(uuid()) @db.Uuid
+  userId       String     @db.Uuid
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generationId String     @db.Uuid
+  generation   Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now()) @db.Timestamptz
+
+  @@unique([userId, generationId])
+  @@index([generationId])
+  @@index([userId])
+  @@map("gallery_likes")
+}
+
+model GalleryComment {
+  id           String     @id @default(uuid()) @db.Uuid
+  userId       String     @db.Uuid
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generationId String     @db.Uuid
+  generation   Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  body         String     @db.Text
+  createdAt    DateTime   @default(now()) @db.Timestamptz
+  updatedAt    DateTime   @updatedAt @db.Timestamptz
+
+  @@index([generationId])
+  @@index([userId])
+  @@map("gallery_comments")
+}
+
+model PromptTemplate {
+  id               String          @id @default(uuid()) @db.Uuid
+  userId           String          @db.Uuid
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String          @db.VarChar(200)
+  prompt           String          @db.Text
+  negativePrompt   String?         @db.Text
+  suggestedSettings Json?          @db.JsonB // { mode, guidanceScale, steps, etc. }
+  priceType        TemplatePriceType @default(FREE)
+  priceCredits     Int             @default(0)
+  usesCount        Int             @default(0)
+  successCount     Int             @default(0)
+  ratingSum        Int             @default(0)
+  ratingCount      Int             @default(0)
+  isPublic         Boolean         @default(true)
+  createdAt        DateTime        @default(now()) @db.Timestamptz
+  updatedAt        DateTime        @updatedAt @db.Timestamptz
+
+  ratings          TemplateRating[]
+  purchases        TemplatePurchase[]
+
+  @@index([userId])
+  @@index([priceType])
+  @@index([usesCount])
+  @@index([createdAt])
+  @@map("prompt_templates")
+}
+
+model TemplateRating {
+  id         String        @id @default(uuid()) @db.Uuid
+  userId     String        @db.Uuid
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateId String        @db.Uuid
+  template   PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  rating     Int           // 1-5
+  createdAt  DateTime      @default(now()) @db.Timestamptz
+
+  @@unique([userId, templateId])
+  @@index([templateId])
+  @@map("template_ratings")
+}
+
+model TemplatePurchase {
+  id         String         @id @default(uuid()) @db.Uuid
+  userId     String         @db.Uuid
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateId String         @db.Uuid
+  template   PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  creditsPaid Int
+  creatorEarned Int        // 70% to creator
+  platformEarned Int       // 30% to platform
+  createdAt  DateTime       @default(now()) @db.Timestamptz
+
+  @@index([userId])
+  @@index([templateId])
+  @@map("template_purchases")
+}
+
+model Challenge {
+  id          String         @id @default(uuid()) @db.Uuid
+  title       String         @db.VarChar(200)
+  description String         @db.Text
+  theme       String         @db.VarChar(100)
+  startAt     DateTime       @db.Timestamptz
+  endAt       DateTime       @db.Timestamptz
+  status      ChallengeStatus @default(DRAFT)
+  prizeCredits Int           @default(0)
+  createdAt   DateTime       @default(now()) @db.Timestamptz
+  updatedAt   DateTime       @updatedAt @db.Timestamptz
+
+  submissions ChallengeSubmission[]
+  votes       ChallengeVote[]
+
+  @@index([status])
+  @@index([startAt])
+  @@index([endAt])
+  @@map("challenges")
+}
+
+model ChallengeSubmission {
+  id           String    @id @default(uuid()) @db.Uuid
+  challengeId  String    @db.Uuid
+  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  generationId String    @db.Uuid
+  generation   Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  userId       String    @db.Uuid
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  voteCount    Int       @default(0)
+  createdAt    DateTime  @default(now()) @db.Timestamptz
+
+  votes        ChallengeVote[]
+
+  @@unique([challengeId, generationId])
+  @@index([challengeId])
+  @@index([userId])
+  @@map("challenge_submissions")
+}
+
+model ChallengeVote {
+  id             String             @id @default(uuid()) @db.Uuid
+  challengeId    String             @db.Uuid
+  challenge      Challenge          @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  submissionId   String             @db.Uuid
+  submission     ChallengeSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  userId         String             @db.Uuid
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime           @default(now()) @db.Timestamptz
+
+  @@unique([challengeId, userId])
+  @@index([submissionId])
+  @@index([userId])
+  @@map("challenge_votes")
+}
+
+model DataContribution {
+  id             String     @id @default(uuid()) @db.Uuid
+  userId         String     @db.Uuid
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generationId   String     @db.Uuid
+  generation     Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  creditsEarned  Int
+  qualityBonus   Boolean    @default(false) // 2x when score > 8
+  createdAt      DateTime   @default(now()) @db.Timestamptz
+
+  @@unique([generationId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("data_contributions")
+}
+
+model Follow {
+  id          String   @id @default(uuid()) @db.Uuid
+  followerId String   @db.Uuid
+  follower   User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String  @db.Uuid
+  following   User     @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+model Activity {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   @db.VarChar(50) // PUBLISHED_GALLERY, NEW_FOLLOWER, LIKED, COMMENTED, etc.
+  targetType String  @db.VarChar(50) // generation, template, challenge
+  targetId  String?  @db.Uuid
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([userId])
+  @@index([targetType])
+  @@index([createdAt])
+  @@map("activities")
+}

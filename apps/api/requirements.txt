@@ -1,0 +1,40 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+sqlalchemy[asyncio]==2.0.25
+asyncpg==0.29.0
+pydantic>=2.5.3
+pydantic-settings>=2.1.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+aiofiles==23.2.1
+httpx==0.26.0
+python-dotenv>=1.0.1
+alembic==1.13.1
+
+# Image processing (PIL — text overlay, design effects, jury)
+pillow==10.2.0
+numpy==1.26.3
+
+# Storage (S3 — for future use, lightweight)
+boto3==1.34.34
+
+# ── External APIs (Fast-Move Phase) ──────────────────────────────────────────
+google-genai>=1.0.0             # Gemini 2.5 Flash — prompt engine (NEW SDK)
+# fal-client NOT needed — we call fal.ai REST API directly via httpx
+# Together AI:   httpx to api.together.xyz  (set TOGETHER_API_KEY in .env.local)
+# Fireworks AI:  httpx to api.fireworks.ai  (set FIREWORKS_API_KEY in .env.local)
+# Replicate:     httpx to api.replicate.com (REPLICATE_API_TOKEN already set)
+
+# ── HOLD — SageMaker/GPU packages (do not install, only needed on GPU instances) ──
+# torch==2.4.1
+# diffusers==0.30.3
+# transformers==4.44.2
+# accelerate==0.34.2
+# nudenet==3.4.2
+# insightface==0.7.3
+# opencv-python==4.9.0.80
+
+# Testing
+pytest==8.0.0
+pytest-asyncio==0.23.3

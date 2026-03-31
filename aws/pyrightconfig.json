@@ -1,0 +1,11 @@
+{
+  "include": ["lambda/**/*.py"],
+  "exclude": ["**/node_modules", "**/__pycache__"],
+  "reportMissingImports": "warning",
+  "reportMissingModuleSource": "none",
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "basic",
+  "stubPath": "",
+  "venvPath": "",
+  "extraPaths": []
+}

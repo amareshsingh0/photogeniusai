@@ -1,0 +1,13 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "photogenius"
+resolve_s3 = true
+s3_prefix = "photogenius"
+capabilities = "CAPABILITY_NAMED_IAM"
+parameter_overrides = "Environment=\"dev\" SageMakerEndpoint=\"photogenius-generation-dev\" SageMakerTwoPassEndpoint=\"photogenius-generation-dev\" SageMakerRealtimeEndpoint=\"\" SageMakerIdentityV2Endpoint=\"\" SageMaker4KEndpoint=\"\" IdentityEngineVersion=\"v1\" IdentityMethod=\"ensemble\""
+image_repositories = []
+confirm_changeset = true
+
+[default.global.parameters]
+region = "us-east-1"

@@ -1,0 +1,26 @@
+{
+  "name": "@photogenius/database",
+  "version": "1.0.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "prisma generate --schema=./prisma/schema.prisma",
+    "db:generate": "dotenv -e ../../apps/api/.env.local -- prisma generate",
+    "db:push": "dotenv -e ../../apps/api/.env.local -- prisma db push",
+    "db:push:force": "dotenv -e ../../apps/api/.env.local -- prisma db push --force-reset --accept-data-loss",
+    "db:migrate": "dotenv -e ../../apps/api/.env.local -- prisma migrate dev",
+    "db:seed": "dotenv -e ../../apps/api/.env.local -- prisma generate && dotenv -e ../../apps/api/.env.local -- tsx prisma/seed.ts",
+    "db:studio": "dotenv -e ../../apps/api/.env.local -- prisma studio",
+    "db:reset": "dotenv -e ../../apps/api/.env.local -- prisma migrate reset"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.8.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^2.4.3",
+    "dotenv-cli": "^7.4.4",
+    "prisma": "^5.8.0",
+    "tsx": "^4.7.0"
+  }
+}

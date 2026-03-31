@@ -1,0 +1,9 @@
+diffusers>=0.25.0
+transformers>=4.37.0
+accelerate>=0.25.0
+safetensors>=0.4.1
+torch>=2.1.0
+torchvision>=0.16.0
+Pillow>=10.0.0
+numpy>=1.24.3,<2
+tomesd>=0.1.3

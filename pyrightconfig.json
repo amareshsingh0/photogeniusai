@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/pyright/main/packages/vscode-pylance/schemas/pyrightconfig.schema.json",
+  "include": [
+    "ai-pipeline/**/*.py",
+    "aws/**/*.py",
+    "apps/api/**/*.py"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.venv",
+    "**/venv",
+    "**/.git"
+  ],
+  "reportMissingImports": "warning",
+  "reportMissingModuleSource": "none",
+  "reportMissingTypeStubs": "none",
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "basic",
+  "extraPaths": [
+    "ai-pipeline",
+    "apps/api"
+  ]
+}

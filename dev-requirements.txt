@@ -1,0 +1,19 @@
+# PhotoGenius AI - Development Dependencies
+# Install these locally for IDE type checking support
+
+# Type stubs for AWS
+boto3-stubs[sagemaker,s3]>=1.34.0
+
+# Type stubs for ML/AI libraries
+types-Pillow>=10.0.0
+
+# Code quality
+black>=24.0.0
+isort>=5.13.0
+flake8>=7.0.0
+
+# Note: Lightning and torch don't have separate type stubs
+# as they include inline type annotations.
+# Install them if needed for local development:
+#
+# pip install lightning torch diffusers transformers

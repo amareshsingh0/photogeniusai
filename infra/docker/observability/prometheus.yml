@@ -1,0 +1,25 @@
+# Prometheus config for PhotoGenius observability.
+# Scrape API /metrics and Pushgateway (for Modal/ephemeral workers).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # PhotoGenius API metrics (adjust target if API runs elsewhere)
+  - job_name: photogenius
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Pushgateway for Modal / ephemeral orchestrator workers
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]
+    scrape_interval: 30s

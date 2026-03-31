@@ -1,0 +1,24 @@
+[
+  {
+    "user_id": "benchmark",
+    "identity_id": "identity_001",
+    "image_urls": [
+      "https://example.com/path/to/photo1.jpg",
+      "https://example.com/path/to/photo2.jpg",
+      "https://example.com/path/to/photo3.jpg",
+      "https://example.com/path/to/photo4.jpg",
+      "https://example.com/path/to/photo5.jpg"
+    ]
+  },
+  {
+    "user_id": "benchmark",
+    "identity_id": "identity_002",
+    "image_urls": [
+      "https://example.com/path/to/photo1.jpg",
+      "https://example.com/path/to/photo2.jpg",
+      "https://example.com/path/to/photo3.jpg",
+      "https://example.com/path/to/photo4.jpg",
+      "https://example.com/path/to/photo5.jpg"
+    ]
+  }
+]

@@ -1,0 +1,46 @@
+{
+  "total_run": 2,
+  "total_planned": 2,
+  "wall_seconds": 0.02,
+  "aggregates": {
+    "first_try_success": 1.0,
+    "person_count_accuracy": 1.0,
+    "hand_anatomy": 1.0,
+    "physics_realism": 0.95,
+    "fantasy_coherence": 1.0,
+    "text_accuracy": 1.0,
+    "math_diagram_accuracy": 1.0,
+    "avg_refinement_loops": 0.0,
+    "first_try_success_by_category": {
+      "multi_person": 1.0,
+      "rain_weather": 1.0
+    },
+    "generation_time_avg_ms": 0.0,
+    "generation_time_per_category_ms": {
+      "multi_person": 0.0,
+      "rain_weather": 0.0
+    }
+  },
+  "metrics_passed": {
+    "first_try_success": true,
+    "person_count_accuracy": true,
+    "hand_anatomy": true,
+    "physics_realism": true,
+    "fantasy_coherence": true,
+    "text_accuracy": true,
+    "math_diagram_accuracy": true
+  },
+  "metrics_threshold": {
+    "first_try_success": 0.95,
+    "person_count_accuracy": 0.99,
+    "hand_anatomy": 0.95,
+    "physics_realism": 0.9,
+    "fantasy_coherence": 0.85,
+    "text_accuracy": 0.98,
+    "math_diagram_accuracy": 0.98
+  },
+  "errors": [],
+  "timestamp": "2026-02-04T08:12:48.545559Z",
+  "results_dir": "benchmark_results",
+  "csv_path": "benchmark_results\\benchmark_results.csv"
+}

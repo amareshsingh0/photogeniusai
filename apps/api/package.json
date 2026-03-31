@@ -1,0 +1,12 @@
+{
+  "name": "@photogenius/api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node ../../scripts/run-api-dev.mjs",
+    "build": "echo 'No JS build'",
+    "lint": "echo 'Use ruff + black'",
+    "test": "node ../../scripts/run-api-test.mjs",
+    "clean": "echo 'Clean Python cache'"
+  }
+}

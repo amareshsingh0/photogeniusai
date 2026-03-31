@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>PhotoGenius AI – Home</title>
+</head>
+<body style="margin:0;padding:40px;background:#0d0d0d;color:#fff;font-family:system-ui,sans-serif;min-height:100vh">
+  <h1 style="font-size:48px;margin-bottom:20px">PhotoGenius AI</h1>
+  <p id="status" style="font-size:14px;color:#4ade80;margin-bottom:16px">Home loaded. Use links below.</p>
+  <p style="font-size:18px;color:#4ade80;margin-bottom:30px">✅ Home. Neeche wale links app ke asli pages pe le jayenge (Next.js).</p>
+  <p style="font-size:20px;color:#888;margin-bottom:30px">Server Time: <span id="time"></span></p>
+
+  <p style="color:#fbbf24;margin-bottom:20px;padding:12px;background:#422006;border-radius:8px"><strong>Pehli baar link pe click ke baad 30–60 sec wait karo — page load hoga.</strong></p>
+  <h2 style="font-size:18px;color:#aaa;margin-bottom:12px">App pages</h2>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px">
+    <a href="__WEB_APP_URL__/dashboard" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:8px">Dashboard</a>
+    <a href="__WEB_APP_URL__/generate" style="padding:12px 24px;background:#667eea;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Generate</a>
+    <a href="__WEB_APP_URL__/gallery" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:8px">Gallery</a>
+    <a href="__WEB_APP_URL__/identity-vault" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:8px">Identity Vault</a>
+    <a href="__WEB_APP_URL__/pricing" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:8px">Pricing</a>
+    <a href="__WEB_APP_URL__/settings" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:8px">Settings</a>
+    <a href="__WEB_APP_URL__/usage" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:8px">Usage</a>
+    <a href="__WEB_APP_URL__/explore" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:8px">Explore</a>
+  </div>
+  <h2 style="font-size:18px;color:#aaa;margin-bottom:12px">Auth &amp; other</h2>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px">
+    <a href="__WEB_APP_URL__/login" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:8px">Login</a>
+    <a href="__WEB_APP_URL__/signup" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:8px">Signup</a>
+    <a href="__WEB_APP_URL__/" style="padding:12px 24px;background:#166534;color:#fff;text-decoration:none;border-radius:8px">Home</a>
+  </div>
+  <div style="margin-top:40px;padding:20px;background:#1a1a1a;border-radius:12px;color:#888">
+    <p>Links upar wale Next app pe jate hain. Browser isi page pe kholo — turant load hoga.</p>
+  </div>
+  <script>var t=document.getElementById("time");if(t)t.textContent=new Date().toISOString();</script>
+</body>
+</html>

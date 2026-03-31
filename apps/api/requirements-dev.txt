@@ -1,0 +1,12 @@
+# Development requirements (lightweight, excludes heavy ML packages)
+# Use this for local development when GPU work happens on Modal
+
+-r requirements.txt
+
+# Exclude heavy packages that are only needed on Modal GPU workers
+# These are commented out in requirements.txt but listed here for reference:
+# - tf-keras (TensorFlow - only needed for local safety checks)
+# - torch, diffusers, transformers (only needed on Modal GPU)
+
+# If you need to run safety checks locally, install:
+# pip install tf-keras>=2.20.0

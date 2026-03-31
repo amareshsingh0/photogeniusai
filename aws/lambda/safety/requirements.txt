@@ -1,0 +1,2 @@
+# PhotoGenius AI - Safety Lambda Dependencies
+# Standard library only - no external dependencies needed

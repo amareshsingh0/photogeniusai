@@ -1,0 +1,22 @@
+# Production-style stack. Use with orchestration (e.g. Swarm, ECS).
+# Build web + API, use external Postgres/Redis or deploy postgres/redis as well.
+version: "3.9"
+
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "3000:3000"
+    env_file: ../../.env
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file: ../../.env
+    restart: unless-stopped

@@ -1,0 +1,34 @@
+
+================================================================================
+SageMaker Endpoint Deployment (Simple)
+================================================================================
+
+Endpoint: photogenius-generation-dev
+Region: us-east-1
+Instance: ml.g5.2xlarge
+S3 Bucket: photogenius-models-dev
+
+Creating model.tar.gz...
+Added: inference.py
+Created: model.tar.gz
+Uploading to s3://photogenius-models-dev/sagemaker/models/enhanced-1770323545/model.tar.gz...
+Uploaded: s3://photogenius-models-dev/sagemaker/models/enhanced-1770323545/model.tar.gz
+Found role: arn:aws:iam::288761732313:role/SageMakerExecutionRole
+Creating model: photogenius-generation-dev-model-1770323550
+Model created: photogenius-generation-dev-model-1770323550
+Creating endpoint config: photogenius-generation-dev-config-1770323555
+Endpoint config created: photogenius-generation-dev-config-1770323555
+Endpoint 'photogenius-generation-dev' exists (status: InService)
+Updating endpoint...
+Update initiated. Waiting for update to complete...
+Traceback (most recent call last):
+  File "C:\desktop\PhotoGenius AI\aws\sagemaker\deploy_simple.py", line 200, in <module>
+    main()
+  File "C:\desktop\PhotoGenius AI\aws\sagemaker\deploy_simple.py", line 188, in main
+    create_or_update_endpoint(ENDPOINT_NAME, config_name)
+  File "C:\desktop\PhotoGenius AI\aws\sagemaker\deploy_simple.py", line 158, in create_or_update_endpoint
+    print(f"\n\u2713 Endpoint ready: {endpoint_name}")
+  File "C:\Users\dell\AppData\Local\Programs\Python\Python311\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2713' in position 2: character maps to <undefined>

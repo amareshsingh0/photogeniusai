@@ -1,0 +1,28 @@
+# Optional: Real-Time Reward Model + Multi-ControlNet (Task 4)
+# Install when using guided diffusion with CLIP/aesthetic rewards and ControlNet.
+# pip install -r requirements-reward.txt
+
+# Core diffusion
+diffusers>=0.27.0
+transformers>=4.38.0
+accelerate>=0.27.0
+
+# CLIP for reward model (anatomy, physics, aesthetics)
+# openai/clip-vit-large-patch14 loaded at runtime
+
+# Computer vision
+opencv-python>=4.9.0
+Pillow>=10.2.0
+
+# PyTorch (install separately for CUDA: see https://pytorch.org)
+# torch>=2.2.0
+# torchvision>=0.17.0
+
+# ControlNet processors (optional, for control image generation)
+# controlnet-aux>=0.0.7
+
+# Aesthetic scoring (optional; reward model falls back to CLIP if unavailable)
+# clip-interrogator>=0.6.0
+
+# Faster inference (optional)
+# xformers>=0.0.24

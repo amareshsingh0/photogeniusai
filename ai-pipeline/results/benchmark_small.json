@@ -1,0 +1,55 @@
+{
+  "total_run": 20,
+  "total_planned": 20,
+  "first_try_success": 1.0,
+  "person_count_accuracy": 1.0,
+  "hand_anatomy": 1.0,
+  "physics_realism": 1.0,
+  "fantasy_coherence": 1.0,
+  "text_accuracy": 1.0,
+  "math_diagram_accuracy": 1.0,
+  "avg_refinement_loops": 0.0,
+  "metrics_passed": {
+    "first_try_success": true,
+    "person_count_accuracy": true,
+    "hand_anatomy": true,
+    "physics_realism": true,
+    "fantasy_coherence": true,
+    "text_accuracy": true,
+    "math_diagram_accuracy": true
+  },
+  "metrics_threshold": {
+    "first_try_success": 0.95,
+    "person_count_accuracy": 0.99,
+    "hand_anatomy": 0.95,
+    "physics_realism": 0.9,
+    "fantasy_coherence": 0.85,
+    "text_accuracy": 0.98,
+    "math_diagram_accuracy": 0.98
+  },
+  "per_category_counts": {
+    "multi_person": 8,
+    "rain_weather": 2,
+    "hand_anatomy": 2,
+    "fantasy": 2,
+    "text_embedded": 2,
+    "math_diagrams": 2,
+    "edge_case": 2
+  },
+  "first_try_success_by_category": {
+    "multi_person": 1.0,
+    "rain_weather": 1.0,
+    "hand_anatomy": 1.0,
+    "fantasy": 1.0,
+    "text_embedded": 1.0,
+    "math_diagrams": 1.0,
+    "edge_case": 1.0
+  },
+  "generation_time_avg_ms": null,
+  "generation_time_per_category_ms": {},
+  "errors": [],
+  "config_name": "production",
+  "baseline_comparison": null,
+  "all_metrics_passed": true,
+  "timestamp": "2026-02-03T11:03:16.078535Z"
+}

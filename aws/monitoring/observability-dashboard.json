@@ -1,0 +1,127 @@
+{
+  "widgets": [
+    {
+      "type": "text",
+      "x": 0,
+      "y": 0,
+      "width": 24,
+      "height": 3,
+      "properties": {
+        "markdown": "## Observability & Correlation IDs\n\nUse **X-Request-ID** (correlation ID) to trace a request across Web → API → Lambda → SageMaker → S3.\nSee runbooks: `docs/runbooks/OBSERVABILITY_RUNBOOKS.md`"
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 3,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/Lambda", "Invocations", "FunctionName", "PhotoGenius-GenerationFunction-*", { "stat": "Sum", "label": "Invocations" } ],
+          [ ".", "Errors", ".", ".", { "stat": "Sum", "label": "Errors", "color": "#d62728" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Generation Lambda – Invocations & Errors",
+        "period": 300
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8,
+      "y": 3,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/Lambda", "Duration", "FunctionName", "PhotoGenius-GenerationFunction-*", { "stat": "Average", "label": "Avg (ms)" } ],
+          [ ".", ".", ".", ".", { "stat": "p99", "label": "p99 (ms)" } ],
+          [ ".", ".", ".", ".", { "stat": "Maximum", "label": "Max (ms)" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Generation Lambda – Duration (ms)",
+        "period": 300
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16,
+      "y": 3,
+      "width": 8,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/Lambda", "ConcurrentExecutions", "FunctionName", "PhotoGenius-GenerationFunction-*", { "stat": "Maximum", "label": "Concurrent" } ],
+          [ "AWS/Lambda", "Throttles", "FunctionName", "PhotoGenius-GenerationFunction-*", { "stat": "Sum", "label": "Throttles", "color": "#ff7f0e" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Lambda Concurrency & Throttles",
+        "period": 300
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 9,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "RequestCount", { "stat": "Sum", "label": "Requests" } ],
+          [ "PhotoGenius", "ErrorCount", { "stat": "Sum", "label": "Errors", "color": "#d62728" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Request & Error Count (custom namespace)",
+        "period": 300
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 9,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "GenerationTimeMs", { "stat": "Average", "label": "Avg" } ],
+          [ "PhotoGenius", "GenerationTimeMs", { "stat": "p99", "label": "p99" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Per-stage / generation latency (custom)",
+        "period": 300
+      }
+    },
+    {
+      "type": "text",
+      "x": 0,
+      "y": 15,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "markdown": "### Logs Insights – correlation ID\n\n**Find all logs for one request (replace `<CORRELATION_ID>`):**\n```\nfields @timestamp, @message\n| filter @message like /<CORRELATION_ID>/\n| sort @timestamp asc\n```\n\n**Top 10 slow by duration (if logs have duration_ms):**\n```\nfields @timestamp, @message\n| parse @message /\"duration_ms\":(?<duration_ms>\\d+)/\n| filter ispresent(duration_ms)\n| sort duration_ms desc\n| limit 10\n```\n\n**S3 upload failures:**\n```\nfields @timestamp, @message\n| filter @message like /S3 upload failed/\n```\n\nUse log groups: Generation Lambda, API Gateway access logs, SageMaker endpoint (if configured)."
+      }
+    },
+    {
+      "type": "alarm",
+      "x": 0,
+      "y": 21,
+      "width": 12,
+      "height": 4,
+      "properties": {
+        "title": "Alarms (Lambda errors / throttles)",
+        "alarms": [],
+        "region": "${AWS::Region}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(MSYS_NO_PATHCONV=1 aws logs get-log-events:*)"
+    ]
+  }
+}

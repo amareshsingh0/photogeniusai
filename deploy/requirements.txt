@@ -1,0 +1,6 @@
+# Required for deploy/sagemaker_deployment.py
+boto3>=1.28.0
+PyYAML>=6.0
+
+# Optional: use SageMaker SDK path instead of boto3-only fallback
+# sagemaker>=2.0.0

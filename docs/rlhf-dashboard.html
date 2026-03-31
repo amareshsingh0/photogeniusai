@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RLHF Pilot Dashboard</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { margin-bottom: 0.5rem; }
+    .subtitle { color: #666; margin-bottom: 1.5rem; }
+    section { margin-bottom: 2rem; }
+    .metric { display: inline-block; background: #f5f5f5; padding: 1rem 1.5rem; border-radius: 8px; margin-right: 1rem; margin-bottom: 0.5rem; }
+    .metric strong { display: block; font-size: 1.5rem; color: #333; }
+    .metric span { font-size: 0.85rem; color: #666; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #eee; }
+    th { background: #f9f9f9; }
+    pre { background: #f5f5f5; padding: 1rem; border-radius: 8px; overflow: auto; font-size: 0.85rem; }
+    .target { color: #0a0; }
+    .warn { color: #c60; }
+  </style>
+</head>
+<body>
+  <h1>RLHF Pilot Dashboard</h1>
+  <p class="subtitle">Preference data, reward model, and policy rollout metrics. Load metrics JSON below or use <code>python ai-pipeline/scripts/rlhf_metrics.py</code>.</p>
+
+  <section>
+    <h2>Preference collection</h2>
+    <div class="metric"><strong id="total-pairs">—</strong><span>Total preference pairs</span></div>
+    <div class="metric"><strong id="target-pairs">5,000+</strong><span>Target (production)</span></div>
+    <div class="metric"><strong id="acceptance">—</strong><span>Acceptance rate</span></div>
+    <table>
+      <thead><tr><th>Source</th><th>Count</th></tr></thead>
+      <tbody id="by-source"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Reward model</h2>
+    <div class="metric"><strong id="rm-accuracy">—</strong><span>Val accuracy / agreement</span></div>
+    <div class="metric"><strong id="pearson">—</strong><span>Pearson r (human eval)</span></div>
+    <p class="subtitle">Target: Pearson r &gt; 0.70 with human judgments.</p>
+  </section>
+
+  <section>
+    <h2>Policy rollout</h2>
+    <div class="metric"><strong id="rollout-pct">—</strong><span>Traffic % (canary)</span></div>
+    <div class="metric"><strong id="safety-ok">—</strong><span>Safety check</span></div>
+  </section>
+
+  <section>
+    <h2>Load metrics JSON</h2>
+    <p>Paste output of <code>rlhf_metrics.py</code> or API response:</p>
+    <textarea id="json-input" rows="8" style=" width: 100%; font-family: monospace; font-size: 0.9rem;"></textarea>
+    <button type="button" onclick="applyMetrics()">Apply</button>
+  </section>
+
+  <script>
+    function applyMetrics() {
+      const raw = document.getElementById('json-input').value.trim();
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        const stats = data.preference_stats || data;
+        document.getElementById('total-pairs').textContent = (stats.total_pairs ?? '—').toLocaleString();
+        document.getElementById('target-pairs').textContent = data.target_pairs || '5,000+';
+        document.getElementById('acceptance').textContent = data.acceptance_rate != null
+          ? (data.acceptance_rate * 100).toFixed(1) + '%'
+          : '—';
+        const bySource = stats.by_source || {};
+        const tbody = document.getElementById('by-source');
+        tbody.innerHTML = Object.entries(bySource).map(([k, v]) =>
+          `<tr><td>${k}</td><td>${Number(v).toLocaleString()}</td></tr>`
+        ).join('') || '<tr><td colspan="2">No data</td></tr>';
+        document.getElementById('rm-accuracy').textContent = data.reward_model_accuracy != null
+          ? (data.reward_model_accuracy * 100).toFixed(1) + '%'
+          : '—';
+        document.getElementById('pearson').textContent = data.pearson_r != null
+          ? data.pearson_r.toFixed(2)
+          : '—';
+        document.getElementById('rollout-pct').textContent = data.rollout_percent != null
+          ? data.rollout_percent + '%'
+          : '—';
+        document.getElementById('safety-ok').textContent = data.safety_ok != null
+          ? (data.safety_ok ? 'OK' : 'Fail')
+          : '—';
+      } catch (e) {
+        alert('Invalid JSON: ' + e.message);
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "include": ["*.py"],
+  "exclude": ["**/__pycache__"],
+  "reportMissingImports": "warning",
+  "reportMissingModuleSource": "none",
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "basic",
+  "stubPath": "",
+  "venvPath": "",
+  "extraPaths": [".."]
+}

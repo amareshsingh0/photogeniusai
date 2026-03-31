@@ -1,0 +1,74 @@
+# CloudWatch Alarms for PhotoGenius (Task 5.1)
+# Deploy with: aws cloudformation deploy --template-file alarms.yaml --stack-name photogenius-alarms
+# Requires: PhotoGenius custom metrics published to namespace "PhotoGenius" (see observability.py + PutMetricData).
+# Optional: set SnsTopicArn or remove AlarmActions to disable notifications.
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CloudWatch Alarms for PhotoGenius - first-try success, OCR, math validation
+
+Parameters:
+  SnsTopicArn:
+    Type: String
+    Default: ""
+    Description: SNS topic ARN for alarm notifications (leave empty to skip)
+  Namespace:
+    Type: String
+    Default: PhotoGenius
+    Description: CloudWatch namespace for custom metrics
+
+Conditions:
+  HasSns: !Not [!Equals [!Ref SnsTopicArn, ""]]
+
+Resources:
+  ValidationFirstTrySuccessAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: PhotoGenius-ValidationFirstTrySuccess-Below90
+      AlarmDescription: "Validation first-try success rate below 90% - notify engineering"
+      MetricName: ValidationFirstTrySuccessRate
+      Namespace: !Ref Namespace
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0.90
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasSns, [!Ref SnsTopicArn], []]
+
+  TypographyOcrAccuracyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: PhotoGenius-TypographyOcrAccuracy-Below70
+      AlarmDescription: "Typography OCR accuracy below 70% - consider circuit fallback"
+      MetricName: TypographyOcrAccuracy
+      Namespace: !Ref Namespace
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0.70
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasSns, [!Ref SnsTopicArn], []]
+
+  MathValidationPassRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: PhotoGenius-MathValidationPassRate-Below98
+      AlarmDescription: "Math formula validation pass rate below 98%"
+      MetricName: MathValidationPassRate
+      Namespace: !Ref Namespace
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0.98
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasSns, [!Ref SnsTopicArn], []]
+
+Outputs:
+  ValidationAlarm:
+    Value: !Ref ValidationFirstTrySuccessAlarm
+  TypographyAlarm:
+    Value: !Ref TypographyOcrAccuracyAlarm
+  MathAlarm:
+    Value: !Ref MathValidationPassRateAlarm

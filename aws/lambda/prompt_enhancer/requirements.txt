@@ -1,0 +1,2 @@
+# No external APIs - pure Python stdlib
+# Optional: add regex if needed (stdlib has re)

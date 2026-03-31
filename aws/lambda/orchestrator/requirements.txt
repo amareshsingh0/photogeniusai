@@ -1,0 +1,21 @@
+# boto3 is provided by Lambda runtime
+
+# Core dependencies (lightweight)
+numpy==1.26.3
+pillow==10.2.0
+
+# Validation
+pydantic>=2.0.0
+
+# Logging
+structlog==24.1.0
+
+# Image Processing (headless version for Lambda)
+opencv-python-headless==4.9.0.80
+
+# Network & Graph Analysis
+networkx==3.0
+
+# Note: Heavy dependencies like torch, sentence-transformers, sympy
+# should be added via Lambda Layers to stay within 250MB limit.
+# Services will gracefully degrade if dependencies are missing.

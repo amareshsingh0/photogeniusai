@@ -1,0 +1,59 @@
+# Observability stack: Jaeger (tracing), Prometheus (metrics), Grafana (dashboards).
+# Run: docker compose -f infra/docker/docker-compose.observability.yml up -d
+#
+# - Jaeger UI: http://localhost:16686
+# - Prometheus: http://localhost:9090
+# - Grafana: http://localhost:3010 (admin / admin)
+#
+# Set OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 for OTLP gRPC (e.g. from host).
+version: "3.8"
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    ports:
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+      - "14250:14250"
+      - "14268:14268"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+
+  pushgateway:
+    image: prom/pushgateway:v1.6.2
+    ports:
+      - "9091:9091"
+    # For Modal / ephemeral workers: set PUSHGATEWAY_URL=http://localhost:9091
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    ports:
+      - "3010:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./observability/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+
+volumes:
+  prometheus_data: {}
+  grafana_data: {}

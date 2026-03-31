@@ -1,0 +1,1 @@
+# Optional: sentence-transformers for semantic enhancement (rule-based handler needs nothing)

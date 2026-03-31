@@ -1,0 +1,2 @@
+# boto3 is provided by Lambda runtime
+# Orchestrator v2 invokes v1 handler when in same package; else add minimal deps

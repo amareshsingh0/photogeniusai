@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photogenius-web
+  labels:
+    app: photogenius-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: photogenius-web
+  template:
+    metadata:
+      labels:
+        app: photogenius-web
+    spec:
+      containers:
+        - name: web
+          image: photogenius-web:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: "production"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photogenius-api
+  labels:
+    app: photogenius-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: photogenius-api
+  template:
+    metadata:
+      labels:
+        app: photogenius-api
+    spec:
+      containers:
+        - name: api
+          image: photogenius-api:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: ENVIRONMENT
+              value: "production"

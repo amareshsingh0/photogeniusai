@@ -1,0 +1,57 @@
+# Minimal requirements for local FastAPI development
+# GPU work happens on AWS SageMaker, so heavy ML packages are optional
+
+# Core FastAPI
+fastapi==0.109.0
+uvicorn[standard]==0.40.0
+sqlalchemy[asyncio]==2.0.25
+asyncpg==0.29.0
+pydantic>=2.5.3
+pydantic-settings>=2.1.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+aiofiles==23.2.1
+httpx==0.26.0
+python-dotenv>=1.0.1
+alembic==1.13.1
+
+# Storage
+boto3==1.34.34
+aioboto3==12.3.0
+
+# WebSocket
+python-socketio==5.11.0
+
+# Redis (Rate Limiting)
+redis==5.0.1
+aioredis==2.0.1
+
+# Scheduled tasks (cleanup, stats)
+apscheduler==3.10.4
+
+# GPU Workers (AWS SageMaker - no Modal needed)
+# modal>=0.65.0  # NOT USED - we're on AWS SageMaker, not Modal
+
+# Monitoring
+sentry-sdk==1.39.2
+
+# Testing
+pytest==8.0.0
+pytest-asyncio==0.23.3
+
+# Basic ML utilities (lightweight, needed for safety services)
+numpy>=1.26.0  # Used by age_estimator and other safety checks
+pillow>=10.0.0  # Image processing
+
+# Note: Heavy ML packages are NOT included here:
+# - torch, diffusers, transformers (only needed on AWS SageMaker GPU instances)
+# - tf-keras, deepface (only needed for local safety checks, pulls in TensorFlow ~2GB)
+# - nudenet (lightweight, but can be slow to install)
+#
+# If you need full requirements, install from requirements.txt separately:
+#   pip install -r requirements.txt
+#
+# Or install specific packages as needed:
+#   pip install nudenet  # Lightweight NSFW detection
+#   pip install deepface tf-keras  # Full safety checks (requires TensorFlow)

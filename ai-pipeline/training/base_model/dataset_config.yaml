@@ -1,0 +1,37 @@
+# Base model pilot dataset (v1.0 = 20K images)
+# Versioning: v1.0 → 20K; v2.0 → 50K (after 3 months)
+
+version: "1.0"
+total_target: 20000
+
+sources:
+  user_optin:
+    count_target: 5000
+    path: "s3://photogenius-training-data/user-optin/"  # or local data/base_model/sources/user_optin
+    license: "user_consent"
+    description: "User opt-in generations (consent + allow training)"
+
+  licensed_stock:
+    count_target: 10000
+    path: "data/base_model/sources/licensed_stock"
+    license: "commercial_license"
+    description: "Licensed stock photos (e.g. Shutterstock, Adobe Stock)"
+
+  public_domain_art:
+    count_target: 5000
+    path: "data/base_model/sources/public_domain"
+    license: "public_domain"
+    description: "Public domain art (e.g. WikiArt, museums)"
+
+output:
+  manifest_path: "data/base_model/curated/v1.0/manifest.jsonl"
+  captions_path: "data/base_model/curated/v1.0/captions.jsonl"
+  dedup_hashes_path: "data/base_model/curated/v1.0/dedup_hashes.json"
+  license_manifest_path: "data/base_model/curated/v1.0/license_manifest.json"
+
+quality:
+  min_resolution: [512, 512]
+  max_aspect_ratio: 2.5
+  min_file_size_kb: 20
+  blur_threshold: 100  # Laplacian variance; lower = more blur
+  skip_nsfw: true

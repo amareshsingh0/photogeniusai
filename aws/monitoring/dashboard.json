@@ -1,0 +1,152 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "ValidationFirstTrySuccessRate", "Category", "portrait", { "stat": "Average", "label": "Portrait" } ],
+          [ "PhotoGenius", "ValidationFirstTrySuccessRate", "Category", "landscape", { "stat": "Average", "label": "Landscape" } ],
+          [ "PhotoGenius", "ValidationFirstTrySuccessRate", "Category", "product", { "stat": "Average", "label": "Product" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Validation First-Try Success Rate (by category)",
+        "period": 300,
+        "yAxis": { "left": { "min": 0, "max": 1 } }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "RefinementLoopsAvg", { "stat": "Average", "label": "Refinement loops (avg)" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Refinement Loops Average",
+        "period": 300
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "AestheticGuidanceTimeMs", { "stat": "p50", "label": "p50 (ms)" } ],
+          [ "PhotoGenius", "AestheticGuidanceTimeMs", { "stat": "Average", "label": "Avg (ms)" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Aesthetic Guidance Time (ms)",
+        "period": 300
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "ConstraintSolverExecutionTimeMs", { "stat": "p50", "label": "p50 (ms)" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Constraint Solver Execution Time (ms)",
+        "period": 300
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "TypographyOcrAccuracy", { "stat": "Average", "label": "OCR accuracy" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Typography OCR Accuracy",
+        "period": 300,
+        "yAxis": { "left": { "min": 0, "max": 1 } }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "MathValidationPassRate", { "stat": "Average", "label": "Math validation pass rate" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Math Validation Pass Rate",
+        "period": 300,
+        "yAxis": { "left": { "min": 0, "max": 1 } }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 18,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [ "PhotoGenius", "RequestCount", { "stat": "Sum", "label": "Requests" } ],
+          [ "PhotoGenius", "ErrorCount", { "stat": "Sum", "label": "Errors" } ]
+        ],
+        "view": "timeSeries",
+        "stacked": false,
+        "region": "${AWS::Region}",
+        "title": "Request & Error Count",
+        "period": 300
+      }
+    },
+    {
+      "type": "alarm",
+      "x": 0,
+      "y": 24,
+      "width": 12,
+      "height": 4,
+      "properties": {
+        "title": "Alarms (first-try success < 90%)",
+        "alarms": [],
+        "region": "${AWS::Region}"
+      }
+    },
+    {
+      "type": "text",
+      "x": 12,
+      "y": 24,
+      "width": 12,
+      "height": 4,
+      "properties": {
+        "markdown": "## Alarm configuration\n\nCreate CloudWatch Alarms (e.g. via CLI or template):\n- **ValidationFirstTrySuccessRate** < 0.90 for 2 periods → notify SNS\n- **TypographyOcrAccuracy** < 0.70 → typography circuit\n- **MathValidationPassRate** < 0.98 → alert"
+      }
+    }
+  ]
+}

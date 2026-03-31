@@ -1,0 +1,14 @@
+# GPU deps for SDXL generation. Install after requirements.txt:
+#   pip install -r requirements.txt && pip install -r requirements-gpu.txt
+# Requires CUDA, ~10GB+ VRAM.
+
+-r requirements.txt
+torch>=2.0.0
+torchvision>=0.15.0
+diffusers>=0.30.0
+transformers>=4.40.0
+accelerate>=0.33.0
+safetensors>=0.4.0
+huggingface_hub>=0.20.0
+peft>=0.10.0
+insightface>=0.7.0

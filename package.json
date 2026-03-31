@@ -1,0 +1,29 @@
+{
+  "name": "photogenius-ai",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "predev": "pnpm --filter @photogenius/database run build",
+    "dev": "turbo run dev --parallel",
+    "dev:web": "pnpm --filter @photogenius/web dev",
+    "build": "turbo run build",
+    "start": "turbo run start",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "verify-env": "bash scripts/verify-env.sh",
+    "verify-env:win": "powershell -ExecutionPolicy Bypass -File scripts/verify-env.ps1"
+  },
+  "devDependencies": {
+    "@turbo/gen": "^1.11.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.1.1",
+    "turbo": "^1.11.0"
+  },
+  "packageManager": "pnpm@8.14.0",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

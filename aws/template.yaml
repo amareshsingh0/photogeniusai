@@ -1,0 +1,492 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: PhotoGenius AI - Serverless Image Generation Platform
+
+# ==================== Parameters ====================
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  SageMakerEndpoint:
+    Type: String
+    Default: photogenius-generation-dev
+    Description: SageMaker endpoint name for single-pass image generation (deployed via gpu.ps1)
+
+  SageMakerTwoPassEndpoint:
+    Type: String
+    Default: photogenius-two-pass
+    Description: SageMaker endpoint name for two-pass (preview + final) generation (matches deploy/sagemaker_deployment.py)
+
+  SageMakerRealtimeEndpoint:
+    Type: String
+    Default: ""
+    Description: "(Optional) SageMaker endpoint for real-time preview (LCM 8–10s; ml.g5.xlarge)"
+
+  SageMakerIdentityV2Endpoint:
+    Type: String
+    Default: ""
+    Description: "(Optional) SageMaker endpoint for Identity Engine V2 (99%+ face consistency)"
+
+  SageMaker4KEndpoint:
+    Type: String
+    Default: ""
+    Description: "(Optional) Native 4K endpoint (3840×2160/3840×3840; ml.g5.4xlarge; PREMIUM + resolution=4k)"
+
+  IdentityEngineVersion:
+    Type: String
+    Default: v1
+    AllowedValues:
+      - v1
+      - v2
+    Description: Identity engine version (v2 = multi-path ensemble)
+
+  IdentityMethod:
+    Type: String
+    Default: ensemble
+    AllowedValues:
+      - instantid
+      - faceadapter
+      - photomaker
+      - ensemble
+    Description: Identity method when using v2 (ensemble = best of 3 paths)
+
+# ==================== Globals ====================
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.11
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        SAGEMAKER_ENDPOINT: !Ref SageMakerEndpoint
+        S3_BUCKET: !Sub photogenius-images-${Environment}
+
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,Authorization,X-Requested-With'"
+      AllowOrigin: "'*'"
+
+# ==================== Resources ====================
+Resources:
+  # ─── S3 Buckets ───────────────────────────────────────────────────────────
+  ImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub photogenius-images-${Environment}
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+            AllowedOrigins:
+              - "*"
+            MaxAge: 3600
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  ImagesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ImagesBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:GetObject
+            Resource: !Sub ${ImagesBucket.Arn}/*
+
+  ModelsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub photogenius-models-${Environment}
+
+  LorasBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub photogenius-loras-${Environment}
+
+  # ─── IAM Roles ────────────────────────────────────────────────────────────
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub photogenius-lambda-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      Policies:
+        - PolicyName: SageMakerInvokePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource: "*"
+        - PolicyName: LambdaInvokePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: "*"
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt GenerationTable.Arn
+
+  # ─── DynamoDB ────────────────────────────────────────────────────────────
+  GenerationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub photogenius-generations-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: generation_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: N
+      KeySchema:
+        - AttributeName: generation_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: user-index
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # Prompt cache: semantic cache key (hash of prompt+seed+tier+identity) → S3 URLs; TTL 30 days
+  PromptCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub photogenius-prompt-cache-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: cache_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: cache_key
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ─── Lambda Functions ─────────────────────────────────────────────────────
+
+  # Safety Check Function
+  SafetyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub photogenius-safety-${Environment}
+      CodeUri: lambda/safety/
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        SafetyApi:
+          Type: Api
+          Properties:
+            Path: /safety
+            Method: POST
+        SafetyOptions:
+          Type: Api
+          Properties:
+            Path: /safety
+            Method: OPTIONS
+
+  # Prompt Enhancer (internal, no API)
+  PromptEnhancerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub photogenius-prompt-enhancer-${Environment}
+      CodeUri: lambda/prompt_enhancer/
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 1024
+      Environment:
+        Variables:
+          ENHANCEMENT_MODE: rule_based
+
+  # Post-Processor (internal, upscale + S3)
+  PostProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub photogenius-post-processor-${Environment}
+      CodeUri: lambda/post_processor/
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 120
+      MemorySize: 1024
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImagesBucket
+          UPSCALE_FACTOR: "2"
+
+  # Orchestrator (quality tier routing: FAST/STANDARD/PREMIUM → two-pass or single-pass SageMaker)
+  OrchestratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub photogenius-orchestrator-${Environment}
+      CodeUri: lambda/orchestrator/
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 600
+      MemorySize: 512
+      Environment:
+        Variables:
+          SAGEMAKER_ENDPOINT: !Ref SageMakerEndpoint
+          SAGEMAKER_TWO_PASS_ENDPOINT: !Ref SageMakerTwoPassEndpoint
+          SAGEMAKER_REALTIME_ENDPOINT: !Ref SageMakerRealtimeEndpoint
+          SAGEMAKER_GENERATION_ENDPOINT: !Ref SageMakerEndpoint
+          SAGEMAKER_IDENTITY_V2_ENDPOINT: !Ref SageMakerIdentityV2Endpoint
+          SAGEMAKER_4K_ENDPOINT: !Ref SageMaker4KEndpoint
+          IDENTITY_ENGINE_VERSION: !Ref IdentityEngineVersion
+          IDENTITY_METHOD: !Ref IdentityMethod
+          S3_BUCKET: !Ref ImagesBucket
+          DYNAMODB_TABLE: !Ref GenerationTable
+          PROMPT_ENHANCER_FUNCTION: !Ref PromptEnhancerFunction
+          POST_PROCESSOR_FUNCTION: !Ref PostProcessorFunction
+      Events:
+        GenerateAPI:
+          Type: Api
+          Properties:
+            Path: /generate
+            Method: POST
+        GenerateOptions:
+          Type: Api
+          Properties:
+            Path: /generate
+            Method: OPTIONS
+        OrchestrateAPI:
+          Type: Api
+          Properties:
+            Path: /orchestrate
+            Method: POST
+        OrchestrateOptions:
+          Type: Api
+          Properties:
+            Path: /orchestrate
+            Method: OPTIONS
+
+  # Orchestrator v2 (smart routing, tier detection, progress callback, cost optimization)
+  OrchestratorV2Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub photogenius-orchestrator-v2-${Environment}
+      CodeUri: lambda/orchestrator_v2/
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 600
+      MemorySize: 512
+      Environment:
+        Variables:
+          ORCHESTRATOR_V1_FUNCTION: !Sub photogenius-orchestrator-${Environment}
+          SAGEMAKER_ENDPOINT: !Ref SageMakerEndpoint
+          SAGEMAKER_TWO_PASS_ENDPOINT: !Ref SageMakerTwoPassEndpoint
+          SAGEMAKER_REALTIME_ENDPOINT: !Ref SageMakerRealtimeEndpoint
+          SAGEMAKER_GENERATION_ENDPOINT: !Ref SageMakerEndpoint
+          SAGEMAKER_IDENTITY_V2_ENDPOINT: !Ref SageMakerIdentityV2Endpoint
+          SAGEMAKER_4K_ENDPOINT: !Ref SageMaker4KEndpoint
+          IDENTITY_ENGINE_VERSION: !Ref IdentityEngineVersion
+          IDENTITY_METHOD: !Ref IdentityMethod
+          S3_BUCKET: !Ref ImagesBucket
+          DYNAMODB_TABLE: !Ref GenerationTable
+      Events:
+        OrchestrateV2API:
+          Type: Api
+          Properties:
+            Path: /orchestrate/v2
+            Method: POST
+        OrchestrateV2Options:
+          Type: Api
+          Properties:
+            Path: /orchestrate/v2
+            Method: OPTIONS
+
+  # Generation Function (direct SageMaker, backward compatibility at /generate/raw)
+  GenerationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub photogenius-generation-${Environment}
+      CodeUri: lambda/generation/
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          PROMPT_CACHE_TABLE: !Ref PromptCacheTable
+          S3_BUCKET: !Ref ImagesBucket
+      Events:
+        GenerationApi:
+          Type: Api
+          Properties:
+            Path: /generate/raw
+            Method: POST
+        GenerationOptions:
+          Type: Api
+          Properties:
+            Path: /generate/raw
+            Method: OPTIONS
+
+  # Refinement Function (PIL-based img2img editing; cold start < 3s, execution < 30s)
+  RefinementFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub photogenius-refinement-${Environment}
+      CodeUri: lambda/refinement/
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 1024
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ImagesBucket
+      Events:
+        RefinementApi:
+          Type: Api
+          Properties:
+            Path: /refine
+            Method: POST
+        RefinementOptions:
+          Type: Api
+          Properties:
+            Path: /refine
+            Method: OPTIONS
+
+  # Training Trigger Function
+  TrainingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub photogenius-training-${Environment}
+      CodeUri: lambda/training/
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Events:
+        TrainingApi:
+          Type: Api
+          Properties:
+            Path: /train
+            Method: POST
+        TrainingOptions:
+          Type: Api
+          Properties:
+            Path: /train
+            Method: OPTIONS
+
+  # Health Check Function
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub photogenius-health-${Environment}
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: index.handler
+      Runtime: python3.11
+      InlineCode: |
+        import json
+        def handler(event, context):
+            return {
+                "statusCode": 200,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"status": "healthy", "provider": "aws"})
+            }
+      Events:
+        HealthApi:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: GET
+
+# ==================== Outputs ====================
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+    Export:
+      Name: !Sub PhotoGeniusApiEndpoint-${Environment}
+
+  SafetyUrl:
+    Description: Safety check endpoint
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/safety"
+
+  GenerationUrl:
+    Description: Generation endpoint
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/generate"
+
+  RefinementUrl:
+    Description: Refinement endpoint
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/refine"
+
+  TrainingUrl:
+    Description: Training endpoint
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/train"
+
+  OrchestratorGenerateUrl:
+    Description: Orchestrator flow (quality tier → SageMaker)
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/generate"
+
+  OrchestrateUrl:
+    Description: "Orchestrator /orchestrate (quality_tier FAST|STANDARD|PREMIUM)"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/orchestrate"
+
+  OrchestrateV2Url:
+    Description: "Orchestrator v2 POST /orchestrate/v2 (smart routing, tier detection)"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/orchestrate/v2"
+
+  GenerationRawUrl:
+    Description: Direct generation (backward compatibility)
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/generate/raw"
+
+  GenerationTableName:
+    Description: DynamoDB table for generation metadata
+    Value: !Ref GenerationTable
+
+  ImagesBucketName:
+    Description: S3 bucket for generated images
+    Value: !Ref ImagesBucket
+
+  ModelsBucketName:
+    Description: S3 bucket for AI models
+    Value: !Ref ModelsBucket

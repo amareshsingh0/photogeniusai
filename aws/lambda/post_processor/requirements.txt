@@ -1,0 +1,5 @@
+# boto3 is provided by Lambda runtime
+Pillow>=10.0.0
+numpy>=1.24.0,<2
+opencv-python-headless>=4.8.0
+# Optional (for EFS + layer): basicsr, realesrgan, facexlib, gfpgan (CodeFormer)

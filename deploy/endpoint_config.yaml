@@ -1,0 +1,76 @@
+# PhotoGenius AI - SageMaker multi-tier endpoint configuration
+# Success: <5s latency STANDARD, <30s PERFECT
+# Auto-scaling: 1-10 instances per tier
+
+defaults:
+  region: us-east-1
+  sagemaker_role_env: SAGEMAKER_ROLE
+  bucket_env: SAGEMAKER_BUCKET
+
+tiers:
+  STANDARD:
+    # Single-pass SDXL Base; target <5s (Turbo) or ~30s (Base)
+    endpoint_name: photogenius-standard
+    instance_type: ml.g5.xlarge
+    min_capacity: 1
+    max_capacity: 10
+    latency_target_seconds: 5
+    # Use Turbo for STANDARD when available for <5s
+    model_env:
+      PHOTOGENIUS_TIER: STANDARD
+      HF_MODEL_ID: stabilityai/sdxl-turbo
+    scaling:
+      target_invocations_per_instance: 2.0
+      scale_in_cooldown: 300
+      scale_out_cooldown: 60
+
+  PREMIUM:
+    # Two-pass Turbo + Base; target <20s
+    endpoint_name: photogenius-two-pass
+    instance_type: ml.g5.2xlarge
+    min_capacity: 1
+    max_capacity: 10
+    latency_target_seconds: 20
+    model_env:
+      PHOTOGENIUS_TIER: PREMIUM
+    scaling:
+      target_invocations_per_instance: 1.5
+      scale_in_cooldown: 300
+      scale_out_cooldown: 90
+
+  PERFECT:
+    # Two-pass + Refiner; target <30s (use ml.g5.xlarge when 2xlarge/4xlarge quota is limited)
+    endpoint_name: photogenius-perfect
+    instance_type: ml.g5.xlarge
+    min_capacity: 1
+    max_capacity: 10
+    latency_target_seconds: 30
+    model_env:
+      PHOTOGENIUS_TIER: PERFECT
+    scaling:
+      target_invocations_per_instance: 1.0
+      scale_in_cooldown: 400
+      scale_out_cooldown: 120
+
+# Optional: separate 4K endpoint (PERFECT tier can route here)
+optional_endpoints:
+  FOUR_K:
+    endpoint_name: photogenius-4k
+    instance_type: ml.g5.4xlarge
+    min_capacity: 0
+    max_capacity: 4
+  REALTIME:
+    endpoint_name: photogenius-realtime
+    instance_type: ml.g5.xlarge
+    min_capacity: 0
+    max_capacity: 6
+
+# CloudWatch alarms
+cloudwatch:
+  alarm_namespace: PhotoGenius/SageMaker
+  latency_alarm_threshold_seconds:
+    STANDARD: 8
+    PREMIUM: 25
+    PERFECT: 35
+  error_rate_threshold: 0.05
+  insufficient_data_actions: []
