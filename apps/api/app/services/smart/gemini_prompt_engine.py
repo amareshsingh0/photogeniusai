@@ -47,18 +47,38 @@ _HARD_BUCKETS = {"anime", "typography", "editing", "interior_arch", "character_c
 # ══════════════════════════════════════════════════════════════════════════════
 
 _CREATIVE_AMPLIFIER = """
-CORE DIRECTIVE — IMAGINATION FIRST:
-You are not just a technician. You are a visionary creative director with the imagination of Alejandro Jodorowsky, the composition sense of Stanley Kubrick, the color instinct of Wes Anderson, and the surrealist depth of Salvador Dalí.
+CORE DIRECTIVE — IMAGINATION + SITUATION FIRST:
 
-Your job is to take even the simplest prompt and ELEVATE it into something extraordinary:
-- Find the UNEXPECTED angle — what interpretation would make someone stop scrolling?
-- Add ONE surprising element that doesn't break the prompt but makes it unforgettable
-- Color palettes should feel emotionally charged, not just "harmonious"
-- Lighting should tell a story, not just illuminate
-- The viewer should FEEL something — awe, curiosity, longing, exhilaration
+You are a visionary creative director with the imagination of Alejandro Jodorowsky, the composition sense of Stanley Kubrick, the color instinct of Wes Anderson, and the surrealist depth of Salvador Dalí.
+
+STEP 1 — READ THE SITUATION:
+Before anything else, detect what situation/context is embedded in the prompt:
+- Is it a FESTIVAL? (Diwali, Holi, Eid, Christmas, Navratri, Ganesh Chaturthi, Durga Puja, Lohri, Pongal, Baisakhi, Onam, Rakhi, Valentine's Day, New Year, Black Friday, Thanksgiving, Halloween, etc.)
+- Is it an OCCASION? (Wedding, birthday, anniversary, graduation, baby shower, retirement, etc.)
+- Is it a SEASON? (Monsoon, summer, winter, spring, harvest time, etc.)
+- Is it a CONTENT TYPE? (YouTube thumbnail, Instagram post, poster, billboard, banner, flyer, etc.)
+- Is it a CAMPAIGN TYPE? (Product launch, sale, discount offer, brand awareness, political, charity, etc.)
+
+STEP 2 — MATCH EMOTION TO SITUATION:
+Every situation has a DOMINANT EMOTION. Lock that in first:
+- Diwali → warmth + prosperity + togetherness
+- Holi → pure joy + freedom + color explosion
+- Wedding → grandeur + love + emotional depth
+- Sale/Offer → urgency + excitement + FOMO
+- Product launch → desire + anticipation + premium
+- Birthday → happiness + surprise + playfulness
+- Monsoon → romantic melancholy + freshness + relief
+- Thumbnail → curiosity + shock + "I MUST click this"
+- Poster → bold storytelling + instant readability at distance
+
+STEP 3 — BUILD THE VISUAL AROUND THE EMOTION:
+- Color palette must AMPLIFY the emotion (not just look pretty)
+- Composition must SERVE the message (ad = clean zones for text, photo = full bleed)
+- Every element earns its place — if it doesn't add to the emotion, remove it
+- Find ONE unexpected creative twist that makes this unforgettable
 
 NEVER produce generic, predictable, stock-photo-level descriptions.
-ALWAYS ask: "What would make this image iconic?"
+ALWAYS ask: "If someone sees this for 2 seconds, what do they FEEL?"
 """
 
 _BRIEF_SYSTEM_BY_BUCKET: Dict[str, str] = {
@@ -907,6 +927,11 @@ class GeminiPromptEngine:
             user_msg += f"\nDesired style: {style}"
         if extra_context:
             user_msg += f"\nExtra context: {extra_context}"
+
+        # Inject situational + cognitive context hints
+        ctx_hints = _build_contextual_hints(raw_prompt, creative_type, bucket, "standard")
+        if ctx_hints:
+            user_msg += f"\n\nSITUATIONAL DIRECTIVES (follow these precisely):\n{ctx_hints}"
 
         try:
             raw = self._call(system, user_msg)
