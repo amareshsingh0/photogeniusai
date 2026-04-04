@@ -254,11 +254,19 @@ function smartAutoDims(prompt: string): { width: number; height: number; label: 
   return { width: 1024, height: 1024, label: "Square 1:1" }
 }
 
+const SESSION_KEY = "pg_last_result"
+
 export default function GeneratePage() {
   const [prompt, setPrompt] = useState("")
-  const [userPrompt, setUserPrompt] = useState("")
+  const [userPrompt, setUserPrompt] = useState<string>(() => {
+    if (typeof window === "undefined") return ""
+    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null")?.userPrompt ?? "" } catch { return "" }
+  })
   const [isGenerating, setIsGenerating] = useState(false)
-  const [result, setResult] = useState<GenerationResult | null>(null)
+  const [result, setResult] = useState<GenerationResult | null>(() => {
+    if (typeof window === "undefined") return null
+    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null")?.result ?? null } catch { return null }
+  })
   const [error, setError] = useState<string | null>(null)
   const [selectedDimension, setSelectedDimension] = useState<DimensionPreset>(DIMENSION_PRESETS[0])
   const [sizeMode, setSizeMode] = useState<"preset" | "custom">("preset")
@@ -312,6 +320,26 @@ export default function GeneratePage() {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 220)}px`
     }
   }, [prompt])
+
+  // Persist result to sessionStorage so back-navigation restores it
+  useEffect(() => {
+    try {
+      if (result) {
+        // For data: URLs (PIL-composited posters), store as-is but catch quota errors
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ result, userPrompt }))
+      } else {
+        sessionStorage.removeItem(SESSION_KEY)
+      }
+    } catch {
+      // Storage quota exceeded (large data: URL) — try storing without the image
+      try {
+        if (result) {
+          const slim = { ...result, image_url: result.image_url?.startsWith("data:") ? "" : result.image_url }
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify({ result: slim, userPrompt }))
+        }
+      } catch { /* give up */ }
+    }
+  }, [result, userPrompt])
 
 
   const canGenerate = (editMode
@@ -1028,7 +1056,13 @@ export default function GeneratePage() {
                   <button
                     key={id}
                     type="button"
-                    onClick={() => { setCreationMode(id); setEditMode(false); clearEditSource() }}
+                    onClick={() => {
+                      setCreationMode(id)
+                      setEditMode(false)
+                      clearEditSource()
+                      // Auto-upgrade fast → balanced (Standard) for poster mode
+                      if (id === "poster" && qualityTier === "fast") setQualityTier("balanced")
+                    }}
                     className={cn(
                       "flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2.5 rounded-[10px] text-sm font-medium transition-all",
                       creationMode === id
@@ -1347,7 +1381,7 @@ export default function GeneratePage() {
                     <Zap className="h-3 w-3" /> Quality
                   </p>
                   <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-1 py-1">
-                    {QUALITY_OPTIONS.map((q) => {
+                    {QUALITY_OPTIONS.filter(q => !(creationMode === "poster" && q.value === "fast")).map((q) => {
                       const isSel = qualityTier === q.value
                       return (
                         <button
