@@ -602,9 +602,21 @@ def get_brand(name: str = "default") -> BrandGuidelines:
 
 BUCKET_KEYWORDS: Dict[str, List[str]] = {
     "typography": [
+        # Direct text/design intent
         "text", "quote", "write", "written", "headline", "title", "caption",
-        "font", "logo", "wordmark", "banner with", "poster with", "label",
-        "sign saying", "reads", "says", "slogan", "tagline", "typography",
+        "font", "logo", "wordmark", "label", "sign saying", "reads", "says",
+        "slogan", "tagline", "typography",
+        # Poster / Banner / Ad formats
+        "poster", "banner", "flyer", "hoarding", "billboard", "brochure",
+        "ad creative", "advertisement", "social media post", "instagram post",
+        "facebook ad", "google ad", "marketing creative", "promotional",
+        "infographic", "thumbnail design",
+        # SaaS / Tech / Business design
+        "saas", "software ad", "app ad", "tech poster", "product launch",
+        "landing page banner", "cta", "call to action",
+        # Festival / Occasion ads
+        "festival ad", "sale poster", "discount banner", "offer poster",
+        "event poster", "invitation design", "greeting card",
     ],
     "vector": [
         "vector", "svg", "icon", "flat design", "scalable", "illustration flat",
