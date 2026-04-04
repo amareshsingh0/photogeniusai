@@ -236,7 +236,7 @@ class PosterCompositor:
         feat_rows = math.ceil(len(features) / feat_cols) if features else 0
         feat_card_w = (inner_w - GAP) // feat_cols
         # Estimate card height
-        feat_card_h = int(W * 0.18) if features else 0
+        feat_card_h = int(W * 0.26) if features else 0
         features_section_h = (feat_card_h + GAP//2) * feat_rows + GAP if features else 0
 
         # CTA button height

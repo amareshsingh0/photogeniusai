@@ -263,9 +263,16 @@ CRITICAL RULES:
    - bg_color: dark or deep color for the panel sections
    - font_style: bold_tech | elegant_serif | expressive_display | clean_sans
    - layout: hero_top_features_bottom for most ads
-3. The background image (from Ideogram) will be used as the HERO visual only (top 55%)
-   — focus its composition on the product/scene visual, NOT on text
-4. All text will be composited by our renderer ON TOP — Ideogram DOES NOT need to render text
+3. The background image (from Ideogram) will be used as the HERO visual only (top 55%).
+   visual_concept MUST describe a REALISTIC, RELEVANT scene matching the product/brand:
+   - SaaS/App → laptop/phone showing a clean dashboard UI, modern office, team working
+   - Diwali/festival → warm lights, diyas, rangoli, celebration scene
+   - Food/restaurant → appetizing food shot, kitchen, plating
+   - Fitness → athlete in action, gym equipment
+   - Fashion → model wearing the product, editorial setting
+   NEVER generate abstract art, fractals, or unrelated imagery for product ads.
+4. All text will be composited by our renderer ON TOP — Ideogram DOES NOT need to render text.
+   Keep the scene CLEAN — no text, no overlays, no watermarks in the image.
 
 Return ONLY valid JSON:
 {
@@ -753,7 +760,7 @@ def _validate_brief(brief: Dict) -> list[str]:
     return issues
 
 
-def _validate_params(params: Dict, bucket: str) -> list[str]:
+def _validate_params(params: Dict, bucket: str, has_ad_copy: bool = False) -> list[str]:
     """Return list of issues with params dict. Empty = valid."""
     issues = []
     for f in _REQUIRED_PARAMS_FIELDS:
@@ -765,7 +772,8 @@ def _validate_params(params: Dict, bucket: str) -> list[str]:
         issues.append(f"Prompt too short ({word_count} words, min {_MIN_PROMPT_WORDS})")
     if word_count > _MAX_PROMPT_TOKENS:
         issues.append(f"Prompt too long ({word_count} words, max {_MAX_PROMPT_TOKENS})")
-    if bucket == "typography" and '"' not in prompt:
+    # Skip double-quote check when PosterCompositor handles text overlay (has_ad_copy=True)
+    if bucket == "typography" and not has_ad_copy and '"' not in prompt:
         issues.append("Typography bucket: text in image must be wrapped in double quotes")
     return issues
 
@@ -1054,8 +1062,9 @@ class GeminiPromptEngine:
             params = _extract_json(raw)
             params["_source"] = "gemini"
 
-            # Validate
-            issues = _validate_params(params, capability_bucket)
+            # Validate (skip double-quote check when PosterCompositor will handle text)
+            _has_ad_copy = bool(capability_bucket == "typography" and brief.get("ad_copy"))
+            issues = _validate_params(params, capability_bucket, has_ad_copy=_has_ad_copy)
             if issues:
                 logger.warning("[gemini-engine] params issues %s: %s", model_name, issues)
 

@@ -205,7 +205,7 @@ async def _stream_pipeline(req: StreamRequest) -> AsyncIterator[str]:
             "all_urls":          gen.get("all_urls", [gen["image_url"]]),
             "enhanced_prompt":   enhanced_prompt,
             "original_prompt":   req.prompt,
-            "model_used":        gen.get("model", fal_model_key),
+            "model_used":        _MODEL_LABELS.get(gen.get("model", fal_model_key), gen.get("model", fal_model_key)),
             "backend":           gen.get("backend", "fal.ai"),
             "capability_bucket": bucket,
             "prompt_engine":     brief.get("_source", "heuristic"),
