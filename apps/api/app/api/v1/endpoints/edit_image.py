@@ -40,6 +40,35 @@ class EditResponse(BaseModel):
     mode:         str   = "global"   # "global" | "targeted"
 
 
+class UploadDataUrlRequest(BaseModel):
+    data_url: str = Field(..., description="data:image/...;base64,... URL")
+
+class UploadDataUrlResponse(BaseModel):
+    url: str
+    content_type: str
+
+
+@router.post("/storage/upload-data-url", response_model=UploadDataUrlResponse)
+async def upload_data_url(request: UploadDataUrlRequest):
+    """
+    Upload a base64 data URL to fal.ai storage → returns an HTTPS URL.
+    Used when an image was processed client-side (PIL overlay) and needs
+    to be uploaded before passing to Flux for editing.
+    """
+    from app.services.external.fal_client import fal_client
+    try:
+        header, b64 = request.data_url.split(",", 1)
+        content_type = header.split(":")[1].split(";")[0] if ":" in header else "image/png"
+        import base64 as _b64
+        img_bytes = _b64.b64decode(b64)
+        ext = "jpg" if "jpeg" in content_type else "png"
+        url = await fal_client.upload_bytes(img_bytes, content_type, f"image.{ext}")
+        return UploadDataUrlResponse(url=url, content_type=content_type)
+    except Exception as e:
+        logger.exception("[upload-data-url] failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+
+
 @router.post("/edit", response_model=EditResponse)
 async def edit_image(request: EditRequest):
     start = time.time()

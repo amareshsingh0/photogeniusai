@@ -232,6 +232,28 @@ function isPortraitLike(prompt: string): boolean {
   return PORTRAIT_KEYWORDS.test(prompt.trim())
 }
 
+// Auto aspect ratio — detect optimal dimensions from prompt content
+function smartAutoDims(prompt: string): { width: number; height: number; label: string } {
+  const p = prompt.toLowerCase()
+  // Story / vertical (9:16) — Instagram stories, TikTok, reels, phone wallpaper
+  if (/\b(story|stories|reel|tiktok|short|phone wallpaper|vertical video|instagram story)\b/.test(p))
+    return { width: 768, height: 1344, label: "Story 9:16" }
+  // Portrait (3:4) — headshots, fashion, single person, profile photo
+  if (/\b(portrait|headshot|selfie|profile photo|face|close.?up|bust shot|half body|full body|person standing|fashion model|editorial)\b/.test(p))
+    return { width: 768, height: 1024, label: "Portrait 3:4" }
+  // Widescreen (16:9) — landscapes, cinematic, YouTube thumbnail, banner, panorama
+  if (/\b(landscape|panorama|cinematic|wide.?angle|youtube|thumbnail|banner|billboard|cover photo|desktop wallpaper|city.?scape|horizon|mountain range)\b/.test(p))
+    return { width: 1344, height: 768, label: "Widescreen 16:9" }
+  // Landscape (4:3) — general wide scenes, group photos, product in context
+  if (/\b(wide|scene|group|outdoor|interior|room|architecture|building|street|product shot)\b/.test(p))
+    return { width: 1024, height: 768, label: "Landscape 4:3" }
+  // Poster / ad / social (1:1 or 4:5) — Instagram post, poster, flyer, ad creative
+  if (/\b(poster|flyer|ad|advertisement|social media|instagram post|facebook|saas|launch|announcement|sale|promo)\b/.test(p))
+    return { width: 1024, height: 1024, label: "Square 1:1" }
+  // Default: square
+  return { width: 1024, height: 1024, label: "Square 1:1" }
+}
+
 export default function GeneratePage() {
   const [prompt, setPrompt] = useState("")
   const [userPrompt, setUserPrompt] = useState("")
@@ -257,6 +279,7 @@ export default function GeneratePage() {
     visual_concept: string; mood: string; lighting: string
     camera: string; color_palette: string; style_refs: string[]
   } | null>(null)
+  const [activeModel, setActiveModel] = useState<string>("")
   // New state: creation mode, poster text fields, advanced panel, result details
   const [creationMode, setCreationMode] = useState<CreationMode>("image")
   const [posterHeadline, setPosterHeadline] = useState("")
@@ -365,9 +388,16 @@ export default function GeneratePage() {
       return
     }
 
-    const genDims = sizeMode === "custom"
-      ? { width: Math.round(customWidth / 64) * 64, height: Math.round(customHeight / 64) * 64 }
-      : { width: selectedDimension.width, height: selectedDimension.height }
+    let genDims: { width: number; height: number }
+    if (sizeMode === "custom") {
+      genDims = { width: Math.round(customWidth / 64) * 64, height: Math.round(customHeight / 64) * 64 }
+    } else if (selectedDimension.aspect === "auto") {
+      // Smart auto: detect optimal aspect ratio from prompt
+      const auto = smartAutoDims(rawPrompt)
+      genDims = { width: auto.width, height: auto.height }
+    } else {
+      genDims = { width: selectedDimension.width, height: selectedDimension.height }
+    }
     setUserPrompt(rawPrompt.trim())
     setGenerationDimension({ ...selectedDimension, width: genDims.width, height: genDims.height })
     setIsGenerating(true)
@@ -375,6 +405,7 @@ export default function GeneratePage() {
     setResult(null)
     setFeedbackGiven(null)
     setBriefData(null)
+    setActiveModel("")
     setSseStage("intent")
     setGenerateShimmer(true)
     setGenStage(0)
@@ -454,6 +485,7 @@ export default function GeneratePage() {
             setSseStage("generating")
             setGenStage(2)
             setGenProgress(SSE_STAGES.generating.pct)
+            if (data.model) setActiveModel(data.model)
 
           } else if (event === "final_ready") {
             setSseStage("done")
@@ -692,6 +724,12 @@ export default function GeneratePage() {
                       <span className="text-xs text-muted-foreground/80">{formatTime(result.total_time)}</span>
                     </div>
                   )}
+                  {result.model_used && (
+                    <div className="flex items-center gap-1.5">
+                      <Cpu className="h-3 w-3 text-sky-400 shrink-0" />
+                      <span className="text-xs text-sky-400 font-medium">{result.model_used}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Detected settings */}
@@ -862,9 +900,16 @@ export default function GeneratePage() {
                 {(sseStage && SSE_STAGES[sseStage]?.sub) || GENERATION_STAGES[genStage]?.sub}
               </p>
               {sseStage === "generating" && (
-                <p className="text-[11px] text-muted-foreground/60 mt-2">
-                  {qualityTier === "fast" ? "~8s" : qualityTier === "ultra" ? "~60s" : qualityTier === "quality" ? "~45s" : "~25s"} est.
-                </p>
+                <div className="flex items-center justify-center gap-2 mt-2">
+                  <p className="text-[11px] text-muted-foreground/60">
+                    {qualityTier === "fast" ? "~8s" : qualityTier === "ultra" ? "~60s" : qualityTier === "quality" ? "~45s" : "~25s"} est.
+                  </p>
+                  {activeModel && (
+                    <span className="text-[11px] text-sky-400/80 bg-sky-500/10 px-1.5 py-0.5 rounded font-medium">
+                      {activeModel}
+                    </span>
+                  )}
+                </div>
               )}
             </motion.div>
 

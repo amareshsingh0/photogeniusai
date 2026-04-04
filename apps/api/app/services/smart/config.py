@@ -666,11 +666,12 @@ BUCKET_MODEL_MAP: Dict[str, Dict[str, Dict]] = {
         "premium":  {"model": "flux_2_max",    "provider": "multi"},
         "ultra":    {"model": "flux_2_max",    "provider": "multi", "num_images": 3},
     },
-    # ── Typography / Text in image / Posters ──────────────────────────────────
-    # Ideogram v3: undisputed best for readable text. rendering_speed controls cost.
+    # ── Typography / Text in image / Posters / Ads ───────────────────────────
+    # Ideogram v3 Quality for ALL tiers — fast removed (not worth it for ads,
+    # poor text quality degrades the whole poster). Standard/premium/ultra all
+    # get quality rendering; ultra gets 2 candidates for best pick.
     "typography": {
-        "fast":     {"model": "ideogram_turbo",   "provider": "multi"},
-        "standard": {"model": "ideogram_turbo",   "provider": "multi"},
+        "standard": {"model": "ideogram_quality", "provider": "multi"},
         "premium":  {"model": "ideogram_quality", "provider": "multi"},
         "ultra":    {"model": "ideogram_quality", "provider": "multi", "num_images": 2},
     },

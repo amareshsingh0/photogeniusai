@@ -248,14 +248,24 @@ Return ONLY valid JSON:
 You specialize in creating PROFESSIONAL POSTER, AD, and MARKETING VISUALS with pixel-perfect text hierarchy.
 
 CRITICAL RULES:
-1. GENERATE THE ACTUAL AD COPY — don't describe text abstractly. Write the EXACT words that will appear.
-   - headline: punchy 1-4 word offer/claim (e.g., "DIWALI SALE", "50% OFF", "LAUNCH OFFER")
-   - subheadline: 5-10 word supporting message (e.g., "Celebrate the festival with amazing deals")
-   - cta: 2-4 word action button (e.g., "Shop Now", "Grab Deal", "Order Today")
-2. Background must have CLEAN ZONES where text will sit (gradient overlays, dark/light panels)
-3. Hero visual (product/character/scene) positioned to LEAVE SPACE for text
-4. Font style must match brand personality (luxury=thin serif, tech=geometric sans, festive=bold display)
-5. Color contrast: text colors must be WCAG AA compliant against background
+1. GENERATE COMPLETE AD COPY with ALL fields filled — this directly drives the poster renderer:
+   - brand_name: the brand/app/product name if mentioned, else infer something fitting
+   - headline: 1-5 ALL CAPS punchy words (e.g., "NOW LIVE!", "DIWALI SALE", "50% OFF")
+   - subheadline: 5-12 word supporting claim
+   - body: 1-2 sentence description of what the product/service/event IS
+   - cta: action button text (e.g., "GET STARTED", "SHOP NOW", "CLAIM OFFER")
+   - cta_url: website/app store URL if relevant (infer something realistic like www.brandname.com)
+   - features: ALWAYS generate 4 features with emoji icon, title, and one-line desc
+     e.g. {"icon":"✅","title":"Task Management","desc":"Organize and prioritize tasks"}
+   - tagline: optional closing line (e.g., "No credit card required · Free 7-day trial")
+2. poster_design: ALWAYS fill all fields — this drives colors, layout, fonts
+   - accent_color: vivid brand color hex (NOT gray, NOT white — must be vibrant)
+   - bg_color: dark or deep color for the panel sections
+   - font_style: bold_tech | elegant_serif | expressive_display | clean_sans
+   - layout: hero_top_features_bottom for most ads
+3. The background image (from Ideogram) will be used as the HERO visual only (top 55%)
+   — focus its composition on the product/scene visual, NOT on text
+4. All text will be composited by our renderer ON TOP — Ideogram DOES NOT need to render text
 
 Return ONLY valid JSON:
 {
@@ -271,16 +281,30 @@ Return ONLY valid JSON:
   "style_refs": ["...", "..."],
   "avoid": ["...", "..."],
   "ad_copy": {
-    "headline": "EXACT HEADLINE TEXT (1-4 words, ALL CAPS for impact)",
-    "subheadline": "Exact supporting message (5-10 words)",
-    "cta": "Action text (2-4 words)",
-    "tagline": "Optional brand tagline or additional line (can be empty string)"
+    "brand_name": "Brand or product name (can be empty if not mentioned)",
+    "headline": "EXACT HEADLINE TEXT (1-5 words, ALL CAPS for impact)",
+    "subheadline": "Exact supporting message (5-12 words)",
+    "body": "1-2 sentence description of the product/offer/event (can be empty)",
+    "cta": "Action button text (2-4 words)",
+    "cta_url": "URL or handle if mentioned (e.g. www.brand.com, @BrandApp)",
+    "tagline": "Optional bottom tagline or legal line (can be empty string)",
+    "features": [
+      {"icon": "emoji or unicode symbol", "title": "Feature name", "desc": "One-line description"},
+      {"icon": "emoji or unicode symbol", "title": "Feature name", "desc": "One-line description"},
+      {"icon": "emoji or unicode symbol", "title": "Feature name", "desc": "One-line description"},
+      {"icon": "emoji or unicode symbol", "title": "Feature name", "desc": "One-line description"}
+    ]
   },
-  "text_layout": {
-    "headline_position": "top | center | bottom",
-    "headline_font_style": "bold condensed sans-serif | thin elegant serif | expressive display | hand-lettered",
-    "headline_color": "#HEXCODE or color name",
-    "background_treatment": "dark gradient overlay | light frosted panel | solid color band | blurred background zone"
+  "poster_design": {
+    "layout": "hero_top_features_bottom | split_left_right | centered_minimal | full_bleed_text",
+    "accent_color": "#HEXCODE — primary brand/action color",
+    "bg_color": "#HEXCODE — background fill color",
+    "text_color_primary": "#HEXCODE — main text color",
+    "text_color_secondary": "#HEXCODE — secondary/body text color",
+    "font_style": "bold_tech | elegant_serif | expressive_display | clean_sans",
+    "has_feature_grid": true,
+    "has_cta_button": true,
+    "hero_occupies": "top_60 | center_50 | full_bleed | left_half"
   }
 }""",
 

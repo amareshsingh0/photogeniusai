@@ -26,11 +26,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["streaming"])
 
 _MODEL_LABELS = {
-    "flux_pro":     "Flux Pro",
-    "flux_schnell": "Flux Schnell",
-    "flux_dev":     "Flux Dev",
-    "flux_redux":   "Flux Redux",
-    "flux_fill":    "Flux Fill",
+    "flux_pro":          "Flux Pro",
+    "flux_schnell":      "Flux Schnell",
+    "flux_dev":          "Flux Dev",
+    "flux_redux":        "Flux Redux",
+    "flux_fill":         "Flux Fill",
+    "ideogram_turbo":    "Ideogram v3 Turbo",
+    "ideogram_quality":  "Ideogram v3 Quality",
+    "recraft_v4":        "Recraft v4",
+    "recraft_v4_svg":    "Recraft v4 SVG",
+    "hunyuan_image":     "Hunyuan Image",
+    "flux_kontext":      "Flux Kontext",
+    "flux_kontext_max":  "Flux Kontext Max",
 }
 
 _QUALITY_SECONDS = {
@@ -85,11 +92,12 @@ async def _stream_pipeline(req: StreamRequest) -> AsyncIterator[str]:
         bucket = detect_capability_bucket(req.prompt)
         model_cfg = get_model_config(bucket, quality)
 
-        # If backend is ideogram but USE_IDEOGRAM=false, fall back to flux_pro
-        use_ideogram = os.getenv("USE_IDEOGRAM", "false").lower() == "true"
         fal_model_key = model_cfg["model"]
-        if model_cfg.get("backend") == "ideogram" and not use_ideogram:
+        # Ideogram fallback: only override if explicitly disabled AND backend tag matches
+        use_ideogram = os.getenv("USE_IDEOGRAM", "true").lower() != "false"
+        if not use_ideogram and fal_model_key in ("ideogram_turbo", "ideogram_quality"):
             fal_model_key = "flux_pro"
+            logger.info("[stream] Ideogram disabled (USE_IDEOGRAM=false), using flux_pro")
 
         model_label = _MODEL_LABELS.get(fal_model_key, fal_model_key)
 
@@ -159,59 +167,37 @@ async def _stream_pipeline(req: StreamRequest) -> AsyncIterator[str]:
             })
             return
 
-        # ── Stage C: PIL text overlay for typography bucket (backup layer) ──
-        # Ideogram should have baked the text in, but PIL overlay ensures
-        # the ad copy hierarchy is always present and readable.
+        # ── Stage C: Full poster compositor for typography bucket ───────────
+        # Uses PosterCompositor: structured multi-zone poster (brand bar,
+        # hero, headline, feature grid, CTA button, footer) — like a real
+        # design tool, not just text slapped on top of an image.
         final_image_url = gen["image_url"]
         ad_copy = brief.get("ad_copy")
+        poster_design = brief.get("poster_design")
         if bucket == "typography" and ad_copy:
             try:
                 import httpx
-                from app.services.smart.text_overlay import text_overlay as _tov
+                from app.services.smart.poster_compositor import poster_compositor
 
-                # Fetch image from URL
+                # Fetch the Ideogram background image
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     img_resp = await client.get(final_image_url)
-                img_bytes = img_resp.content
-                img_b64 = base64.b64encode(img_bytes).decode("ascii")
+                img_b64 = base64.b64encode(img_resp.content).decode("ascii")
 
-                # Detect image format for data URL
-                content_type = img_resp.headers.get("content-type", "image/jpeg")
-
-                # Build text list from ad_copy
-                texts = []
-                layout = brief.get("text_layout", {})
-                hl_pos = layout.get("headline_position", "center")
-
-                headline = ad_copy.get("headline", "").strip()
-                subheadline = ad_copy.get("subheadline", "").strip()
-                cta = ad_copy.get("cta", "").strip()
-                tagline = ad_copy.get("tagline", "").strip()
-
-                if headline:
-                    texts.append({"text": headline, "position": hl_pos, "role": "headline"})
-                if subheadline:
-                    sub_pos = "bottom" if hl_pos in ("top", "center") else "top"
-                    texts.append({"text": subheadline, "position": sub_pos, "role": "subtitle"})
-                if cta:
-                    texts.append({"text": cta, "position": "bottom", "role": "cta"})
-                if tagline and not cta:
-                    texts.append({"text": tagline, "position": "bottom", "role": "subtitle"})
-
-                # Auto-spread positions for 3+ texts
-                if len(texts) >= 3:
-                    texts[0]["position"] = "top"
-                    texts[-1]["position"] = "bottom"
-                    for t in texts[1:-1]:
-                        t["position"] = "center"
-
-                if texts:
-                    new_b64 = _tov.apply(img_b64, texts, style="poster")
-                    final_image_url = f"data:{content_type};base64,{new_b64}"
-                    logger.info("[stream] PIL text overlay applied: %s", [t["text"] for t in texts])
+                # Build full structured poster
+                composed_b64 = poster_compositor.composite(
+                    hero_b64=img_b64,
+                    ad_copy=ad_copy,
+                    poster_design=poster_design,
+                    target_width=req.width or 1024,
+                    target_height=int((req.height or 1024) * 1.5),  # extend to poster ratio
+                )
+                final_image_url = f"data:image/jpeg;base64,{composed_b64}"
+                logger.info("[stream] PosterCompositor applied: headline=%s features=%d",
+                            ad_copy.get("headline",""), len(ad_copy.get("features") or []))
 
             except Exception as _ov_err:
-                logger.warning("[stream] PIL text overlay failed (%s), using raw image", _ov_err)
+                logger.warning("[stream] PosterCompositor failed (%s), using raw image", _ov_err)
 
         yield _sse("final_ready", {
             "success":           True,
