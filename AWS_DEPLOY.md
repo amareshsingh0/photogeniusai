@@ -123,7 +123,7 @@ BFL_API_KEY=bfl_CJ8iHx7KVSneBF0jyrLYyQz2MiKBaxxE \
 DATABASE_URL=postgresql://postgres:m9w9SBlS96oGwO8n@db.whefwzleeyimflfcunqt.supabase.co:5432/postgres \
 CLERK_SECRET_KEY=sk_test_a4kjikWGmQjqybn8cykySbbjVP1yRUiXot4t7ru2p3 \
 USE_FIREWORKS=true USE_PIXAZO=true USE_BFL=true USE_KIE=true \
-USE_GEMINI_ENGINE=true GENERATION_BACKEND=fal API_PORT=8003 \
+USE_GEMINI_ENGINE=true USE_IDEOGRAM=true GENERATION_BACKEND=fal API_PORT=8003 \
 pm2 start "uvicorn app.main:app --host 0.0.0.0 --port 8003" --name photogenius-api
 pm2 save
 ```

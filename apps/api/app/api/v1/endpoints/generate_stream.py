@@ -10,6 +10,8 @@ Events emitted (in order):
 """
 from __future__ import annotations
 
+import base64
+import io
 import json
 import logging
 import os
@@ -114,6 +116,7 @@ async def _stream_pipeline(req: StreamRequest) -> AsyncIterator[str]:
             "color_palette":  brief.get("color_palette", ""),
             "style_refs":     brief.get("style_refs", []),
             "source":         brief.get("_source", "heuristic"),
+            "ad_copy":        brief.get("ad_copy"),      # present for typography bucket
         })
 
         # ── Stage B: Build generation params ──────────────────────────────
@@ -156,9 +159,63 @@ async def _stream_pipeline(req: StreamRequest) -> AsyncIterator[str]:
             })
             return
 
+        # ── Stage C: PIL text overlay for typography bucket (backup layer) ──
+        # Ideogram should have baked the text in, but PIL overlay ensures
+        # the ad copy hierarchy is always present and readable.
+        final_image_url = gen["image_url"]
+        ad_copy = brief.get("ad_copy")
+        if bucket == "typography" and ad_copy:
+            try:
+                import httpx
+                from app.services.smart.text_overlay import text_overlay as _tov
+
+                # Fetch image from URL
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    img_resp = await client.get(final_image_url)
+                img_bytes = img_resp.content
+                img_b64 = base64.b64encode(img_bytes).decode("ascii")
+
+                # Detect image format for data URL
+                content_type = img_resp.headers.get("content-type", "image/jpeg")
+
+                # Build text list from ad_copy
+                texts = []
+                layout = brief.get("text_layout", {})
+                hl_pos = layout.get("headline_position", "center")
+
+                headline = ad_copy.get("headline", "").strip()
+                subheadline = ad_copy.get("subheadline", "").strip()
+                cta = ad_copy.get("cta", "").strip()
+                tagline = ad_copy.get("tagline", "").strip()
+
+                if headline:
+                    texts.append({"text": headline, "position": hl_pos, "role": "headline"})
+                if subheadline:
+                    sub_pos = "bottom" if hl_pos in ("top", "center") else "top"
+                    texts.append({"text": subheadline, "position": sub_pos, "role": "subtitle"})
+                if cta:
+                    texts.append({"text": cta, "position": "bottom", "role": "cta"})
+                if tagline and not cta:
+                    texts.append({"text": tagline, "position": "bottom", "role": "subtitle"})
+
+                # Auto-spread positions for 3+ texts
+                if len(texts) >= 3:
+                    texts[0]["position"] = "top"
+                    texts[-1]["position"] = "bottom"
+                    for t in texts[1:-1]:
+                        t["position"] = "center"
+
+                if texts:
+                    new_b64 = _tov.apply(img_b64, texts, style="poster")
+                    final_image_url = f"data:{content_type};base64,{new_b64}"
+                    logger.info("[stream] PIL text overlay applied: %s", [t["text"] for t in texts])
+
+            except Exception as _ov_err:
+                logger.warning("[stream] PIL text overlay failed (%s), using raw image", _ov_err)
+
         yield _sse("final_ready", {
             "success":           True,
-            "image_url":         gen["image_url"],
+            "image_url":         final_image_url,
             "all_urls":          gen.get("all_urls", [gen["image_url"]]),
             "enhanced_prompt":   enhanced_prompt,
             "original_prompt":   req.prompt,

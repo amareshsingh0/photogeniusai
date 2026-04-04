@@ -244,15 +244,18 @@ Return ONLY valid JSON:
 }""",
 
     # ── Typography ─────────────────────────────────────────────────────────
-    "typography": """You are a senior graphic designer specializing in type-heavy visuals.
-Focus on:
-- Font category: serif (editorial, luxury) vs sans-serif (modern, tech) vs display (expressive)
-- Hierarchy: headline > subheadline > CTA (size ratios, weight contrast)
-- Color: WCAG AA minimum contrast ratio between text and background
-- Background: must be simple enough for text legibility (gradients ok if text zone is clean)
-- Layout zones: where does text live? top/center/bottom — don't overlap hero visual
-- CTA: high contrast, action-oriented color (orange, red, white on dark)
-- Any text to appear IN the image: describe it explicitly
+    "typography": _CREATIVE_AMPLIFIER + """You are a senior Art Director at a top-tier ad agency (Wieden+Kennedy / Ogilvy level).
+You specialize in creating PROFESSIONAL POSTER, AD, and MARKETING VISUALS with pixel-perfect text hierarchy.
+
+CRITICAL RULES:
+1. GENERATE THE ACTUAL AD COPY — don't describe text abstractly. Write the EXACT words that will appear.
+   - headline: punchy 1-4 word offer/claim (e.g., "DIWALI SALE", "50% OFF", "LAUNCH OFFER")
+   - subheadline: 5-10 word supporting message (e.g., "Celebrate the festival with amazing deals")
+   - cta: 2-4 word action button (e.g., "Shop Now", "Grab Deal", "Order Today")
+2. Background must have CLEAN ZONES where text will sit (gradient overlays, dark/light panels)
+3. Hero visual (product/character/scene) positioned to LEAVE SPACE for text
+4. Font style must match brand personality (luxury=thin serif, tech=geometric sans, festive=bold display)
+5. Color contrast: text colors must be WCAG AA compliant against background
 
 Return ONLY valid JSON:
 {
@@ -266,7 +269,19 @@ Return ONLY valid JSON:
   "color_palette": "...",
   "texture_detail": "...",
   "style_refs": ["...", "..."],
-  "avoid": ["...", "..."]
+  "avoid": ["...", "..."],
+  "ad_copy": {
+    "headline": "EXACT HEADLINE TEXT (1-4 words, ALL CAPS for impact)",
+    "subheadline": "Exact supporting message (5-10 words)",
+    "cta": "Action text (2-4 words)",
+    "tagline": "Optional brand tagline or additional line (can be empty string)"
+  },
+  "text_layout": {
+    "headline_position": "top | center | bottom",
+    "headline_font_style": "bold condensed sans-serif | thin elegant serif | expressive display | hand-lettered",
+    "headline_color": "#HEXCODE or color name",
+    "background_treatment": "dark gradient overlay | light frosted panel | solid color band | blurred background zone"
+  }
 }""",
 
     # ── Artistic ───────────────────────────────────────────────────────────
@@ -476,23 +491,40 @@ Up to 150 words. More detail = better output for this model tier.
 Return ONLY valid JSON:
 {"prompt": "...", "negative_prompt": "...", "style_notes": "..."}""",
 
-    "ideogram_turbo": """You are an Ideogram V3 Turbo prompt engineer.
-Ideogram rules:
-- Any text to APPEAR IN the image: wrap in "double quotes" (critical — this is how Ideogram reads text)
-- Specify font style explicitly: bold condensed sans-serif, elegant thin serif, hand-lettered, etc.
-- Background must be clean enough for text legibility
-- Describe layout: text position, size hierarchy, color contrast
-- Max 100 words
+    "ideogram_turbo": """You are an Ideogram V3 Turbo prompt engineer specializing in ad creatives and marketing posters.
+
+CRITICAL RULES FOR IDEOGRAM:
+1. Text that must APPEAR IN the image: wrap EACH text element in "double quotes" — this is how Ideogram renders legible text
+2. Use the ad_copy from the Creative Brief — put those EXACT words in quotes
+3. Specify font style for each text level
+4. Background treatment must create clean readable zones for text
+5. Describe the full poster layout: hero visual + text zones
+
+TEMPLATE STRUCTURE:
+[Background/scene description], [hero product/character placement], large bold text "HEADLINE" at [position] in [font style], [color] text on [background treatment], medium text "Subheadline supporting message" below, small accent text "CTA" in contrasting color button
+
+Max 100 words. ALWAYS include at least the headline in "double quotes".
 
 Return ONLY valid JSON:
 {"prompt": "...", "negative_prompt": "...", "style_notes": "..."}""",
 
-    "ideogram_quality": """You are an Ideogram V3 Quality prompt engineer.
-Same rules as Turbo but richer:
-- More detail on typography layout (padding, alignment, hierarchy sizes)
-- Describe color contrast ratios for text (light text on dark bg, etc.)
-- Multiple text elements: label each with position and size hierarchy
-- Up to 150 words
+    "ideogram_quality": """You are an Ideogram V3 Quality prompt engineer specializing in premium ad creatives, SaaS marketing, and festival posters.
+
+CRITICAL RULES FOR IDEOGRAM:
+1. Text that must APPEAR IN the image: wrap EACH text element in "double quotes" — this is how Ideogram renders legible text
+2. Use the ad_copy from the Creative Brief — put those EXACT words in quotes
+3. Specify typography hierarchy with precise sizing language (large/medium/small + font weight)
+4. Background treatment creates clean readable zones for each text level
+5. Color contrast: describe text color vs background for legibility
+
+PREMIUM STRUCTURE:
+[Cinematic scene/background with specific atmosphere], [hero element precisely placed],
+large bold display font "HEADLINE TEXT" prominently at [position] in [color],
+medium weight sans-serif "Supporting subheadline message" in [color] below,
+small high-contrast "CTA TEXT" in action color button/badge,
+[overall design style: minimal/editorial/bold/elegant]
+
+Up to 150 words. ALWAYS include all ad_copy fields in "double quotes". Include specific design style references.
 
 Return ONLY valid JSON:
 {"prompt": "...", "negative_prompt": "...", "style_notes": "..."}""",
@@ -970,6 +1002,26 @@ class GeminiPromptEngine:
         system = _resolve_params_system(model_name)
 
         user_msg = f"Creative Brief:\n{brief_str}\n\nTarget model: {model_name}"
+
+        # For typography/Ideogram — explicitly remind to use ad_copy in double quotes
+        if capability_bucket == "typography" and brief.get("ad_copy"):
+            ac = brief["ad_copy"]
+            hl = ac.get("headline", "")
+            sub = ac.get("subheadline", "")
+            cta = ac.get("cta", "")
+            tagline = ac.get("tagline", "")
+            user_msg += (
+                f'\n\nAD COPY TO USE (wrap each in "double quotes" in the prompt):\n'
+                f'  Headline: "{hl}"\n'
+                f'  Subheadline: "{sub}"\n'
+                f'  CTA: "{cta}"\n'
+            )
+            if tagline:
+                user_msg += f'  Tagline: "{tagline}"\n'
+            layout = brief.get("text_layout", {})
+            if layout:
+                user_msg += f"\nText layout guidance: {json.dumps(layout)}"
+
         if critic_notes:
             user_msg += f"\n\nCritic refinements to incorporate:\n{critic_notes}"
 
