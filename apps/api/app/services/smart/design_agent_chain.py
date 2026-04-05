@@ -44,28 +44,57 @@ def _safe_hex(value: object, fallback: str) -> str:
     return s if _HEX_RE.match(s) else fallback
 
 
-# ── Module-level Gemini client singleton ─────────────────────────────────────
-_gemini_client = None
+# ── Gemini client pool (round-robin across multiple API keys) ─────────────────
+# Set GEMINI_API_KEY_2 (and _3, _4 ...) in .env to double/triple the RPM quota.
+# Falls back to single key if only GEMINI_API_KEY is set.
+_gemini_clients: list = []
+_gemini_client_idx: int = 0
+
+
+def _build_client_pool() -> list:
+    from google import genai
+
+    keys: list[str] = []
+    # Primary key
+    k = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_AI_API_KEY", "")
+    if k:
+        keys.append(k)
+    # Extra keys: GEMINI_API_KEY_2, GEMINI_API_KEY_3, ...
+    for i in range(2, 10):
+        k2 = os.getenv(f"GEMINI_API_KEY_{i}", "")
+        if k2:
+            keys.append(k2)
+        else:
+            break
+
+    if not keys:
+        raise RuntimeError("GEMINI_API_KEY not set")
+
+    clients = [genai.Client(api_key=k) for k in keys]
+    logger.info("[design_chain] Gemini client pool: %d key(s)", len(clients))
+    return clients
 
 
 def _get_gemini_client():
-    global _gemini_client
-    if _gemini_client is None:
-        from google import genai
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_AI_API_KEY", "")
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY not set")
-        _gemini_client = genai.Client(api_key=api_key)
-    return _gemini_client
+    global _gemini_clients, _gemini_client_idx
+    if not _gemini_clients:
+        _gemini_clients = _build_client_pool()
+    # Round-robin
+    client = _gemini_clients[_gemini_client_idx % len(_gemini_clients)]
+    _gemini_client_idx += 1
+    return client
 
+
+# Model — use env var so free-tier users can switch to gemini-2.0-flash (higher RPM)
+_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-preview-05-20")
 
 # Per-agent max tokens — generous enough for Gemini to think fully
 _AGENT_MAX_TOKENS = {
     "triage":           600,
     "brand_intel":      500,
-    "creative_director":900,   # +200 for creative_bible JSON
-    "copy_writer":      1200,
-    "image_prompter":   800,
+    "creative_director":1100,  # bible JSON needs room
+    "copy_writer":      1400,
+    "image_prompter":   900,
 }
 
 
@@ -140,44 +169,67 @@ async def _acall_gemini(
     user: str,
     temperature: float = 0.7,
     agent_name: str = "unknown",
+    _retries: int = 3,
 ) -> str:
+    """Call Gemini with automatic retry on rate-limit (429 / ResourceExhausted)."""
     t0 = time.time()
-    try:
-        client = _get_gemini_client()
-        from google.genai import types
+    from google.genai import types
 
-        max_tokens = _AGENT_MAX_TOKENS.get(agent_name, 500)
+    max_tokens = _AGENT_MAX_TOKENS.get(agent_name, 600)
 
-        # Use async interface
-        resp = await client.aio.models.generate_content(
-            model="gemini-2.5-flash-preview-05-20",
-            contents=[{"role": "user", "parts": [{"text": user}]}],
-            config=types.GenerateContentConfig(
-                system_instruction=system,
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-            ),
-        )
-        result = resp.text or "{}"
-        elapsed_ms = int((time.time() - t0) * 1000)
-        logger.info("[design_chain][%s] %dms parsed=%s", agent_name, elapsed_ms, "true")
-        return result
+    for attempt in range(_retries):
+        try:
+            client = _get_gemini_client()
 
-    except RuntimeError as e:
-        # GEMINI_API_KEY not set
-        logger.warning("[design_chain][%s] config error: %s", agent_name, e)
-        return "{}"
-    except Exception as e:
-        elapsed_ms = int((time.time() - t0) * 1000)
-        # Distinguish quota vs timeout vs other
-        err_type = type(e).__name__
-        if "ResourceExhausted" in err_type or "quota" in str(e).lower():
-            logger.error("[design_chain][%s] Gemini QUOTA EXCEEDED: %s", agent_name, e)
-        elif "DeadlineExceeded" in err_type or "timeout" in str(e).lower():
-            logger.error("[design_chain][%s] Gemini TIMEOUT after %dms: %s", agent_name, elapsed_ms, e)
-        else:
-            logger.warning("[design_chain][%s] Gemini call failed (%dms): %s", agent_name, elapsed_ms, e)
-        return "{}"
+            resp = await client.aio.models.generate_content(
+                model=_GEMINI_MODEL,
+                contents=[{"role": "user", "parts": [{"text": user}]}],
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    temperature=temperature,
+                    max_output_tokens=max_tokens,
+                ),
+            )
+            result = resp.text or "{}"
+            elapsed_ms = int((time.time() - t0) * 1000)
+            logger.info("[design_chain][%s] %dms attempt=%d", agent_name, elapsed_ms, attempt + 1)
+            return result
+
+        except RuntimeError as e:
+            # GEMINI_API_KEY not set — no point retrying
+            logger.warning("[design_chain][%s] config error: %s", agent_name, e)
+            return "{}"
+        except Exception as e:
+            err_str = str(e).lower()
+            err_type = type(e).__name__
+            is_rate_limit = (
+                "resourceexhausted" in err_type.lower()
+                or "429" in err_str
+                or "quota" in err_str
+                or "rate" in err_str
+            )
+            elapsed_ms = int((time.time() - t0) * 1000)
+
+            if is_rate_limit and attempt < _retries - 1:
+                # Rotate to next key immediately — if only 1 key, add small delay
+                pool_size = len(_gemini_clients) if _gemini_clients else 1
+                wait = 0.5 if pool_size > 1 else 2 ** attempt
+                logger.warning(
+                    "[design_chain][%s] rate-limited (attempt %d/%d, pool=%d), switching key in %.1fs",
+                    agent_name, attempt + 1, _retries, pool_size, wait,
+                )
+                await asyncio.sleep(wait)
+                continue
+
+            if "deadlineexceeded" in err_type.lower() or "timeout" in err_str:
+                logger.error("[design_chain][%s] TIMEOUT after %dms: %s", agent_name, elapsed_ms, e)
+            elif is_rate_limit:
+                logger.error("[design_chain][%s] QUOTA EXCEEDED after %d retries: %s", agent_name, _retries, e)
+            else:
+                logger.warning("[design_chain][%s] call failed (%dms): %s", agent_name, elapsed_ms, e)
+            return "{}"
+
+    return "{}"
 
 
 # ── Individual agents (all async) ─────────────────────────────────────────────
@@ -699,22 +751,16 @@ class DesignAgentChain:
             triage = await _agent_triage(safe_prompt)
             agent_times["triage"] = round(time.time() - t, 2)
 
-            # ── Stage 2: Brand Intel + Creative Director (PARALLEL) ──────────
+            # ── Stage 2: Brand Intel first, then Creative Director with real brand ─
+            # Sequential (not parallel) — saves 1 Gemini call vs old double-CD pattern,
+            # and Creative Director gets accurate brand colors/tone from the start.
             t = time.time()
-            brand, creative = await asyncio.gather(
-                _agent_brand_intel(triage, brand_kit, safe_prompt),
-                _agent_creative_director(triage, {"brand_name": "", "tone": "bold",
-                    "primary_color": (brand_kit or {}).get("primary_color", "#6C63FF"),
-                    "font_style": (brand_kit or {}).get("font_style", "bold_tech")}, safe_prompt),
-            )
-            agent_times["brand_creative_parallel"] = round(time.time() - t, 2)
+            brand = await _agent_brand_intel(triage, brand_kit, safe_prompt)
+            agent_times["brand_intel"] = round(time.time() - t, 2)
 
-            # Rebuild creative with real brand (re-run is cheap; palette is local)
-            # Only re-run creative director if brand changed significantly from placeholder
-            if brand.get("primary_color") != "#6C63FF" or brand.get("tone") != "bold":
-                t = time.time()
-                creative = await _agent_creative_director(triage, brand, safe_prompt)
-                agent_times["creative_director_refined"] = round(time.time() - t, 2)
+            t = time.time()
+            creative = await _agent_creative_director(triage, brand, safe_prompt)
+            agent_times["creative_director"] = round(time.time() - t, 2)
 
             palette = creative.get("palette", {})
 
