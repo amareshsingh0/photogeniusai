@@ -751,7 +751,6 @@
     background: rgba(15,17,25,0.5);
     backdrop-filter: blur(12px);
   }
-}
 
   /* ── Global select dark theme fix ──────────────────────────────────────────
      Native <select> dropdown uses OS chrome which ignores Tailwind bg.
