@@ -90,11 +90,12 @@ _GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-preview-05-20")
 
 # Per-agent max tokens — generous enough for Gemini to think fully
 _AGENT_MAX_TOKENS = {
-    "triage":           600,
-    "brand_intel":      500,
-    "creative_director":1100,  # bible JSON needs room
-    "copy_writer":      1400,
-    "image_prompter":   900,
+    "triage":           800,
+    "brand_intel":      800,
+    "creative_director":1500,  # bible JSON needs room
+    "copy_writer":      1800,
+    "image_prompter":   1200,
+    "char_guard":       600,
 }
 
 
@@ -158,9 +159,72 @@ def _extract_json(text: str) -> Dict:
         try:
             return json.loads(match.group())
         except json.JSONDecodeError:
-            pass
+            # Try to repair truncated JSON: close open strings/objects/arrays
+            candidate = match.group()
+            try:
+                repaired = _repair_truncated_json(candidate)
+                return json.loads(repaired)
+            except Exception:
+                pass
     logger.warning("[design_chain] _extract_json failed on: %r", text[:200])
     return {"_parse_error": True}
+
+
+def _repair_truncated_json(s: str) -> str:
+    """
+    Best-effort repair of JSON truncated mid-stream (token limit cut-off).
+    Closes any open strings, arrays, and objects in reverse nesting order.
+    """
+    # Remove trailing incomplete key-value (e.g. ends with `,"key":` or `,"key":"`)
+    s = s.rstrip().rstrip(",").rstrip()
+
+    # Close any open string (odd number of unescaped quotes after last complete token)
+    # Simple heuristic: if the last char is not a closing delimiter, check if inside string
+    in_string = False
+    escape_next = False
+    for ch in s:
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+
+    suffix = ""
+    if in_string:
+        suffix += '"'
+
+    # Count open braces/brackets (depth)
+    depth_obj = 0
+    depth_arr = 0
+    in_str2 = False
+    esc2 = False
+    for ch in s:
+        if esc2:
+            esc2 = False
+            continue
+        if ch == "\\" and in_str2:
+            esc2 = True
+            continue
+        if ch == '"':
+            in_str2 = not in_str2
+            continue
+        if in_str2:
+            continue
+        if ch == "{":
+            depth_obj += 1
+        elif ch == "}":
+            depth_obj -= 1
+        elif ch == "[":
+            depth_arr += 1
+        elif ch == "]":
+            depth_arr -= 1
+
+    suffix += "]" * max(0, depth_arr)
+    suffix += "}" * max(0, depth_obj)
+    return s + suffix
 
 
 # ── Async Gemini caller ───────────────────────────────────────────────────────

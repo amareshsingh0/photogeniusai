@@ -53,6 +53,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Bebas Neue, Impact, sans-serif",
         "google_query":"Bebas+Neue",
+        "google_url":  "https://github.com/google/fonts/raw/main/ofl/bebasnue/BebasNeue-Regular.ttf",
     },
     "anton": {
         "file":        "Anton-Regular.ttf",
@@ -61,6 +62,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Anton, Impact, sans-serif",
         "google_query":"Anton",
+        "google_url":  "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
     },
     "montserrat_black": {
         "file":        "Montserrat-Black.ttf",
@@ -69,6 +71,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Montserrat, sans-serif",
         "google_query":"Montserrat:wght@900",
+        "google_url":  "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Black.ttf",
     },
     "montserrat_bold": {
         "file":        "Montserrat-Bold.ttf",
@@ -77,6 +80,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "body",
         "css_family":  "Montserrat, sans-serif",
         "google_query":"Montserrat:wght@700",
+        "google_url":  "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Bold.ttf",
     },
     # ── Downloaded-on-demand fonts (google_url = TTF, NOT woff2) ─────────────
     "oswald": {
