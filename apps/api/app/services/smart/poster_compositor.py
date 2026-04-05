@@ -429,164 +429,204 @@ class PosterCompositor:
                 )
             y = BRAND_BAR_H
 
-        # ── Zone 2: Hero image (aspect-preserved cover crop) ─────────────────
-        # Use ImageOps.fit for cover-crop (no distortion)
+        # ══════════════════════════════════════════════════════════════════════
+        # FULL-BLEED LAYOUT — image fills entire canvas, text overlaid on top
+        # This replaces the old "split zone" (image top 60% + dark panel below)
+        # ══════════════════════════════════════════════════════════════════════
+
+        canvas_full_h = total_h
+        canvas = Image.new("RGBA", (W, min(int(canvas_full_h * 1.05), MAX_CANVAS_H)), (0, 0, 0, 255))
+        canvas_h = canvas.height
+        draw = ImageDraw.Draw(canvas)
+
+        # ── Step 1: Hero image fills entire canvas ────────────────────────────
         hero_resized = ImageOps.fit(
-            hero_img, (W, hero_h),
+            hero_img, (W, canvas_h),
             method=Image.Resampling.LANCZOS,
-            centering=(0.5, 0.3),  # bias slightly up (faces/subjects usually upper area)
+            centering=(0.5, 0.35),
         )
+        canvas.paste(hero_resized.convert("RGBA"), (0, 0))
 
-        # Vectorized gradient fade (not per-pixel loop)
-        fade = _make_gradient_fade(W, hero_h, fade_start_frac=0.60, bg_color=bg_color)
-        hero_comp = Image.alpha_composite(hero_resized, fade)
-        canvas.paste(hero_comp, (0, y))
-        y += hero_h
+        # ── Step 2: Gradient overlays for text readability ────────────────────
+        # Bottom gradient: transparent → dark (text zone)
+        def _make_overlay(w: int, h: int, top_alpha: int, bot_alpha: int,
+                          color: Tuple[int,int,int]) -> Image.Image:
+            overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            for py in range(h):
+                a = int(top_alpha + (bot_alpha - top_alpha) * py / max(h - 1, 1))
+                overlay.putpixel((0, py), color + (a,))
+            overlay = overlay.resize((w, h), Image.Resampling.BILINEAR)
+            return overlay
 
-        # ── Zone 3: Text section ──────────────────────────────────────────────
-        draw.rectangle([0, y, W, y + text_section_h + 40], fill=bg_color + (255,))
-        y += SECTION_PAD
+        # Bottom 65% — dark gradient for text zone
+        bot_zone_h = int(canvas_h * 0.72)
+        bot_zone_y = canvas_h - bot_zone_h
+        bot_overlay = _make_overlay(W, bot_zone_h, 0, 210, bg_color)
+        canvas.alpha_composite(bot_overlay, (0, bot_zone_y))
 
-        shadow_offset = max(3, sz_headline // 20)
+        # Top strip — subtle dark for brand bar readability
+        top_overlay = _make_overlay(W, int(canvas_h * 0.18), 160, 0, bg_color)
+        canvas.alpha_composite(top_overlay, (0, 0))
+
+        draw = ImageDraw.Draw(canvas)
+        shadow_offset = max(3, sz_headline // 18)
+
+        # ── Step 3: Brand bar (top) ───────────────────────────────────────────
+        y = 0
+        if brand_name or logo_img:
+            bar_h = int(canvas_h * 0.075)
+            # Accent left stripe
+            draw.rectangle([0, 0, max(6, W // 80), bar_h], fill=accent + (230,))
+
+            if logo_img:
+                lh = int(bar_h * 0.60)
+                lw = int(lh * logo_img.width / max(logo_img.height, 1))
+                lw = min(lw, W // 4)
+                logo_r = logo_img.resize((lw, lh), Image.Resampling.LANCZOS)
+                canvas.paste(logo_r, (PAD, (bar_h - lh) // 2), logo_r)
+                if brand_name:
+                    draw.text(
+                        (PAD + lw + PAD // 2, (bar_h - sz_brand) // 2),
+                        brand_name, font=fn_brand, fill=(255, 255, 255, 220),
+                    )
+            else:
+                bw, bh = _text_size(draw, brand_name, fn_brand)
+                draw.text(
+                    ((W - bw) // 2, (bar_h - bh) // 2),
+                    brand_name, font=fn_brand, fill=(255, 255, 255, 220),
+                )
+            y = bar_h + GAP // 2
+
+        # ── Step 4: Headline + subheadline (lower-center of image) ───────────
+        # Position text block starting at ~52% of canvas height
+        text_start_y = max(y + GAP, int(canvas_h * 0.50))
+        ty = text_start_y
 
         if hl_wrapped:
+            # Strong text shadow for contrast on any background
             _draw_text_centered(
-                draw, hl_wrapped, fn_headline, W, y, txt_pri + (255,),
+                draw, hl_wrapped, fn_headline, W, ty, txt_pri + (255,),
                 shadow=True, shadow_offset=shadow_offset,
+                shadow_color=(0, 0, 0, 180),
             )
-            y += hl_h + GAP // 2
+            ty += hl_h + GAP // 3
 
-            # Accent underline — full inner_w for consistency
-            line_h = max(4, sz_headline // 20)
+            # Accent underline
+            line_h = max(4, sz_headline // 18)
+            ul_w = min(inner_w, _text_width_multiline(draw, hl_wrapped, fn_headline) + PAD)
             draw.rectangle(
-                [(W - inner_w) // 2, y - GAP // 4,
-                 (W + inner_w) // 2, y - GAP // 4 + line_h],
+                [(W - ul_w) // 2, ty,
+                 (W + ul_w) // 2, ty + line_h],
                 fill=accent + (255,),
             )
+            ty += line_h + GAP // 3
 
         if sub_wrapped:
-            _draw_text_centered(draw, sub_wrapped, fn_sub, W, y, txt_sec + (255,))
-            y += sub_h
+            _draw_text_centered(
+                draw, sub_wrapped, fn_sub, W, ty, txt_sec + (240,),
+                shadow=True, shadow_offset=max(2, shadow_offset // 2),
+                shadow_color=(0, 0, 0, 160),
+            )
+            ty += sub_h + GAP // 4
 
         if body_wrapped:
-            y += GAP // 2
-            _draw_text_centered(draw, body_wrapped, fn_body, W, y, txt_sec + (200,))
-            y += body_h
+            _draw_text_centered(
+                draw, body_wrapped, fn_body, W, ty, txt_sec + (200,),
+                shadow=True, shadow_offset=2, shadow_color=(0, 0, 0, 140),
+            )
+            ty += body_h + GAP // 4
 
-        y += SECTION_PAD
+        ty += GAP // 2
 
-        # ── Zone 4: Feature grid ──────────────────────────────────────────────
+        # ── Step 5: Feature chips (compact horizontal rows on image) ─────────
         if features:
-            y += GAP
-            # "KEY FEATURES" section label
-            sl_font = _font(f_body, max(18, int(W * 0.026)))
-            sl_w, sl_h_actual = _text_size(draw, "KEY FEATURES", sl_font)
-            draw.text(((W - sl_w) // 2, y), "KEY FEATURES", font=sl_font, fill=accent + (200,))
-            y += sl_h_actual + GAP // 2
+            chip_font  = _font(f_body, max(18, int(W * 0.025)))
+            chip_pad_x = int(W * 0.028)
+            chip_pad_y = int(W * 0.016)
+            chip_gap   = int(W * 0.018)
+            chip_r     = int(W * 0.025)
 
-            # Fixed icon boundary for aligned grid
-            icon_size  = max(28, int(W * 0.040))
-            circle_r   = max(22, icon_size // 2 + 6)
-            icon_font  = _font(f_body, icon_size)
+            # Measure all chips first to layout 2-per-row
+            chip_sizes = []
+            for feat in features[:4]:
+                icon_s  = str(feat.get("icon") or "•").strip()
+                title_s = str(feat.get("title") or "").strip()
+                label   = f"{icon_s}  {title_s}" if icon_s and title_s else title_s or icon_s
+                cw, ch  = _text_size(draw, label, chip_font)
+                chip_sizes.append((label, cw + chip_pad_x * 2, ch + chip_pad_y * 2))
 
-            for row_i in range(feat_rows):
-                row_y = y
-                # Find number of cards in this row (last row may be partial)
-                row_start = row_i * feat_cols
-                row_end   = min(row_start + feat_cols, len(features))
-                cards_in_row = row_end - row_start
-                # Center partial last row
-                row_total_w = cards_in_row * feat_card_w + (cards_in_row - 1) * GAP
-                row_x0 = (W - row_total_w) // 2
+            # Lay out 2 chips per row
+            for row_i in range(0, len(chip_sizes), 2):
+                row_chips = chip_sizes[row_i: row_i + 2]
+                total_row_w = sum(c[1] for c in row_chips) + chip_gap * (len(row_chips) - 1)
+                rx = (W - total_row_w) // 2
 
-                for col_i in range(cards_in_row):
-                    fi = row_start + col_i
-                    feat = features[fi]
-                    fx = row_x0 + col_i * (feat_card_w + GAP)
-
-                    card_bg = accent + (40,)
-                    _rounded_rect(draw, (fx, row_y, fx + feat_card_w, row_y + feat_card_h), card_radius, card_bg)
+                max_chip_h = 0
+                for label, cw, ch in row_chips:
+                    _rounded_rect(
+                        draw, (rx, ty, rx + cw, ty + ch),
+                        chip_r, accent + (55,),
+                    )
                     draw.rounded_rectangle(
-                        [fx+1, row_y+1, fx+feat_card_w-1, row_y+feat_card_h-1],
-                        radius=card_radius, outline=accent + (100,), width=1,
+                        [rx, ty, rx + cw, ty + ch],
+                        radius=chip_r, outline=accent + (140,), width=1,
                     )
-
-                    cp = int(feat_card_w * 0.10)
-                    icon_str  = str(feat.get("icon")  or "●").strip()
-                    title_str = str(feat.get("title") or "").strip()
-                    desc_str  = str(feat.get("desc")  or "").strip()
-
-                    # Icon circle (fixed size for alignment)
-                    ic_cx = fx + cp + circle_r
-                    ic_cy = row_y + cp + circle_r
-                    draw.ellipse(
-                        [ic_cx-circle_r, ic_cy-circle_r, ic_cx+circle_r, ic_cy+circle_r],
-                        fill=accent + (180,),
-                    )
-                    ic_w, ic_h = _text_size(draw, icon_str, icon_font)
+                    lw2, lh2 = _text_size(draw, label, chip_font)
                     draw.text(
-                        (ic_cx - ic_w // 2, ic_cy - ic_h // 2),
-                        icon_str, font=icon_font, fill=accent_text + (255,),
+                        (rx + (cw - lw2) // 2, ty + (ch - lh2) // 2),
+                        label, font=chip_font, fill=txt_pri + (240,),
                     )
+                    rx += cw + chip_gap
+                    max_chip_h = max(max_chip_h, ch)
 
-                    # Title (clamped to 2 lines)
-                    title_x = fx + cp
-                    title_y = row_y + cp * 2 + circle_r * 2 + 4
-                    title_w_max = feat_card_w - 2 * cp
-                    title_wrapped = _wrap(draw, title_str, fn_feat_ttl, title_w_max)
-                    # Clamp to 2 lines
-                    title_lines = title_wrapped.split("\n")[:2]
-                    title_wrapped = "\n".join(title_lines)
-                    draw.text((title_x, title_y), title_wrapped, font=fn_feat_ttl, fill=txt_pri + (255,))
-                    _, ttl_h = _text_size(draw, title_wrapped, fn_feat_ttl)
+                ty += max_chip_h + chip_gap
 
-                    # Desc (clamped to 2 lines)
-                    desc_y = title_y + ttl_h + 4
-                    desc_wrapped = _wrap(draw, desc_str, fn_feat_dsc, title_w_max)
-                    desc_lines = desc_wrapped.split("\n")[:2]
-                    desc_wrapped = "\n".join(desc_lines)
-                    draw.text((fx + cp, desc_y), desc_wrapped, font=fn_feat_dsc, fill=txt_sec + (200,))
+            ty += GAP // 2
 
-                y += feat_card_h + GAP // 2
-
-            y += GAP // 2
-
-        # ── Zone 5: CTA section ───────────────────────────────────────────────
+        # ── Step 6: CTA button ────────────────────────────────────────────────
         if show_cta:
-            y += GAP
             btn_h = cta_h
-            btn_w = min(int(W * 0.75), inner_w)
+            btn_w = min(int(W * 0.70), inner_w)
+            # Pin CTA to 87% of canvas height if there's room
+            cta_y = max(ty + GAP, int(canvas_h * 0.83))
             btn_x = (W - btn_w) // 2
-            _rounded_rect(draw, (btn_x, y, btn_x + btn_w, y + btn_h), btn_radius, accent + (255,))
 
+            # Button shadow
+            shadow_img = Image.new("RGBA", (btn_w + 12, btn_h + 12), (0, 0, 0, 0))
+            shadow_d = ImageDraw.Draw(shadow_img)
+            shadow_d.rounded_rectangle([6, 6, btn_w + 6, btn_h + 6], radius=btn_radius, fill=(0, 0, 0, 100))
+            shadow_img = shadow_img.filter(ImageFilter.GaussianBlur(6))
+            canvas.alpha_composite(shadow_img, (btn_x - 6, cta_y - 6))
+
+            _rounded_rect(draw, (btn_x, cta_y, btn_x + btn_w, cta_y + btn_h), btn_radius, accent + (255,))
             cta_wrapped = _wrap(draw, cta_text, fn_cta, btn_w - 40)
-            cw, ch = _text_size(draw, cta_wrapped, fn_cta)
+            cw2, ch2 = _text_size(draw, cta_wrapped, fn_cta)
             draw.text(
-                (btn_x + (btn_w - cw) // 2, y + (btn_h - ch) // 2),
+                (btn_x + (btn_w - cw2) // 2, cta_y + (btn_h - ch2) // 2),
                 cta_wrapped, font=fn_cta, fill=accent_text + (255,),
             )
-            y += btn_h
+            ty = cta_y + btn_h + GAP // 2
 
             if cta_url:
-                y += GAP // 2
-                # Truncate long URLs with ellipsis
-                url_display = cta_url
-                url_w, url_h = _text_size(draw, url_display, fn_url)
-                while url_w > inner_w and len(url_display) > 10:
-                    url_display = url_display[:-4] + "..."
-                    url_w, url_h = _text_size(draw, url_display, fn_url)
-                draw.text(((W - url_w) // 2, y), url_display, font=fn_url, fill=accent + (200,))
-                y += url_h
+                url_display = cta_url if len(cta_url) <= 40 else cta_url[:37] + "..."
+                uw, uh = _text_size(draw, url_display, fn_url)
+                draw.text(
+                    ((W - uw) // 2, ty),
+                    url_display, font=fn_url, fill=(255, 255, 255, 130),
+                )
+                ty += uh + GAP // 4
 
-            y += GAP
-
-        # ── Zone 6: Tagline footer ────────────────────────────────────────────
+        # ── Step 7: Tagline (bottom edge) ─────────────────────────────────────
         if tagline:
-            draw.line([(PAD, y), (W - PAD, y)], fill=txt_sec + (60,), width=1)
-            y += GAP // 2
             tg_w, tg_h = _text_size(draw, tagline, fn_tagline)
-            draw.text(((W - tg_w) // 2, y), tagline, font=fn_tagline, fill=txt_sec + (160,))
-            y += tg_h + GAP // 2
+            tg_y = canvas_h - tg_h - int(GAP * 0.8)
+            draw.text(
+                ((W - tg_w) // 2, tg_y),
+                tagline, font=fn_tagline, fill=(255, 255, 255, 140),
+            )
+            y = tg_y + tg_h
+
+        y = canvas_h  # full canvas used
 
         # ── Encode output ─────────────────────────────────────────────────────
         final_h = min(y + GAP, canvas_h)
