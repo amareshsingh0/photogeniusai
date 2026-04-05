@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { getCurrentUserId } from '@/lib/auth'
+import { prisma } from '@/lib/db'
+import { getUserId } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await getCurrentUserId(req)
+    const userId = await getUserId()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       prompt, quality, name,
     } = body
 
-    const project = await (db as any).posterProject.create({
+    const project = await (prisma as any).posterProject.create({
       data: {
         userId,
         name:        name || (adCopy?.headline ? `${adCopy.headline}` : 'Untitled Poster'),
@@ -34,8 +34,9 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ projectId: project.id, project })
-  } catch (error: any) {
-    console.error('[/api/projects/create]', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    console.error('[/api/projects/create]', msg)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

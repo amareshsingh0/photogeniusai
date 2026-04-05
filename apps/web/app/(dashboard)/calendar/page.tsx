@@ -1,35 +1,24 @@
 'use client'
 
-/**
- * Content Calendar — /calendar
- * AI-powered 30-day content planner.
- * "Generate Plan" → calls Gemini agent → fills month grid.
- * Click any day → opens generate page pre-filled with that day's prompt.
- */
-
 import React, { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CalendarDays, Sparkles, Loader2, ChevronLeft, ChevronRight,
-  Instagram, Linkedin, Twitter, Globe, RefreshCw, Download,
+  Instagram, Linkedin, Twitter, Globe, Download, Settings2,
 } from 'lucide-react'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 interface CalendarEntry {
-  date:         string
-  day_of_week:  string
-  platform:     string
-  content_type: string
-  prompt:       string
-  caption:      string
-  hashtags:     string[]
-  cta:          string
-  is_festival:  boolean
+  date:          string
+  day_of_week:   string
+  platform:      string
+  content_type:  string
+  prompt:        string
+  caption:       string
+  hashtags:      string[]
+  cta:           string
+  is_festival:   boolean
   festival_name: string | null
 }
-
-// ── Constants ─────────────────────────────────────────────────────────────────
 
 const MONTH_NAMES = [
   'January','February','March','April','May','June',
@@ -44,64 +33,51 @@ const PLATFORM_ICONS: Record<string, React.ReactNode> = {
 }
 
 const PLATFORM_COLORS: Record<string, string> = {
-  instagram: 'text-pink-400 bg-pink-500/10 border-pink-500/20',
-  linkedin:  'text-blue-400 bg-blue-500/10 border-blue-500/20',
-  twitter:   'text-sky-400  bg-sky-500/10  border-sky-500/20',
-  general:   'text-white/50 bg-white/5     border-white/10',
+  instagram: 'text-pink-400  bg-pink-500/10  border-pink-500/20',
+  linkedin:  'text-blue-400  bg-blue-500/10  border-blue-500/20',
+  twitter:   'text-sky-400   bg-sky-500/10   border-sky-500/20',
+  general:   'text-white/40  bg-white/5      border-white/8',
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  product_showcase:   'bg-purple-500/20 text-purple-300',
-  behind_the_scenes:  'bg-amber-500/20  text-amber-300',
-  tip_or_tutorial:    'bg-emerald-500/20 text-emerald-300',
-  testimonial:        'bg-blue-500/20   text-blue-300',
-  promotion_sale:     'bg-red-500/20    text-red-300',
-  announcement:       'bg-indigo-500/20 text-indigo-300',
-  poll_question:      'bg-teal-500/20   text-teal-300',
-  quote_card:         'bg-orange-500/20 text-orange-300',
-  carousel:           'bg-fuchsia-500/20 text-fuchsia-300',
-  reel_idea:          'bg-rose-500/20   text-rose-300',
-  event_promo:        'bg-yellow-500/20 text-yellow-300',
-  ugc_repost:         'bg-cyan-500/20   text-cyan-300',
+  product_showcase:  'bg-purple-500/20 text-purple-300',
+  behind_the_scenes: 'bg-amber-500/20  text-amber-300',
+  tip_or_tutorial:   'bg-emerald-500/20 text-emerald-300',
+  testimonial:       'bg-blue-500/20   text-blue-300',
+  promotion_sale:    'bg-red-500/20    text-red-300',
+  announcement:      'bg-indigo-500/20 text-indigo-300',
+  poll_question:     'bg-teal-500/20   text-teal-300',
+  quote_card:        'bg-orange-500/20 text-orange-300',
+  carousel:          'bg-fuchsia-500/20 text-fuchsia-300',
+  reel_idea:         'bg-rose-500/20   text-rose-300',
+  event_promo:       'bg-yellow-500/20 text-yellow-300',
+  ugc_repost:        'bg-cyan-500/20   text-cyan-300',
 }
 
-const PLATFORMS = ['instagram','linkedin','twitter','general']
-const TONES     = ['professional','casual','luxury','energetic','playful','trustworthy']
+const PLATFORMS = ['instagram', 'linkedin', 'twitter', 'general']
+const TONES     = ['professional', 'casual', 'luxury', 'energetic', 'playful', 'trustworthy']
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function getDaysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate()
-}
-function getFirstDayOfWeek(year: number, month: number) {
-  return new Date(year, month, 1).getDay() // 0=Sun
-}
-function formatTypeLabel(s: string) {
-  return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-}
-
-// ── Main Component ─────────────────────────────────────────────────────────────
+function getDaysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate() }
+function getFirstDayOfWeek(year: number, month: number) { return new Date(year, month, 1).getDay() }
+function formatTypeLabel(s: string) { return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }
 
 export default function CalendarPage() {
   const router = useRouter()
+  const today  = new Date()
 
-  const today = new Date()
-  const [viewYear, setViewYear]   = useState(today.getFullYear())
-  const [viewMonth, setViewMonth] = useState(today.getMonth())  // 0-indexed
+  const [viewYear,  setViewYear]  = useState(today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(today.getMonth())
+  const [calendar,  setCalendar]  = useState<CalendarEntry[]>([])
+  const [loading,   setLoading]   = useState(false)
+  const [selected,  setSelected]  = useState<CalendarEntry | null>(null)
+  const [showCfg,   setShowCfg]   = useState(false)
 
-  const [calendar, setCalendar]   = useState<CalendarEntry[]>([])
-  const [loading, setLoading]     = useState(false)
-  const [selected, setSelected]   = useState<CalendarEntry | null>(null)
+  const [brandName, setBrandName] = useState('')
+  const [brandTone, setBrandTone] = useState('professional')
+  const [industry,  setIndustry]  = useState('Technology / SaaS')
+  const [platform,  setPlatform]  = useState('instagram')
+  const [notes,     setNotes]     = useState('')
 
-  // Plan settings
-  const [brandName,  setBrandName]  = useState('')
-  const [brandTone,  setBrandTone]  = useState('professional')
-  const [industry,   setIndustry]   = useState('Technology / SaaS')
-  const [platform,   setPlatform]   = useState('instagram')
-  const [notes,      setNotes]      = useState('')
-  const [showConfig, setShowConfig] = useState(false)
-
-  // Build a lookup map: date string → entry
   const entryMap = React.useMemo(() => {
     const m: Record<string, CalendarEntry> = {}
     calendar.forEach(e => { m[e.date] = e })
@@ -132,10 +108,7 @@ export default function CalendarPage() {
   }, [brandName, brandTone, industry, platform, viewMonth, viewYear, notes])
 
   const openInGenerate = (entry: CalendarEntry) => {
-    const params = new URLSearchParams({
-      prefill_prompt: entry.prompt,
-      prefill_caption: entry.caption,
-    })
+    const params = new URLSearchParams({ prefill_prompt: entry.prompt, prefill_caption: entry.caption })
     router.push(`/generate?${params.toString()}`)
   }
 
@@ -146,67 +119,52 @@ export default function CalendarPage() {
       e.date, e.day_of_week, e.platform, e.content_type,
       `"${e.prompt.replace(/"/g,'""')}"`,
       `"${e.caption.replace(/"/g,'""')}"`,
-      e.hashtags.join(' '),
-      e.cta,
-      e.festival_name || '',
+      e.hashtags.join(' '), e.cta, e.festival_name || '',
     ])
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+    const csv  = [headers, ...rows].map(r => r.join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
-    a.href     = url
+    a.href = url
     a.download = `content-calendar-${viewYear}-${String(viewMonth+1).padStart(2,'0')}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  // Calendar grid
   const daysInMonth  = getDaysInMonth(viewYear, viewMonth)
   const firstWeekday = getFirstDayOfWeek(viewYear, viewMonth)
 
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
-    else setViewMonth(m => m - 1)
-  }
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
-    else setViewMonth(m => m + 1)
-  }
+  const prevMonth = () => viewMonth === 0  ? (setViewYear(y => y-1), setViewMonth(11))  : setViewMonth(m => m-1)
+  const nextMonth = () => viewMonth === 11 ? (setViewYear(y => y+1), setViewMonth(0))   : setViewMonth(m => m+1)
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-6">
+    <div className="max-w-5xl mx-auto space-y-5">
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <CalendarDays className="w-5 h-5 text-purple-400" />
+          <h1 className="text-lg font-bold text-white flex items-center gap-2">
+            <CalendarDays className="w-4.5 h-4.5 text-purple-400" />
             Content Calendar
           </h1>
-          <p className="text-sm text-white/40 mt-0.5">
-            AI-planned 30-day content schedule — click any day to generate that post
-          </p>
+          <p className="text-xs text-white/30 mt-0.5">AI-planned content schedule — click any day to generate</p>
         </div>
         <div className="flex items-center gap-2">
           {calendar.length > 0 && (
-            <button
-              onClick={exportCSV}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/50 hover:text-white hover:border-white/20 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" /> Export CSV
+            <button onClick={exportCSV}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white/40 hover:text-white transition-colors"
+              style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+              <Download className="w-3.5 h-3.5" /> CSV
             </button>
           )}
-          <button
-            onClick={() => setShowConfig(c => !c)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/50 hover:text-white hover:border-white/20 transition-colors"
-          >
-            Settings
+          <button onClick={() => setShowCfg(c => !c)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${showCfg ? 'text-purple-400' : 'text-white/40 hover:text-white'}`}
+            style={{ border: `1px solid ${showCfg ? 'rgba(124,58,237,0.4)' : 'rgba(255,255,255,0.08)'}` }}>
+            <Settings2 className="w-3.5 h-3.5" /> Settings
           </button>
-          <button
-            onClick={generatePlan}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-sm font-semibold transition-colors"
-          >
+          <button onClick={generatePlan} disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold transition-all disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', boxShadow: '0 0 16px rgba(124,58,237,0.3)' }}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             {loading ? 'Planning…' : calendar.length ? 'Regenerate' : 'Generate Plan'}
           </button>
@@ -214,119 +172,109 @@ export default function CalendarPage() {
       </div>
 
       {/* Config panel */}
-      {showConfig && (
-        <div className="bg-white/3 border border-white/8 rounded-2xl p-5 grid grid-cols-2 sm:grid-cols-3 gap-4">
+      {showCfg && (
+        <div className="rounded-2xl p-4 grid grid-cols-2 sm:grid-cols-3 gap-3"
+          style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div>
-            <label className="text-xs text-white/40 mb-1 block">Brand Name</label>
+            <label className="text-[10px] text-white/30 mb-1 block uppercase tracking-wider">Brand Name</label>
             <input value={brandName} onChange={e => setBrandName(e.target.value)}
               placeholder="e.g. PhotoGenius AI"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-purple-500/50" />
+              className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-purple-500/40" />
           </div>
           <div>
-            <label className="text-xs text-white/40 mb-1 block">Platform</label>
+            <label className="text-[10px] text-white/30 mb-1 block uppercase tracking-wider">Platform</label>
             <select value={platform} onChange={e => setPlatform(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 appearance-none">
-              {PLATFORMS.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}
+              style={{ colorScheme: 'dark' }}
+              className="w-full bg-[#1a1a2e] border border-white/8 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/40 appearance-none cursor-pointer">
+              {PLATFORMS.map(p => <option key={p} value={p} style={{ background: '#1a1a2e', color: '#fff' }}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs text-white/40 mb-1 block">Brand Tone</label>
+            <label className="text-[10px] text-white/30 mb-1 block uppercase tracking-wider">Brand Tone</label>
             <select value={brandTone} onChange={e => setBrandTone(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 appearance-none">
-              {TONES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
+              style={{ colorScheme: 'dark' }}
+              className="w-full bg-[#1a1a2e] border border-white/8 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/40 appearance-none cursor-pointer">
+              {TONES.map(t => <option key={t} value={t} style={{ background: '#1a1a2e', color: '#fff' }}>{t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-xs text-white/40 mb-1 block">Industry</label>
+            <label className="text-[10px] text-white/30 mb-1 block uppercase tracking-wider">Industry</label>
             <input value={industry} onChange={e => setIndustry(e.target.value)}
               placeholder="Technology / SaaS"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-purple-500/50" />
+              className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-purple-500/40" />
           </div>
           <div className="col-span-2">
-            <label className="text-xs text-white/40 mb-1 block">Additional Notes</label>
+            <label className="text-[10px] text-white/30 mb-1 block uppercase tracking-wider">Notes</label>
             <input value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="Include product launch on 15th, avoid weekends..."
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-purple-500/50" />
+              placeholder="Include product launch on 15th, avoid weekends…"
+              className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-purple-500/40" />
           </div>
         </div>
       )}
 
-      {/* Month navigator */}
+      {/* Month nav */}
       <div className="flex items-center justify-between">
-        <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-white/5 text-white/40 hover:text-white transition-colors">
+        <button onClick={prevMonth} className="p-2 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors">
           <ChevronLeft className="w-4 h-4" />
         </button>
-        <h2 className="text-sm font-semibold text-white">
-          {MONTH_NAMES[viewMonth]} {viewYear}
+        <div className="text-center">
+          <h2 className="text-sm font-semibold text-white">{MONTH_NAMES[viewMonth]} {viewYear}</h2>
           {calendar.length > 0 && (
-            <span className="ml-2 text-xs text-purple-400 font-normal">{calendar.length} posts planned</span>
+            <p className="text-[10px] text-purple-400 mt-0.5">{calendar.length} posts planned</p>
           )}
-        </h2>
-        <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-white/5 text-white/40 hover:text-white transition-colors">
+        </div>
+        <button onClick={nextMonth} className="p-2 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-colors">
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Day-of-week headers */}
+      {/* Day headers */}
       <div className="grid grid-cols-7 gap-1 text-center">
         {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
-          <div key={d} className="text-[10px] font-semibold text-white/30 py-1">{d}</div>
+          <div key={d} className="text-[10px] font-medium text-white/20 py-1">{d}</div>
         ))}
       </div>
 
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-1">
-        {/* Leading empty cells */}
         {Array.from({ length: firstWeekday }).map((_, i) => (
-          <div key={`empty-${i}`} className="h-24 rounded-xl" />
+          <div key={`e${i}`} className="h-20 rounded-xl" />
         ))}
-
-        {/* Day cells */}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const dayNum  = i + 1
           const dateStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`
           const entry   = entryMap[dateStr]
           const isToday = dateStr === today.toISOString().split('T')[0]
-
           return (
-            <DayCell
-              key={dateStr}
-              dayNum={dayNum}
-              dateStr={dateStr}
-              isToday={isToday}
-              entry={entry}
-              onClick={() => entry ? setSelected(entry) : null}
-            />
+            <DayCell key={dateStr} dayNum={dayNum} isToday={isToday} entry={entry}
+              onClick={() => entry ? setSelected(entry) : undefined} />
           )
         })}
       </div>
 
       {/* Empty state */}
       {!loading && calendar.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-            <Sparkles className="w-8 h-8 text-purple-400" />
+        <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+            style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
+            <Sparkles className="w-6 h-6 text-purple-400" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white/80">No content plan yet</p>
-            <p className="text-xs text-white/30 mt-1">Click "Generate Plan" to fill this month with AI-crafted content ideas</p>
+            <p className="text-sm font-semibold text-white/70">No content plan yet</p>
+            <p className="text-xs text-white/25 mt-1">Click "Generate Plan" to fill this month with AI-crafted content ideas</p>
           </div>
-          <button
-            onClick={generatePlan}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-colors"
-          >
+          <button onClick={generatePlan}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}>
             <Sparkles className="w-4 h-4" /> Generate My Content Plan
           </button>
         </div>
       )}
 
-      {/* Day detail drawer */}
+      {/* Detail drawer */}
       {selected && (
-        <DayDetailDrawer
-          entry={selected}
-          onClose={() => setSelected(null)}
-          onGenerate={() => { setSelected(null); openInGenerate(selected) }}
-        />
+        <DayDetailDrawer entry={selected} onClose={() => setSelected(null)}
+          onGenerate={() => { setSelected(null); openInGenerate(selected) }} />
       )}
     </div>
   )
@@ -334,48 +282,39 @@ export default function CalendarPage() {
 
 // ── Day Cell ──────────────────────────────────────────────────────────────────
 
-function DayCell({
-  dayNum, dateStr, isToday, entry, onClick,
-}: {
+function DayCell({ dayNum, isToday, entry, onClick }: {
   dayNum:  number
-  dateStr: string
   isToday: boolean
   entry?:  CalendarEntry
   onClick: () => void
 }) {
-  const typeColor = entry ? (TYPE_COLORS[entry.content_type] ?? 'bg-white/10 text-white/50') : ''
+  const typeColor = entry ? (TYPE_COLORS[entry.content_type] ?? 'bg-white/10 text-white/40') : ''
   const platColor = entry ? (PLATFORM_COLORS[entry.platform] ?? PLATFORM_COLORS.general) : ''
 
   return (
     <div
       onClick={onClick}
       className={[
-        'relative h-24 rounded-xl p-1.5 border transition-all text-left',
-        entry
-          ? 'bg-white/[0.03] border-white/8 hover:bg-white/6 hover:border-purple-500/30 cursor-pointer'
-          : 'bg-white/[0.015] border-white/4',
-        isToday ? 'ring-1 ring-purple-500/50' : '',
+        'relative h-20 rounded-xl p-1.5 transition-all text-left',
+        entry ? 'cursor-pointer hover:scale-[1.02]' : '',
+        isToday ? 'ring-1 ring-purple-500/40' : '',
       ].join(' ')}
+      style={{
+        background: entry ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.012)',
+        border: `1px solid ${entry ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)'}`,
+      }}
     >
-      {/* Day number */}
-      <span className={[
-        'text-[11px] font-semibold leading-none',
-        isToday ? 'text-purple-400' : 'text-white/40',
-      ].join(' ')}>
+      <span className={`text-[11px] font-semibold ${isToday ? 'text-purple-400' : 'text-white/30'}`}>
         {dayNum}
       </span>
-
       {entry && (
         <div className="mt-1 space-y-1">
-          {/* Platform badge */}
           <div className={`inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded border ${platColor}`}>
             {PLATFORM_ICONS[entry.platform] ?? <Globe className="w-3 h-3" />}
           </div>
-          {/* Content type chip */}
           <div className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium leading-none truncate ${typeColor}`}>
             {formatTypeLabel(entry.content_type)}
           </div>
-          {/* Festival indicator */}
           {entry.is_festival && entry.festival_name && (
             <div className="text-[9px] text-amber-400 truncate">🎉 {entry.festival_name}</div>
           )}
@@ -387,29 +326,24 @@ function DayCell({
 
 // ── Day Detail Drawer ─────────────────────────────────────────────────────────
 
-function DayDetailDrawer({
-  entry, onClose, onGenerate,
-}: {
+function DayDetailDrawer({ entry, onClose, onGenerate }: {
   entry:      CalendarEntry
   onClose:    () => void
   onGenerate: () => void
 }) {
-  const typeColor = TYPE_COLORS[entry.content_type] ?? 'bg-white/10 text-white/50'
+  const typeColor = TYPE_COLORS[entry.content_type] ?? 'bg-white/10 text-white/40'
   const platColor = PLATFORM_COLORS[entry.platform] ?? PLATFORM_COLORS.general
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 md:left-auto md:right-6 md:top-1/2 md:-translate-y-1/2 md:w-96 md:bottom-auto rounded-t-3xl md:rounded-2xl shadow-2xl p-6 space-y-4"
+        style={{ background: '#0e0e1a', border: '1px solid rgba(255,255,255,0.08)' }}>
 
-      {/* Drawer */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 md:left-auto md:right-6 md:top-1/2 md:-translate-y-1/2 md:w-96 md:bottom-auto bg-[#0E0E18] border border-white/10 rounded-t-3xl md:rounded-2xl shadow-2xl p-6 space-y-4">
-
-        {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs text-white/40">{entry.day_of_week}, {entry.date}</p>
-            <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs text-white/30">{entry.day_of_week}, {entry.date}</p>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${typeColor}`}>
                 {formatTypeLabel(entry.content_type)}
               </span>
@@ -422,44 +356,37 @@ function DayDetailDrawer({
               )}
             </div>
           </div>
-          <button onClick={onClose} className="text-white/30 hover:text-white text-lg leading-none mt-1">✕</button>
+          <button onClick={onClose} className="text-white/20 hover:text-white text-lg leading-none">✕</button>
         </div>
 
-        {/* Image Prompt */}
         <div>
-          <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Generation Prompt</p>
-          <p className="text-xs text-white/80 leading-relaxed bg-white/3 border border-white/8 rounded-xl p-3">
+          <p className="text-[10px] text-white/25 uppercase tracking-wider mb-1.5">Generation Prompt</p>
+          <p className="text-xs text-white/70 leading-relaxed rounded-xl p-3"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             {entry.prompt}
           </p>
         </div>
 
-        {/* Caption */}
         <div>
-          <p className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Caption</p>
-          <p className="text-xs text-white/70 leading-relaxed">{entry.caption}</p>
+          <p className="text-[10px] text-white/25 uppercase tracking-wider mb-1.5">Caption</p>
+          <p className="text-xs text-white/60 leading-relaxed">{entry.caption}</p>
         </div>
 
-        {/* Hashtags */}
         {entry.hashtags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {entry.hashtags.map(h => (
-              <span key={h} className="text-[10px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded-full">
-                {h}
-              </span>
+              <span key={h} className="text-[10px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded-full">{h}</span>
             ))}
           </div>
         )}
 
-        {/* CTA */}
         {entry.cta && (
-          <p className="text-xs text-white/40">CTA: <span className="text-white/70">{entry.cta}</span></p>
+          <p className="text-xs text-white/30">CTA: <span className="text-white/60">{entry.cta}</span></p>
         )}
 
-        {/* Action */}
-        <button
-          onClick={onGenerate}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-colors"
-        >
+        <button onClick={onGenerate}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-white text-sm font-semibold transition-all"
+          style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}>
           <Sparkles className="w-4 h-4" /> Generate This Post
         </button>
       </div>

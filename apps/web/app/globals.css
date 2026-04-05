@@ -753,6 +753,20 @@
   }
 }
 
+  /* ── Global select dark theme fix ──────────────────────────────────────────
+     Native <select> dropdown uses OS chrome which ignores Tailwind bg.
+     color-scheme: dark forces the browser to render the dropdown in dark mode.
+     Pair with bg-[#1a1a2e] on the element itself for the closed state.
+  ─────────────────────────────────────────────────────────────────────────── */
+  select {
+    color-scheme: dark;
+  }
+  select option {
+    background-color: #1a1a2e;
+    color: #ffffff;
+  }
+}
+
 @layer utilities {
   .break-inside-avoid {
     break-inside: avoid;

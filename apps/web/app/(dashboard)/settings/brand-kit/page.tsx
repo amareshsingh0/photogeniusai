@@ -201,10 +201,11 @@ export default function BrandKitPage() {
             <select
               value={kit.industry}
               onChange={e => update('industry', e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 appearance-none"
+              style={{ colorScheme: 'dark' }}
+              className="w-full bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer"
             >
-              <option value="">Select industry…</option>
-              {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+              <option value="" style={{ background: '#1a1a2e', color: '#fff' }}>Select industry…</option>
+              {INDUSTRIES.map(i => <option key={i} value={i} style={{ background: '#1a1a2e', color: '#fff' }}>{i}</option>)}
             </select>
           </div>
         </div>
