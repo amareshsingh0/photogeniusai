@@ -115,14 +115,14 @@ interface GenerationResult {
 const SSE_STAGES: Record<string, { label: string; sub: string; pct: number }> = {
   intent:     { label: "Reading your vision",     sub: "Detecting intent & creative type",  pct: 10 },
   brief:      { label: "Creative brief ready",    sub: "Photographer mindset applied",      pct: 35 },
-  generating: { label: "Rendering with AI",       sub: "Flux Pro processing your image",    pct: 55 },
+  generating: { label: "Rendering with AI",       sub: "AI processing your image",          pct: 55 },
   done:       { label: "Finishing touches",       sub: "Optimizing quality",                pct: 95 },
 }
 // Fallback array for dot indicator (4 stages)
 const GENERATION_STAGES = [
   { label: "Reading your vision",   sub: "Detecting intent & creative type", pct: 10 },
   { label: "Creative brief ready",  sub: "Photographer mindset applied",     pct: 35 },
-  { label: "Rendering with AI",     sub: "Flux Pro processing your image",   pct: 55 },
+  { label: "Rendering with AI",     sub: "AI processing your image",         pct: 55 },
   { label: "Finishing touches",     sub: "Optimizing quality",               pct: 95 },
 ]
 
