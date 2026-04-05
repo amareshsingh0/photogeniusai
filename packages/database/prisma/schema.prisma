@@ -857,3 +857,139 @@ model Activity {
   @@index([createdAt])
   @@map("activities")
 }
+
+// ==================== SPRINT 3: CANVAS EDITOR ====================
+
+/// Saved poster project — stores Fabric.js canvas state + DesignBrief
+model PosterProject {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+
+  name        String   @default("Untitled Poster") @db.VarChar(255)
+  canvasState Json?    @db.JsonB   // Fabric.js canvas.toJSON() — all layers
+  designBrief Json?    @db.JsonB   // Full DesignBrief from agent chain
+  heroUrl     String?  @db.Text    // Raw Ideogram/Flux output URL (for recompose)
+  thumbnail   String?  @db.Text    // 256px preview data URI
+
+  width       Int      @default(1080)
+  height      Int      @default(1080)
+  platform    String?  @db.VarChar(50)  // instagram | linkedin | print | etc.
+  bucket      String?  @db.VarChar(50)  // capability bucket (typography | photorealism | etc.)
+
+  // Quality scores from jury
+  juryScore   Float?   @db.DoublePrecision
+  juryGrade   String?  @db.VarChar(2)
+
+  // Status
+  isArchived  Boolean  @default(false)
+  publishedAt DateTime? @db.Timestamptz
+
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  @@index([userId])
+  @@index([userId, isArchived, createdAt(sort: Desc)])
+  @@index([platform])
+  @@map("poster_projects")
+}
+
+// ==================== SPRINT 6: BATCH GENERATION + CONTENT CALENDAR ====================
+
+/// Batch generation job (e.g. "generate 7 posts for Diwali week")
+model BatchJob {
+  id         String      @id @default(uuid()) @db.Uuid
+  userId     String      @db.Uuid
+
+  status     String      @default("pending") @db.VarChar(20)  // pending | running | done | failed
+  totalTasks Int
+  doneTasks  Int         @default(0)
+  failedTasks Int        @default(0)
+
+  name       String?     @db.VarChar(255)  // optional user-provided name
+  metadata   Json?       @db.JsonB
+
+  tasks      BatchTask[]
+
+  createdAt  DateTime    @default(now()) @db.Timestamptz
+  updatedAt  DateTime    @updatedAt @db.Timestamptz
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("batch_jobs")
+}
+
+/// Individual task in a batch job
+model BatchTask {
+  id           String    @id @default(uuid()) @db.Uuid
+  batchJobId   String    @db.Uuid
+  batchJob     BatchJob  @relation(fields: [batchJobId], references: [id], onDelete: Cascade)
+
+  // Generation params
+  prompt       String    @db.Text
+  quality      String    @default("balanced") @db.VarChar(20)
+  width        Int       @default(1080)
+  height       Int       @default(1080)
+  style        String?   @db.VarChar(100)
+
+  // Result
+  imageUrl     String?   @db.Text
+  imageB64     String?   @db.Text      // only kept short-term (null after upload)
+  projectId    String?   @db.Uuid      // → PosterProject if user opens in editor
+
+  // Scheduling & publishing
+  scheduledFor DateTime? @db.Timestamptz
+  platform     String?   @db.VarChar(50)  // instagram | linkedin | twitter
+  publishedAt  DateTime? @db.Timestamptz
+  caption      String?   @db.Text
+
+  // Status
+  status       String    @default("pending") @db.VarChar(20) // pending | generating | done | failed | scheduled | published
+  error        String?   @db.Text
+
+  // Metadata (jury scores, model used, etc.)
+  metadata     Json?     @db.JsonB
+
+  createdAt    DateTime  @default(now()) @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @db.Timestamptz
+
+  @@index([batchJobId])
+  @@index([status])
+  @@index([scheduledFor])
+  @@index([platform])
+  @@map("batch_tasks")
+}
+
+// ==================== SPRINT 8: TEAM WORKSPACE ====================
+
+/// Team workspace for brand collaboration
+model Workspace {
+  id          String            @id @default(uuid()) @db.Uuid
+  name        String            @db.VarChar(255)
+  brandKit    Json?             @db.JsonB   // shared brand colors, fonts, logo
+  ownerId     String            @db.Uuid
+
+  createdAt   DateTime          @default(now()) @db.Timestamptz
+  updatedAt   DateTime          @updatedAt @db.Timestamptz
+
+  members     WorkspaceMember[]
+
+  @@index([ownerId])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String    @db.Uuid
+  role        String    @db.VarChar(20)  // owner | editor | viewer
+
+  invitedAt   DateTime  @default(now()) @db.Timestamptz
+  joinedAt    DateTime? @db.Timestamptz
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("workspace_members")
+}

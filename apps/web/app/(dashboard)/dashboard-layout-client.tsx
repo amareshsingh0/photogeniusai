@@ -24,24 +24,32 @@ import {
   Receipt,
   Activity,
   Plus,
+  CalendarDays,
+  Palette,
+  Zap,
+  Share2,
 } from "lucide-react"
 
 const navigation = [
-  { name: "Home", href: "/dashboard", icon: Home },
-  { name: "Create", href: "/generate", icon: Sparkles, highlight: true },
-  { name: "Gallery", href: "/gallery", icon: Image },
-  { name: "Identities", href: "/identity-vault", icon: Users },
-  { name: "Explore", href: "/explore", icon: Globe },
+  { name: "Home",      href: "/dashboard",     icon: Home },
+  { name: "Create",    href: "/generate",       icon: Sparkles, highlight: true },
+  { name: "Gallery",   href: "/gallery",        icon: Image },
+  { name: "Calendar",  href: "/calendar",       icon: CalendarDays },
+  { name: "Batch",     href: "/batch",          icon: Zap },
+  { name: "Identities",href: "/identity-vault", icon: Users },
+  { name: "Explore",   href: "/explore",        icon: Globe },
 ]
 
 const userMenuItems = [
-  { name: "Profile", href: "/settings/profile", icon: User },
-  { name: "Notifications", href: "/settings/notifications", icon: Bell },
-  { name: "Generation Defaults", href: "/settings/generation-defaults", icon: SlidersHorizontal },
-  { name: "Privacy & Consent", href: "/settings/privacy", icon: Shield },
-  { name: "API Keys", href: "/settings/api-keys", icon: Key },
-  { name: "Pricing", href: "/pricing", icon: CreditCard },
-  { name: "Billing", href: "/settings/billing", icon: Receipt },
+  { name: "Profile",             href: "/settings/profile",            icon: User },
+  { name: "Brand Kit",           href: "/settings/brand-kit",          icon: Palette },
+  { name: "Integrations",        href: "/settings/integrations",       icon: Share2 },
+  { name: "Notifications",       href: "/settings/notifications",      icon: Bell },
+  { name: "Generation Defaults", href: "/settings/generation-defaults",icon: SlidersHorizontal },
+  { name: "Privacy & Consent",   href: "/settings/privacy",            icon: Shield },
+  { name: "API Keys",            href: "/settings/api-keys",           icon: Key },
+  { name: "Pricing",             href: "/pricing",                     icon: CreditCard },
+  { name: "Billing",             href: "/settings/billing",            icon: Receipt },
   { name: "Activity Log", href: "/settings/activity", icon: Activity },
 ]
 

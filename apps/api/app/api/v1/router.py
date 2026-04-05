@@ -17,6 +17,9 @@ from app.api.v1.endpoints import (
     edit_image,
     upscale_image,
     logo_overlay,
+    poster_recompose,
+    content_planner,
+    batch_generate,
 )
 
 api_router = APIRouter()
@@ -33,3 +36,6 @@ api_router.include_router(storage.router, prefix="/storage", tags=["storage"])
 api_router.include_router(edit_image.router, tags=["edit"])
 api_router.include_router(upscale_image.router, tags=["upscale"])
 api_router.include_router(logo_overlay.router, tags=["logo"])
+api_router.include_router(poster_recompose.router, tags=["poster"])
+api_router.include_router(content_planner.router, prefix="/content", tags=["content-planner"])
+api_router.include_router(batch_generate.router, prefix="/batch", tags=["batch"])

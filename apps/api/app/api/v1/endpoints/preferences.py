@@ -226,3 +226,135 @@ async def record_feedback(
     except Exception as e:
         logger.warning("Failed to update style_dna: %s", e)
         return FeedbackResponse(success=True, message="Rating saved, DNA update skipped")
+
+
+# ==================== Brand Kit ====================
+
+class BrandKitRequest(BaseModel):
+    primary_color:   str  = Field(default="#6366F1", description="Primary brand hex color")
+    secondary_color: str  = Field(default="#8B5CF6", description="Secondary brand hex color")
+    accent_color:    str  = Field(default="#F59E0B", description="CTA/accent hex color")
+    bg_color:        str  = Field(default="#0A0A1A", description="Preferred background hex color")
+    font_style:      str  = Field(default="modern_sans", description="Font style key")
+    brand_tone:      str  = Field(default="professional", description="Brand voice tone")
+    brand_name:      str  = Field(default="", description="Brand / company name")
+    logo_url:        str  = Field(default="", description="Logo image URL")
+    industry:        str  = Field(default="", description="Industry category")
+
+
+class BrandKitResponse(BaseModel):
+    success:   bool = True
+    brand_kit: dict = {}
+
+
+@router.get(
+    "/brand-kit",
+    response_model=BrandKitResponse,
+    summary="Get brand kit",
+)
+async def get_brand_kit(user_id: CurrentUserId, db: DbSession) -> BrandKitResponse:
+    """Return the user's saved brand kit from User.preferences.brand_kit."""
+    require_auth(user_id)
+    try:
+        user = await db.user.find_first(where={"id": user_id})
+        prefs: dict = (user.preferences or {}) if user else {}
+        return BrandKitResponse(success=True, brand_kit=prefs.get("brand_kit", {}))
+    except Exception as e:
+        logger.warning("get_brand_kit error: %s", e)
+        return BrandKitResponse(success=True, brand_kit={})
+
+
+@router.post(
+    "/brand-kit",
+    response_model=BrandKitResponse,
+    summary="Save brand kit",
+)
+async def save_brand_kit(
+    req: BrandKitRequest,
+    user_id: CurrentUserId,
+    db: DbSession,
+) -> BrandKitResponse:
+    """Persist brand kit to User.preferences.brand_kit."""
+    require_auth(user_id)
+    try:
+        user = await db.user.find_first(where={"id": user_id})
+        prefs: dict = (user.preferences or {}) if user else {}
+        prefs["brand_kit"] = req.model_dump()
+        await db.user.update(where={"id": user_id}, data={"preferences": prefs})
+        return BrandKitResponse(success=True, brand_kit=req.model_dump())
+    except Exception as e:
+        logger.error("save_brand_kit error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Brand Research Agent ───────────────────────────────────────────────────────
+
+class BrandResearchRequest(BaseModel):
+    url: str = Field(..., description="Website URL to scrape for brand identity")
+
+
+@router.post(
+    "/brand-kit/research",
+    summary="Extract brand identity from website URL",
+)
+async def research_brand_from_url(req: BrandResearchRequest):
+    """
+    Scrape a website and extract brand signals (name, colors, fonts, tone).
+    Used by Brand Kit settings page — "Import from Website" button.
+    """
+    try:
+        from app.services.agents.research_agent import research_brand
+        result = await research_brand(req.url)
+        return result
+    except Exception as e:
+        logger.error("brand research error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Integrations (Instagram / LinkedIn tokens) ──────────────────────────���─────
+
+@router.get("/integrations", summary="Get connected social integrations")
+async def get_integrations(user_id: CurrentUserId, db: DbSession):
+    """Return masked view of connected integrations (no raw tokens)."""
+    require_auth(user_id)
+    try:
+        user = await db.user.find_first(where={"id": user_id})
+        prefs = (user.preferences or {}) if user else {}
+        integrations = prefs.get("integrations", {})
+
+        result: dict = {}
+        for platform in ("instagram", "linkedin"):
+            creds = integrations.get(platform, {})
+            if creds.get("access_token"):
+                result[platform] = {
+                    "connected":    True,
+                    "account_name": creds.get("account_name", ""),
+                    "expires_at":   creds.get("expires_at"),
+                }
+        return result
+    except Exception as e:
+        logger.warning("get_integrations error: %s", e)
+        return {}
+
+
+@router.delete("/integrations/{platform}", summary="Disconnect a social integration")
+async def disconnect_integration(
+    platform: str,
+    user_id: CurrentUserId,
+    db: DbSession,
+):
+    """Remove stored credentials for a platform."""
+    require_auth(user_id)
+    if platform not in ("instagram", "linkedin"):
+        raise HTTPException(status_code=400, detail=f"Unknown platform: {platform}")
+    try:
+        user = await db.user.find_first(where={"id": user_id})
+        prefs = (user.preferences or {}) if user else {}
+        integrations = prefs.get("integrations", {})
+        integrations.pop(platform, None)
+        prefs["integrations"] = integrations
+        await db.user.update(where={"id": user_id}, data={"preferences": prefs})
+        return {"success": True, "platform": platform}
+    except Exception as e:
+        logger.error("disconnect_integration error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))

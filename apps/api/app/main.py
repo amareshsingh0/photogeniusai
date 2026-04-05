@@ -56,6 +56,14 @@ async def lifespan(app: FastAPI):
     # Start cleanup task
     cleanup_task = asyncio.create_task(scheduled_cleanup())
 
+    # Preload typography fonts (async download if not already cached)
+    try:
+        from app.services.smart.typography_engine import preload_all_fonts, validate_required_fonts
+        validate_required_fonts()
+        asyncio.create_task(preload_all_fonts())
+    except Exception as e:
+        logger.warning("Typography font preload skipped: %s", e)
+
     # Start scheduled tasks only if apscheduler is available (optional for dev)
     try:
         from app.tasks.scheduled import start_scheduler, stop_scheduler

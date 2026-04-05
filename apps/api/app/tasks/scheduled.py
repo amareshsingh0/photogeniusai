@@ -81,6 +81,18 @@ async def run_weekly_stats():
         logger.error(f"Weekly stats generation failed: {e}")
 
 
+async def run_publish_due_tasks():
+    """
+    Every 60s: publish BatchTasks where scheduledFor <= now and status='ready'.
+    Delegates to instagram_publisher / linkedin_publisher.
+    """
+    try:
+        from app.services.publishers.scheduler import _publish_due_tasks
+        await _publish_due_tasks()
+    except Exception as e:
+        logger.error("Publish scheduler error: %s", e)
+
+
 def start_scheduler():
     """
     Start the scheduled task system
@@ -88,7 +100,20 @@ def start_scheduler():
     Jobs:
     - Daily cleanup at 3 AM (delete old generations)
     - Weekly stats at 2 AM on Sundays
+    - Publish due tasks every 60s
     """
+
+    # Publish due BatchTasks every 60 seconds
+    scheduler.add_job(
+        run_publish_due_tasks,
+        "interval",
+        seconds=60,
+        id="publish_due_tasks",
+        name="Publish Scheduled Posts",
+        replace_existing=True,
+        max_instances=1,
+    )
+    logger.info("Scheduled: Publish due tasks every 60s")
 
     # Daily cleanup at 3 AM
     scheduler.add_job(

@@ -2,9 +2,13 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import dynamic from "next/dynamic"
+import { useRouter } from "next/navigation"
 
-const EditImageModal   = dynamic(() => import("@/components/edit-image-modal"),   { ssr: false })
-const LogoOverlayModal = dynamic(() => import("@/components/logo-overlay-modal"), { ssr: false })
+const EditImageModal      = dynamic(() => import("@/components/edit-image-modal"),      { ssr: false })
+const LogoOverlayModal    = dynamic(() => import("@/components/logo-overlay-modal"),    { ssr: false })
+const PosterInlineEditor  = dynamic(() => import("@/components/poster-inline-editor").then(m => ({ default: m.PosterInlineEditor })), { ssr: false })
+const PosterPackModal     = dynamic(() => import("@/components/poster-pack-modal").then(m => ({ default: m.PosterPackModal })),     { ssr: false })
+const TemplatePickerModal = dynamic(() => import("@/components/template-picker-modal").then(m => ({ default: m.TemplatePickerModal })), { ssr: false })
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -51,6 +55,8 @@ import {
   Lightbulb,
   ThumbsUp,
   ThumbsDown,
+  Package,
+  PenSquare,
 } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
@@ -94,6 +100,15 @@ interface GenerationResult {
   total_time?: number
   model_used?: string
   creative_os?: CreativeOSData
+  // Poster / ad fields (Sprint 4)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ad_copy?: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  poster_design?: any
+  hero_url?: string          // raw hero before compositor — for recompose/pack
+  capability_bucket?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  design_brief?: any         // full DesignBrief from agent chain — for canvas editor
 }
 
 // SSE-driven stage labels — updated by real backend events
@@ -216,13 +231,16 @@ const POSTER_SUGGESTION_CARDS = [
 // Creation modes
 type CreationMode = "image" | "poster"
 
-// P2: Reactive tint — keyword -> subtle bg tint
+// P2: Reactive tint — keyword -> subtle bg tint (patterns hoisted to module level)
+const _TINT_PATTERNS: [RegExp, string][] = [
+  [/\b(cyberpunk|neon|night|sci-fi)\b/,          "rgba(0,255,255,0.04)"],
+  [/\b(nature|forest|green|grass|tree)\b/,        "rgba(34,197,94,0.05)"],
+  [/\b(sunset|golden|warm|fire)\b/,               "rgba(251,146,60,0.05)"],
+  [/\b(portrait|headshot|face|person)\b/,         "rgba(168,85,247,0.04)"],
+]
 function getPromptTint(prompt: string): string {
   const p = prompt.toLowerCase()
-  if (/\b(cyberpunk|neon|night|sci-fi)\b/.test(p)) return "rgba(0,255,255,0.04)"
-  if (/\b(nature|forest|green|grass|tree)\b/.test(p)) return "rgba(34,197,94,0.05)"
-  if (/\b(sunset|golden|warm|fire)\b/.test(p)) return "rgba(251,146,60,0.05)"
-  if (/\b(portrait|headshot|face|person)\b/.test(p)) return "rgba(168,85,247,0.04)"
+  for (const [re, color] of _TINT_PATTERNS) if (re.test(p)) return color
   return "transparent"
 }
 
@@ -257,6 +275,8 @@ function smartAutoDims(prompt: string): { width: number; height: number; label: 
 const SESSION_KEY = "pg_last_result"
 
 export default function GeneratePage() {
+  const router = useRouter()
+  const [openingEditor, setOpeningEditor] = useState(false)
   const [prompt, setPrompt] = useState("")
   const [userPrompt, setUserPrompt] = useState<string>(() => {
     if (typeof window === "undefined") return ""
@@ -302,10 +322,15 @@ export default function GeneratePage() {
   const [editSourceImage, setEditSourceImage] = useState<string | null>(null)
   const [editSourceUrl, setEditSourceUrl] = useState<string>("")
   const editFileInputRef = useRef<HTMLInputElement>(null)
-  // Advanced edit modal + logo overlay modal
-  const [showEditModal, setShowEditModal]   = useState(false)
-  const [showLogoModal, setShowLogoModal]   = useState(false)
+  // Advanced edit modal + logo overlay modal + pack modal + template picker
+  const [showEditModal, setShowEditModal]       = useState(false)
+  const [showLogoModal, setShowLogoModal]       = useState(false)
+  const [showPackModal, setShowPackModal]       = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  // Poster inline editor state (updated image replaces result.image_url)
+  const [posterImageUrl, setPosterImageUrl] = useState<string | null>(null)
   const stageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const promptHistoryRef = useRef<string[]>([])
   const adaptiveToastShownRef = useRef(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -343,8 +368,8 @@ export default function GeneratePage() {
 
 
   const canGenerate = (editMode
-    ? (editSourceUrl.length > 0 && prompt.trim().length >= 3)
-    : prompt.trim().length >= 3
+    ? (editSourceUrl.length > 0 && prompt.trim().length >= 3 && prompt.trim().length <= 2000)
+    : (prompt.trim().length >= 3 && prompt.trim().length <= 2000)
   ) && !isGenerating
   const promptTint = useMemo(() => getPromptTint(prompt), [prompt])
 
@@ -391,6 +416,8 @@ export default function GeneratePage() {
       setIsGenerating(true)
       setError(null)
       setResult(null)
+      setFeedbackGiven(null)
+      setPosterImageUrl(null)
       setBriefData(null)
       setSseStage("generating")
       setGenProgress(40)
@@ -432,6 +459,7 @@ export default function GeneratePage() {
     setError(null)
     setResult(null)
     setFeedbackGiven(null)
+    setPosterImageUrl(null)
     setBriefData(null)
     setActiveModel("")
     setSseStage("intent")
@@ -439,6 +467,12 @@ export default function GeneratePage() {
     setGenStage(0)
     setGenProgress(SSE_STAGES.intent.pct)
     setTimeout(() => setGenerateShimmer(false), 800)
+
+    // Create abort controller with 3-minute timeout
+    abortControllerRef.current?.abort()
+    const abort = new AbortController()
+    abortControllerRef.current = abort
+    const timeoutId = setTimeout(() => abort.abort(), 180_000)
 
     // P8: Adaptive — suggest Portrait via toast with Apply (user consent)
     promptHistoryRef.current = [finalPrompt.trim(), ...promptHistoryRef.current].slice(0, 10)
@@ -459,6 +493,7 @@ export default function GeneratePage() {
       const res = await fetch("/api/generate/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abort.signal,
         body: JSON.stringify({
           prompt: finalPrompt.trim(),
           width: genDims.width,
@@ -496,7 +531,8 @@ export default function GeneratePage() {
 
           const event = eventMatch[1]
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const data: any = JSON.parse(dataMatch[1])
+          let data: any
+          try { data = JSON.parse(dataMatch[1]) } catch { continue }
 
           if (event === "intent_ready") {
             setSseStage("intent")
@@ -518,6 +554,7 @@ export default function GeneratePage() {
           } else if (event === "final_ready") {
             setSseStage("done")
             setGenProgress(100)
+            setPosterImageUrl(null) // reset inline editor override
             setResult({
               success: true,
               image_url: data.image_url,
@@ -534,6 +571,12 @@ export default function GeneratePage() {
               quality_score: data.quality_score,
               generationId: data.generationId,
               creative_os: data.creative_os,
+              // Poster fields
+              ad_copy: data.ad_copy,
+              poster_design: data.poster_design,
+              hero_url: data.hero_url,
+              capability_bucket: data.capability_bucket,
+              design_brief: data.design_brief,
             })
 
           } else if (event === "error") {
@@ -542,8 +585,13 @@ export default function GeneratePage() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong")
+      if (err instanceof Error && err.name === "AbortError") {
+        setError("Generation timed out — please try again")
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong")
+      }
     } finally {
+      clearTimeout(timeoutId)
       setIsGenerating(false)
       if (stageTimerRef.current) clearTimeout(stageTimerRef.current)
     }
@@ -557,15 +605,23 @@ export default function GeneratePage() {
   }
 
   const handleReset = () => {
+    abortControllerRef.current?.abort()
     setResult(null)
     setError(null)
     setUserPrompt("")
     setReferenceImage(null)
+    setPosterImageUrl(null)
+    setFeedbackGiven(null)
   }
 
   const handleReferenceImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file?.type.startsWith("image/")) return
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Image too large", description: "Reference image must be under 5 MB.", variant: "destructive" })
+      e.target.value = ""
+      return
+    }
     const reader = new FileReader()
     reader.onload = () => setReferenceImage(reader.result as string)
     reader.readAsDataURL(file)
@@ -608,6 +664,7 @@ export default function GeneratePage() {
   useEffect(() => {
     return () => {
       recognitionRef.current?.abort()
+      abortControllerRef.current?.abort()
     }
   }, [])
 
@@ -615,14 +672,14 @@ export default function GeneratePage() {
   const [feedbackGiven, setFeedbackGiven] = useState<"up" | "down" | null>(null)
 
   const handleFeedback = async (thumbs: "up" | "down") => {
-    if (!result) return
+    if (!result?.generationId) return   // guard: no ID = nothing to record
     setFeedbackGiven(thumbs)
     try {
       await fetch("/api/preferences/thumbs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          generationId: result.generationId ?? "",
+          generationId: result.generationId,
           imageUrl: result.image_url ?? "",
           thumbs,
           style: selectedStyle,
@@ -635,12 +692,59 @@ export default function GeneratePage() {
     } catch { /* silent — feedback is best-effort */ }
   }
 
-  const handleDownload = () => {
-    if (!result?.image_url) return
-    const link = document.createElement("a")
-    link.href = result.image_url
-    link.download = `photogenius-${Date.now()}.png`
-    link.click()
+  const handleDownload = async () => {
+    const url = posterImageUrl ?? result?.image_url
+    if (!url) return
+    try {
+      // For data: URIs, anchor click works directly
+      if (url.startsWith("data:")) {
+        const link = document.createElement("a")
+        link.href = url
+        link.download = `photogenius-${Date.now()}.jpg`
+        link.click()
+        return
+      }
+      // For cross-origin CDN URLs, fetch → blob to trigger Save As
+      const blob = await fetch(url).then(r => r.blob())
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = blobUrl
+      link.download = `photogenius-${Date.now()}.jpg`
+      link.click()
+      URL.revokeObjectURL(blobUrl)
+    } catch {
+      // Last-resort: open in new tab
+      window.open(url, "_blank")
+    }
+  }
+
+  // Open result in canvas editor
+  const handleOpenInEditor = async () => {
+    if (!result) return
+    setOpeningEditor(true)
+    try {
+      const res = await fetch("/api/projects/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          heroUrl:      result.hero_url || result.image_url,
+          adCopy:       result.ad_copy,
+          posterDesign: result.poster_design,
+          designBrief:  result.design_brief,
+          imageUrl:     result.image_url,
+          prompt:       userPrompt,
+          name:         result.ad_copy?.headline || userPrompt.slice(0, 50) || "Untitled",
+        }),
+      })
+      const data = await res.json()
+      if (data.projectId) {
+        router.push(`/editor/${data.projectId}`)
+      } else {
+        throw new Error(data.error ?? "Failed to create project")
+      }
+    } catch (err) {
+      toast({ title: "Could not open editor", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" })
+    } finally { setOpeningEditor(false) }
   }
 
   // Regenerate with same prompt
@@ -653,6 +757,8 @@ export default function GeneratePage() {
     setPrompt(userPrompt)
     setResult(null)
     setError(null)
+    setPosterImageUrl(null)
+    setFeedbackGiven(null)
   }
 
   // Edit the generated image — open advanced edit modal
@@ -700,16 +806,45 @@ export default function GeneratePage() {
           {/* 2-col: image + details */}
           <div className="grid grid-cols-1 md:grid-cols-[1fr_300px] lg:grid-cols-[1fr_320px] gap-5 items-start">
 
-            {/* Image */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.97 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.04 }}
-              className="relative w-full rounded-2xl overflow-hidden result-card-glow border border-white/10 bg-black/20"
-              style={{ ...aspectStyle, maxHeight: "78vh" }}
-            >
-              <Image src={result.image_url} alt="Generated" fill className="object-contain" unoptimized priority />
-            </motion.div>
+            {/* Image + inline editor column */}
+            <div className="flex flex-col gap-0">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.04 }}
+                className="relative w-full rounded-2xl overflow-hidden result-card-glow border border-white/10 bg-black/20"
+                style={{ ...aspectStyle, maxHeight: "78vh" }}
+              >
+                <Image
+                  src={posterImageUrl ?? result.image_url}
+                  alt="Generated"
+                  fill
+                  className="object-contain"
+                  unoptimized
+                  priority
+                />
+              </motion.div>
+
+              {/* Poster Inline Editor — shown only for ad/poster bucket */}
+              {result.ad_copy && result.hero_url && (
+                <PosterInlineEditor
+                  heroUrl={result.hero_url}
+                  adCopy={result.ad_copy}
+                  posterDesign={result.poster_design ?? {}}
+                  width={generationDimension.width}
+                  height={generationDimension.height}
+                  onUpdated={(uri, newAdCopy, newDesign) => {
+                    setPosterImageUrl(uri)
+                    // Keep result in sync so Pack Modal + Canvas Editor get the edited values
+                    setResult(prev => prev ? {
+                      ...prev,
+                      ad_copy: newAdCopy,
+                      poster_design: newDesign,
+                    } : prev)
+                  }}
+                />
+              )}
+            </div>
 
             {/* Details panel */}
             <motion.div
@@ -843,6 +978,26 @@ export default function GeneratePage() {
                 <Button onClick={handleDownload} className="gap-2 btn-premium text-white rounded-xl col-span-2">
                   <Download className="h-4 w-4" /> Download
                 </Button>
+                <Button
+                  onClick={handleOpenInEditor}
+                  disabled={openingEditor}
+                  className="gap-2 rounded-xl border border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 text-sm col-span-2"
+                  variant="outline"
+                >
+                  {openingEditor
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <PenSquare className="h-3.5 w-3.5" />}
+                  Open in Canvas Editor
+                </Button>
+                {result.ad_copy && result.hero_url && (
+                  <Button
+                    onClick={() => setShowPackModal(true)}
+                    className="gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-sm col-span-2"
+                    variant="outline"
+                  >
+                    <Package className="h-3.5 w-3.5" /> Download Pack (4 sizes)
+                  </Button>
+                )}
                 {/* Thumbs feedback */}
                 <div className="col-span-2 flex items-center gap-2">
                   <span className="text-[11px] text-muted-foreground/40 shrink-0">Rate this</span>
@@ -896,6 +1051,18 @@ export default function GeneratePage() {
             </motion.div>{/* end details panel */}
           </div>{/* end 2-col grid */}
         </motion.div>
+
+        {/* Poster Pack modal */}
+        {result.ad_copy && result.hero_url && (
+          <PosterPackModal
+            open={showPackModal}
+            onClose={() => setShowPackModal(false)}
+            heroUrl={result.hero_url}
+            adCopy={result.ad_copy}
+            posterDesign={result.poster_design ?? {}}
+            designBrief={result.design_brief}
+          />
+        )}
       </div>
     )
   }
@@ -1247,9 +1414,17 @@ export default function GeneratePage() {
                   className="overflow-hidden"
                 >
                   <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4 space-y-3">
-                    <p className="flex items-center gap-2 text-xs font-semibold text-foreground/80">
-                      <Type className="h-3.5 w-3.5 text-primary" /> Poster Text
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="flex items-center gap-2 text-xs font-semibold text-foreground/80">
+                        <Type className="h-3.5 w-3.5 text-primary" /> Poster Text
+                      </p>
+                      <button
+                        onClick={() => setShowTemplateModal(true)}
+                        className="flex items-center gap-1.5 text-[10px] text-purple-400 hover:text-purple-300 border border-purple-500/20 hover:border-purple-500/40 px-2 py-1 rounded-lg transition-colors"
+                      >
+                        <Sparkles className="h-3 w-3" /> Templates
+                      </button>
+                    </div>
                     <div className="grid grid-cols-1 gap-2">
                       <input
                         type="text"
@@ -1606,6 +1781,30 @@ export default function GeneratePage() {
           }}
         />
       )}
+
+      {/* Template Picker Modal */}
+      {showTemplateModal && (
+        <TemplatePickerModal
+          onClose={() => setShowTemplateModal(false)}
+          onSelect={(template) => {
+            setPrompt(template.prompt_prefix)
+            setPosterHeadline(template.ad_copy.headline ?? "")
+            setPosterSubtitle(template.ad_copy.subheadline ?? "")
+            setPosterCta(template.ad_copy.cta ?? "")
+            setCreationMode("poster")
+            // Switch to story ratio for vertical templates
+            if (template.recommended_ratio === "9:16") {
+              const storyPreset = DIMENSION_PRESETS.find(p => p.aspect === "9:16")
+              if (storyPreset) setSelectedDimension(storyPreset)
+            } else if (template.recommended_ratio === "1:1") {
+              const sqPreset = DIMENSION_PRESETS.find(p => p.aspect === "1:1")
+              if (sqPreset) setSelectedDimension(sqPreset)
+            }
+            setShowTemplateModal(false)
+          }}
+        />
+      )}
     </div>
   )
 }
+

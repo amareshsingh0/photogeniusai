@@ -32,12 +32,17 @@ from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# ── Feature flags ──────────────────────────────────────────────────────────────
-_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-USE_GEMINI_ENGINE: bool = (
-    bool(_GEMINI_KEY)
-    and os.getenv("USE_GEMINI_ENGINE", "true").lower() != "false"
-)
+# ── Feature flags (read at call time via property, not import time) ────────────
+def _is_gemini_enabled() -> bool:
+    key = os.getenv("GEMINI_API_KEY", "").strip()
+    flag = os.getenv("USE_GEMINI_ENGINE", "true").strip().lower()
+    return bool(key) and flag not in ("false", "0", "no", "off")
+
+# Module-level alias kept for legacy imports
+USE_GEMINI_ENGINE: bool = _is_gemini_enabled()
+
+# Model name (env-configurable, no deploy required for upgrade)
+_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-preview-05-20")
 
 # Buckets that get a critic agent on premium/ultra
 _HARD_BUCKETS = {"anime", "typography", "editing", "interior_arch", "character_consistency"}
@@ -522,40 +527,45 @@ Up to 150 words. More detail = better output for this model tier.
 Return ONLY valid JSON:
 {"prompt": "...", "negative_prompt": "...", "style_notes": "..."}""",
 
-    "ideogram_turbo": """You are an Ideogram V3 Turbo prompt engineer specializing in ad creatives and marketing posters.
+    "ideogram_turbo": """You are an Ideogram V3 Turbo background scene generator for poster/ad hero images.
 
-CRITICAL RULES FOR IDEOGRAM:
-1. Text that must APPEAR IN the image: wrap EACH text element in "double quotes" — this is how Ideogram renders legible text
-2. Use the ad_copy from the Creative Brief — put those EXACT words in quotes
-3. Specify font style for each text level
-4. Background treatment must create clean readable zones for text
-5. Describe the full poster layout: hero visual + text zones
+CRITICAL: Generate ONLY the hero background scene — NO text, NO words, NO UI labels.
+PosterCompositor will add all text/headlines/CTAs on top.
 
-TEMPLATE STRUCTURE:
-[Background/scene description], [hero product/character placement], large bold text "HEADLINE" at [position] in [font style], [color] text on [background treatment], medium text "Subheadline supporting message" below, small accent text "CTA" in contrasting color button
+RULES:
+1. NO TEXT whatsoever — zero words, letters, numbers in the image
+2. Focus on the scene atmosphere: lighting, colors, composition, mood
+3. Bottom portion should be darker/cleaner to allow text overlay naturally
+4. Match the brief's visual_concept exactly
 
-Max 100 words. ALWAYS include at least the headline in "double quotes".
+Max 80 words. Scene description only.
 
 Return ONLY valid JSON:
 {"prompt": "...", "negative_prompt": "...", "style_notes": "..."}""",
 
-    "ideogram_quality": """You are an Ideogram V3 Quality prompt engineer specializing in premium ad creatives, SaaS marketing, and festival posters.
+    "ideogram_quality": """You are an Ideogram V3 Quality background scene generator for poster/ad hero images.
 
-CRITICAL RULES FOR IDEOGRAM:
-1. Text that must APPEAR IN the image: wrap EACH text element in "double quotes" — this is how Ideogram renders legible text
-2. Use the ad_copy from the Creative Brief — put those EXACT words in quotes
-3. Specify typography hierarchy with precise sizing language (large/medium/small + font weight)
-4. Background treatment creates clean readable zones for each text level
-5. Color contrast: describe text color vs background for legibility
+CRITICAL: You are generating ONLY the hero background image — NOT the full poster.
+A separate renderer (PosterCompositor) will composite all text, headlines, CTAs, and feature cards on top.
 
-PREMIUM STRUCTURE:
-[Cinematic scene/background with specific atmosphere], [hero element precisely placed],
-large bold display font "HEADLINE TEXT" prominently at [position] in [color],
-medium weight sans-serif "Supporting subheadline message" in [color] below,
-small high-contrast "CTA TEXT" in action color button/badge,
-[overall design style: minimal/editorial/bold/elegant]
+YOUR ONLY JOB: Create a stunning, cinematic BACKGROUND SCENE that matches the brief's visual_concept.
 
-Up to 150 words. ALWAYS include all ad_copy fields in "double quotes". Include specific design style references.
+RULES:
+1. NO TEXT in the image — absolutely zero text, words, letters, numbers, watermarks, UI overlays
+2. Focus 100% on the scene: lighting, atmosphere, composition, colors, depth
+3. The bottom ~45% of the image should be darker/simpler (text will go here) — use gradient/depth naturally
+4. Match the visual_concept EXACTLY — if it says "laptop showing dashboard", generate that scene
+5. Cinematic quality: dramatic lighting, high detail, professional photography or render style
+6. Leave clean visual space in the center/bottom for text compositing
+
+PRODUCT TYPE GUIDANCE:
+- SaaS/Tech app → Realistic laptop/phone on a clean desk showing app UI, soft bokeh background, ambient office lighting
+- Festival/Event → Rich cultural scene with atmospheric lighting, bokeh lights, vibrant colors
+- Fashion → Model in editorial setting, clean background, dramatic lighting
+- Food → Hero product shot, soft bokeh, warm lighting, appetizing presentation
+- Fitness → Athlete in action, dynamic pose, cinematic lighting
+
+Up to 120 words. Scene description only — no text, no UI labels in the output.
 
 Return ONLY valid JSON:
 {"prompt": "...", "negative_prompt": "...", "style_notes": "..."}""",
@@ -665,9 +675,8 @@ _NEGATIVE_BY_BUCKET: Dict[str, str] = {
         "changed perspective, altered background, removed shadows, "
         "blurry blend edge, scale mismatch, unrealistic composite"
     ),
-    "fast": (
-        "blurry, low quality, watermark, deformed, bad anatomy"
-    ),
+    # NOTE: "fast" is a tier, not a bucket — kept only for heuristic_params compat
+    # Do NOT route bucket="fast" through the engine
 }
 
 _DEFAULT_NEGATIVE = (
@@ -783,14 +792,33 @@ def _validate_params(params: Dict, bucket: str, has_ad_copy: bool = False) -> li
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _extract_json(text: str) -> Dict:
-    """Extract first JSON object from LLM response (handles markdown fences)."""
-    text = re.sub(r"```(?:json)?\s*", "", text).strip()
-    text = re.sub(r"```\s*$", "", text).strip()
-    start = text.find("{")
-    end = text.rfind("}") + 1
-    if start == -1 or end == 0:
-        raise ValueError(f"No JSON found in response: {text[:200]}")
-    return json.loads(text[start:end])
+    """
+    Extract first JSON object from LLM response.
+    Handles: markdown fences, prose prefix/suffix, multiple JSON objects.
+    Returns {} on parse failure (never raises).
+    """
+    if not text or not text.strip():
+        return {}
+    # Strip markdown fences
+    text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
+    # Try direct parse (model returned clean JSON)
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+    # Regex: find outermost {...} — handles prose wrapper like "Here is the JSON: {...}"
+    match = re.search(r"\{[\s\S]*\}", text)
+    if match:
+        try:
+            parsed = json.loads(match.group())
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+    logger.warning("[gemini-engine] _extract_json failed: %r", text[:200])
+    return {}
 
 
 def _resolve_brief_system(bucket: str) -> str:
@@ -802,32 +830,53 @@ def _resolve_brief_system(bucket: str) -> str:
     return _BRIEF_SYSTEM_BY_BUCKET.get(parent, _BRIEF_SYSTEM_BY_BUCKET["photorealism"])
 
 
+_MODEL_KEY_ALIASES: Dict[str, str] = {
+    # stream_generate.py key  →  _PARAMS_SYSTEM_BY_MODEL key
+    "flux_pro":     "flux_2_pro",
+    "flux_dev":     "flux_2_dev",
+    "flux_schnell": "flux_schnell",
+    "flux_kontext": "flux_kontext",
+    "flux_kontext_max": "flux_kontext_max",
+    "ideogram_quality": "ideogram_quality",
+    "ideogram_turbo":   "ideogram_turbo",
+    "recraft_v4":       "recraft_v4",
+    "recraft_v4_svg":   "recraft_v4_svg",
+    "hunyuan_image":    "hunyuan_image",
+}
+
+
 def _resolve_params_system(model_key: str) -> str:
     """Pick model-specific params prompt. Fallback to flux_2_pro."""
     # Normalize: "Flux 2 Pro" → "flux_2_pro"
     normalized = model_key.lower().replace(" ", "_").replace(".", "_").replace("-", "_")
-    # Try exact, then try prefix match
+    # 1. Exact match
     if normalized in _PARAMS_SYSTEM_BY_MODEL:
         return _PARAMS_SYSTEM_BY_MODEL[normalized]
-    for key in _PARAMS_SYSTEM_BY_MODEL:
-        if key in normalized or normalized in key:
+    # 2. Alias table (handles stream_generate "flux_pro" → "flux_2_pro")
+    aliased = _MODEL_KEY_ALIASES.get(normalized)
+    if aliased and aliased in _PARAMS_SYSTEM_BY_MODEL:
+        return _PARAMS_SYSTEM_BY_MODEL[aliased]
+    # 3. Longest-key-first prefix match (prevents "flux_kontext" matching "flux_kontext_max")
+    for key in sorted(_PARAMS_SYSTEM_BY_MODEL, key=len, reverse=True):
+        if normalized.startswith(key) or key.startswith(normalized):
             return _PARAMS_SYSTEM_BY_MODEL[key]
     return _PARAMS_SYSTEM_BY_MODEL["flux_2_pro"]
 
 
 def _resolve_negative(bucket: str, params_negative: str) -> str:
-    """Merge bucket-specific negative with params-returned negative."""
+    """Merge bucket-specific negative with params-returned negative (case-insensitive dedup)."""
     bucket_neg = _NEGATIVE_BY_BUCKET.get(
         bucket,
         _NEGATIVE_BY_BUCKET.get(bucket.split("_")[0], _DEFAULT_NEGATIVE)
     )
-    if params_negative and params_negative.strip() and params_negative != _DEFAULT_NEGATIVE:
-        # Merge: params-specific + bucket-specific, deduplicated
-        all_terms = [t.strip() for t in (params_negative + ", " + bucket_neg).split(",")]
-        seen, deduped = set(), []
+    pn = (params_negative or "").strip()
+    if pn and pn.strip().lower() != _DEFAULT_NEGATIVE.strip().lower():
+        all_terms = [t.strip() for t in (pn + ", " + bucket_neg).split(",")]
+        seen: set = set()
+        deduped: list = []
         for t in all_terms:
-            if t and t not in seen:
-                seen.add(t)
+            if t and t.lower() not in seen:
+                seen.add(t.lower())
                 deduped.append(t)
         return ", ".join(deduped)
     return bucket_neg
@@ -873,7 +922,7 @@ _IMPERFECT_BY_DESIGN_BUCKETS = {
 # Tiers where Imperfect by Design applies (not fast — too quick for nuance)
 _IMPERFECT_TIERS = {"standard", "premium", "ultra", "balanced", "quality"}
 
-# India "Modern Masala" cultural keywords
+# India "Modern Masala" cultural keywords — compiled at import for perf
 _INDIA_KEYWORDS = {
     "indian", "india", "desi", "bollywood", "hindi", "saree", "sari", "kurta",
     "punjabi", "bengali", "south indian", "tamil", "gujarati", "rajasthani",
@@ -881,6 +930,17 @@ _INDIA_KEYWORDS = {
     "indian bride", "indian wedding", "mehndi", "dupatta", "lehenga", "dhoti",
     "rangoli", "temple", "mumbai", "delhi", "india gate", "taj mahal",
 }
+_INDIA_RE = re.compile(
+    r"(" + "|".join(re.escape(k) for k in sorted(_INDIA_KEYWORDS, key=len, reverse=True)) + r")",
+    re.IGNORECASE,
+)
+
+# Explicit color terms — if user already specified colors, skip color psychology injection
+_EXPLICIT_COLOR_RE = re.compile(
+    r"\b(red|blue|green|purple|gold|black|white|pink|teal|warm|cool|pastel|monochrome|"
+    r"crimson|navy|magenta|cyan|amber|ivory|beige|maroon|coral|olive|lavender)\b",
+    re.IGNORECASE,
+)
 
 
 def _build_contextual_hints(
@@ -897,19 +957,21 @@ def _build_contextual_hints(
     """
     hints: list[str] = []
     prompt_lower = raw_prompt.lower()
-    type_lower = creative_type.lower()
-    resolved_tier = tier.lower().replace("quality", "premium").replace("balanced", "standard")
+    # Null-safe: default if None passed
+    type_lower = (creative_type or "photo").lower()
+    resolved_tier = (tier or "standard").lower().replace("quality", "premium").replace("balanced", "standard")
 
     # ── 1. Color Psychology ────────────────────────────────────────────────────
-    color_goal = _CREATIVE_TYPE_TO_COLOR_GOAL.get(type_lower)
-    if not color_goal:
-        # Scan prompt for goal signals
-        for signal, goal in _CREATIVE_TYPE_TO_COLOR_GOAL.items():
-            if signal in prompt_lower:
-                color_goal = goal
-                break
-    if color_goal:
-        hints.append(_COLOR_PSYCHOLOGY[color_goal])
+    # Skip if user already specified explicit colors in prompt
+    if not _EXPLICIT_COLOR_RE.search(raw_prompt):
+        color_goal = _CREATIVE_TYPE_TO_COLOR_GOAL.get(type_lower)
+        if not color_goal:
+            for signal, goal in _CREATIVE_TYPE_TO_COLOR_GOAL.items():
+                if signal in prompt_lower:
+                    color_goal = goal
+                    break
+        if color_goal and color_goal in _COLOR_PSYCHOLOGY:
+            hints.append(_COLOR_PSYCHOLOGY[color_goal])
 
     # ── 2. Imperfect by Design ────────────────────────────────────────────────
     if capability_bucket in _IMPERFECT_BY_DESIGN_BUCKETS and resolved_tier in _IMPERFECT_TIERS:
@@ -921,7 +983,7 @@ def _build_contextual_hints(
         )
 
     # ── 3. India 'Modern Masala' cultural context ─────────────────────────────
-    if any(kw in prompt_lower for kw in _INDIA_KEYWORDS):
+    if _INDIA_RE.search(raw_prompt):
         hints.append(
             "Cultural context: Indian aesthetic — blend traditional vibrancy "
             "(saffron, turmeric gold, deep sindoor red, marigold, peacock teal) with "
@@ -936,6 +998,24 @@ def _build_contextual_hints(
 # Main Engine
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Per-stage token limits (tuned to actual output sizes)
+_STAGE_MAX_TOKENS = {
+    "brief":  1500,
+    "params":  600,
+    "critic":  400,
+}
+
+# Tier normalization table — covers all names clients might pass
+_TIER_NORM = {
+    "fast":     "fast",
+    "balanced": "standard",
+    "standard": "standard",
+    "quality":  "premium",
+    "premium":  "premium",
+    "ultra":    "ultra",
+}
+
+
 class GeminiPromptEngine:
     """
     Bucket-aware + model-specific prompt engine with validator and optional critic.
@@ -949,21 +1029,41 @@ class GeminiPromptEngine:
     """
 
     def __init__(self):
-        self._model_name = "gemini-2.5-flash"
-        self.enabled = USE_GEMINI_ENGINE
+        self._model_name = _GEMINI_MODEL
+        self._client = None   # initialized lazily; see _get_client()
 
-    def _call(self, system: str, user: str) -> str:
-        """Single Gemini call — returns raw text."""
-        from google import genai
+    @property
+    def enabled(self) -> bool:
+        """Re-evaluated on each access so key rotation / env changes take effect."""
+        return _is_gemini_enabled()
+
+    def _get_client(self):
+        """Return module-level singleton Gemini client (created once, reused)."""
+        global _gemini_client
+        if "_gemini_client" not in globals() or _gemini_client is None:
+            from google import genai
+            key = os.getenv("GEMINI_API_KEY", "").strip()
+            globals()["_gemini_client"] = genai.Client(api_key=key)
+        return globals()["_gemini_client"]
+
+    async def _call(
+        self,
+        system: str,
+        user: str,
+        stage: str = "brief",
+        temperature: float = 0.85,
+    ) -> str:
+        """Single async Gemini call — returns raw text."""
         from google.genai import types
-        client = genai.Client(api_key=_GEMINI_KEY)
-        resp = client.models.generate_content(
+        client = self._get_client()
+        max_tokens = _STAGE_MAX_TOKENS.get(stage, 800)
+        resp = await client.aio.models.generate_content(
             model=self._model_name,
-            contents=user,
+            contents=[{"role": "user", "parts": [{"text": user}]}],
             config=types.GenerateContentConfig(
                 system_instruction=system,
-                temperature=0.95,
-                max_output_tokens=4096,
+                temperature=temperature,
+                max_output_tokens=max_tokens,
                 response_mime_type="application/json",
             ),
         )
@@ -971,15 +1071,18 @@ class GeminiPromptEngine:
 
     # ── Stage A ───────────────────────────────────────────────────────────────
 
-    def create_brief(
+    async def create_brief(
         self,
         raw_prompt: str,
         creative_type: str = "photo",
         style: str = "photo",
         extra_context: Optional[str] = None,
         bucket: str = "photorealism",
+        tier: str = "standard",
     ) -> Dict:
         """Stage A: raw prompt → Creative Brief JSON (bucket-specific system prompt)."""
+        if not raw_prompt or len(raw_prompt.strip()) < 3:
+            return self._heuristic_brief(raw_prompt or "")
         if not self.enabled:
             return self._heuristic_brief(raw_prompt)
 
@@ -992,21 +1095,33 @@ class GeminiPromptEngine:
         if extra_context:
             user_msg += f"\nExtra context: {extra_context}"
 
-        # Inject situational + cognitive context hints
-        ctx_hints = _build_contextual_hints(raw_prompt, creative_type, bucket, "standard")
+        # Inject situational + cognitive context hints (uses real tier, not hardcoded "standard")
+        ctx_hints = _build_contextual_hints(raw_prompt, creative_type or "photo", bucket, tier)
         if ctx_hints:
             user_msg += f"\n\nSITUATIONAL DIRECTIVES (follow these precisely):\n{ctx_hints}"
 
         try:
-            raw = self._call(system, user_msg)
+            raw = await self._call(system, user_msg, stage="brief", temperature=0.90)
             brief = _extract_json(raw)
             brief["_source"] = "gemini"
             brief["_bucket"] = bucket
 
-            # Soft validation — log issues but don't fail
+            # Validate — heuristic fallback if missing critical fields
             issues = _validate_brief(brief)
             if issues:
                 logger.warning("[gemini-engine] brief issues %s: %s", bucket, issues)
+                # If truly missing required fields, fall back rather than pass garbage downstream
+                missing_critical = [i for i in issues if "Missing required field" in i]
+                if missing_critical:
+                    logger.warning("[gemini-engine] critical brief fields missing, falling back")
+                    return self._heuristic_brief(raw_prompt)
+
+            # Typography: must have ad_copy + poster_design for compositor
+            if bucket == "typography":
+                if not isinstance(brief.get("ad_copy"), dict):
+                    brief.setdefault("ad_copy", {})
+                if not isinstance(brief.get("poster_design"), dict):
+                    brief.setdefault("poster_design", {})
 
             logger.info("[gemini-engine] brief OK bucket=%s: %s",
                         bucket, brief.get("visual_concept", "")[:60])
@@ -1018,10 +1133,10 @@ class GeminiPromptEngine:
 
     # ── Stage B ───────────────────────────────────────────────────────────────
 
-    def build_params(
+    async def build_params(
         self,
         brief: Dict,
-        model_name: str = "Flux 2 Pro",
+        model_name: str = "flux_pro",
         capability_bucket: str = "photorealism",
         critic_notes: Optional[str] = None,
     ) -> Dict:
@@ -1029,41 +1144,37 @@ class GeminiPromptEngine:
         if not self.enabled or brief.get("_source") == "heuristic":
             return self._heuristic_params(brief, capability_bucket)
 
+        # Compact JSON — fewer input tokens billed
         brief_clean = {k: v for k, v in brief.items() if not k.startswith("_")}
-        brief_str = json.dumps(brief_clean, indent=2)
+        brief_str = json.dumps(brief_clean, separators=(",", ":"))
         system = _resolve_params_system(model_name)
 
         user_msg = f"Creative Brief:\n{brief_str}\n\nTarget model: {model_name}"
 
-        # For typography/Ideogram — explicitly remind to use ad_copy in double quotes
-        if capability_bucket == "typography" and brief.get("ad_copy"):
-            ac = brief["ad_copy"]
-            hl = ac.get("headline", "")
-            sub = ac.get("subheadline", "")
-            cta = ac.get("cta", "")
-            tagline = ac.get("tagline", "")
+        _has_ad_copy = (
+            capability_bucket == "typography"
+            and isinstance(brief.get("ad_copy"), dict)
+            and bool(brief["ad_copy"].get("headline"))
+        )
+        if _has_ad_copy:
+            vc = brief.get("visual_concept", "")
+            product = brief.get("subject", "")
             user_msg += (
-                f'\n\nAD COPY TO USE (wrap each in "double quotes" in the prompt):\n'
-                f'  Headline: "{hl}"\n'
-                f'  Subheadline: "{sub}"\n'
-                f'  CTA: "{cta}"\n'
+                f"\n\nIMPORTANT: PosterCompositor will add all text on top. "
+                f"Generate ONLY the hero background scene — NO TEXT in the image.\n"
+                f"visual_concept: {vc}\nproduct/subject: {product}\n"
+                f"Negative prompt MUST include: text, words, letters, typography, watermark, UI overlay, labels\n"
+                f"Focus entirely on scene quality: lighting, atmosphere, composition, realism."
             )
-            if tagline:
-                user_msg += f'  Tagline: "{tagline}"\n'
-            layout = brief.get("text_layout", {})
-            if layout:
-                user_msg += f"\nText layout guidance: {json.dumps(layout)}"
 
         if critic_notes:
             user_msg += f"\n\nCritic refinements to incorporate:\n{critic_notes}"
 
         try:
-            raw = self._call(system, user_msg)
+            raw = await self._call(system, user_msg, stage="params", temperature=0.80)
             params = _extract_json(raw)
             params["_source"] = "gemini"
 
-            # Validate (skip double-quote check when PosterCompositor will handle text)
-            _has_ad_copy = bool(capability_bucket == "typography" and brief.get("ad_copy"))
             issues = _validate_params(params, capability_bucket, has_ad_copy=_has_ad_copy)
             if issues:
                 logger.warning("[gemini-engine] params issues %s: %s", model_name, issues)
@@ -1077,11 +1188,12 @@ class GeminiPromptEngine:
 
     # ── Critic (hard buckets, premium/ultra only) ─────────────────────────────
 
-    def run_critic(
+    async def run_critic(
         self,
         brief: Dict,
         params: Dict,
         bucket: str,
+        raw_prompt: str = "",
     ) -> Optional[str]:
         """
         Specialist critic agent for hard buckets.
@@ -1091,19 +1203,32 @@ class GeminiPromptEngine:
         if not critic_system or not self.enabled:
             return None
 
+        # Skip critic for typography when compositor handles text (double-quote critique is irrelevant)
+        _has_ad_copy = (
+            bucket == "typography"
+            and isinstance(brief.get("ad_copy"), dict)
+            and bool(brief["ad_copy"].get("headline"))
+        )
+        if bucket == "typography" and _has_ad_copy:
+            return None
+
         try:
             brief_clean = {k: v for k, v in brief.items() if not k.startswith("_")}
+            # Compact JSON + original prompt for critic context
             user_msg = (
-                f"Creative Brief:\n{json.dumps(brief_clean, indent=2)}\n\n"
+                f"Original user prompt: {raw_prompt}\n\n"
+                f"Creative Brief:\n{json.dumps(brief_clean, separators=(',', ':'))}\n\n"
                 f"Generated prompt:\n{params.get('prompt', '')}\n\n"
                 f"Negative prompt:\n{params.get('negative_prompt', '')}"
             )
-            raw = self._call(critic_system, user_msg)
+            raw = await self._call(critic_system, user_msg, stage="critic", temperature=0.25)
             critic = _extract_json(raw)
 
-            issues = critic.get("issues", [])
-            additions = critic.get("refined_prompt_additions", "")
-            neg_additions = critic.get("refined_negative_additions", "")
+            issues = critic.get("issues") or []
+            if not isinstance(issues, list):
+                issues = []
+            additions = str(critic.get("refined_prompt_additions") or "")
+            neg_additions = str(critic.get("refined_negative_additions") or "")
 
             if not issues and not additions:
                 logger.info("[gemini-engine] critic: no issues found for %s", bucket)
@@ -1126,10 +1251,10 @@ class GeminiPromptEngine:
 
     # ── Full pipeline ─────────────────────────────────────────────────────────
 
-    def enhance(
+    async def enhance(
         self,
         raw_prompt: str,
-        model_name: str = "Flux Pro",
+        model_name: str = "flux_pro",
         capability_bucket: str = "photorealism",
         creative_type: str = "photo",
         style: str = "photo",
@@ -1137,57 +1262,48 @@ class GeminiPromptEngine:
         tier: str = "standard",
     ) -> Dict:
         """
-        Full pipeline: brief → params → [critic → refined params] → validate → return.
+        Full async pipeline: brief → params → [critic → refined params] → validate → return.
 
         Critic runs only for hard buckets (anime, typography, editing,
         interior_arch, character_consistency) on premium or ultra tier.
 
-        Returns:
-          {
-            "brief": dict,
-            "prompt": str,
-            "negative_prompt": str,
-            "style_notes": str,
-            "original_prompt": str,
-            "engine": "gemini" | "heuristic",
-            "critic_ran": bool,
-          }
+        Returns dict compatible with stream_generate.py's separate create_brief/build_params calls.
         """
-        # ── Cognitive aesthetic hints (color psychology + imperfect + cultural) ──
-        hints = _build_contextual_hints(raw_prompt, creative_type, capability_bucket, tier)
-        if hints:
-            extra_context = f"{extra_context} | {hints}".strip(" |") if extra_context else hints
+        resolved_tier = _TIER_NORM.get((tier or "standard").lower(), "standard")
 
-        # Stage A — bucket-aware brief
-        brief = self.create_brief(
-            raw_prompt, creative_type, style, extra_context, bucket=capability_bucket
+        # Hints are built once here and passed into create_brief (not built again inside)
+        hints = _build_contextual_hints(raw_prompt, creative_type or "photo", capability_bucket, resolved_tier)
+        full_extra = f"{extra_context} | {hints}".strip(" |") if (extra_context and hints) else (hints or extra_context or "")
+
+        # Stage A
+        brief = await self.create_brief(
+            raw_prompt, creative_type, style,
+            extra_context=full_extra,
+            bucket=capability_bucket,
+            tier=resolved_tier,
         )
 
-        # Stage B — model-specific params (first pass)
-        params = self.build_params(brief, model_name, capability_bucket)
+        # Stage B — first pass
+        params = await self.build_params(brief, model_name, capability_bucket)
 
-        # Critic — hard buckets, premium/ultra only
+        # Critic — hard buckets, premium/ultra only, both brief AND params must be Gemini
         critic_ran = False
-        resolved_tier = tier.lower().replace("quality", "premium")
         use_critic = (
             capability_bucket in _HARD_BUCKETS
             and resolved_tier in ("premium", "ultra")
             and self.enabled
             and brief.get("_source") == "gemini"
+            and params.get("_source") == "gemini"
         )
         if use_critic:
-            critic_notes = self.run_critic(brief, params, capability_bucket)
+            critic_notes = await self.run_critic(brief, params, capability_bucket, raw_prompt)
             if critic_notes:
-                # Stage B2 — refined params with critic notes
-                params = self.build_params(brief, model_name, capability_bucket, critic_notes)
+                params = await self.build_params(brief, model_name, capability_bucket, critic_notes)
                 critic_ran = True
 
-        # Merge bucket-specific negative
-        final_negative = _resolve_negative(
-            capability_bucket, params.get("negative_prompt", "")
-        )
-
-        engine_label = "gemini" if self.enabled and brief.get("_source") == "gemini" else "heuristic"
+        final_negative = _resolve_negative(capability_bucket, params.get("negative_prompt", ""))
+        # engine_label tracks what actually built the params (not just the brief)
+        engine_label = "gemini" if params.get("_source") == "gemini" else "heuristic"
 
         return {
             "brief": brief,
