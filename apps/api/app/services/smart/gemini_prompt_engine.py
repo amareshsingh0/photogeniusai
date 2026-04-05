@@ -1629,7 +1629,12 @@ class GeminiPromptEngine:
 
     @staticmethod
     def _heuristic_params(brief: Dict, capability_bucket: str) -> Dict:
-        parts = [brief.get("visual_concept") or brief.get("subject", "")]
+        # Sanitize visual_concept — reject JSON failure strings like "{}", "null"
+        _vc = brief.get("visual_concept") or brief.get("subject", "")
+        _vc = str(_vc).strip()
+        if _vc in ("{}", "{", "}", "null", "none") or len(_vc) < 5:
+            _vc = brief.get("subject", "") or brief.get("mood", "") or "professional scene"
+        parts = [_vc]
         for field in ("lighting", "camera", "composition", "mood", "color_palette", "texture_detail"):
             val = brief.get(field, "")
             if val:
