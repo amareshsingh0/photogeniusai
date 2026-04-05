@@ -272,9 +272,9 @@ function smartAutoDims(prompt: string): { width: number; height: number; label: 
   // Landscape (4:3) — general wide scenes, group photos, product in context
   if (/\b(wide|scene|group|outdoor|interior|room|architecture|building|street|product shot)\b/.test(p))
     return { width: 1024, height: 768, label: "Landscape 4:3" }
-  // Poster / ad / social (1:1 or 4:5) — Instagram post, poster, flyer, ad creative
-  if (/\b(poster|flyer|ad|advertisement|social media|instagram post|facebook|saas|launch|announcement|sale|promo)\b/.test(p))
-    return { width: 1024, height: 1024, label: "Square 1:1" }
+  // Poster / ad / flyer — tall portrait 4:5 format
+  if (/\b(poster|flyer|ad\b|advertisement|instagram post|facebook post|saas|product launch|launch|announcement|sale|promo|marketing|campaign|brand|creative)\b/.test(p))
+    return { width: 1024, height: 1280, label: "Portrait 4:5" }
   // Default: square
   return { width: 1024, height: 1024, label: "Square 1:1" }
 }

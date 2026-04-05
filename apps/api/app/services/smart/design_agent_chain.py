@@ -454,14 +454,15 @@ async def _agent_copy_writer(
     while len(features) < 4:
         features.append({"icon": "⭐", "title": f"Feature {len(features)+1}", "desc": "Coming soon"})
 
-    headline = str(r.get("headline") or "").strip().upper() or "MAKE IT HAPPEN"
-    if len(headline) > hl_max:
-        headline = headline[:hl_max].rsplit(" ", 1)[0]
-    cta = str(r.get("cta") or "GET STARTED").upper()
-
-    # Triage already extracted explicit user text — always wins
+    # Explicit user text ALWAYS wins — even if Gemini failed entirely
+    # Check this FIRST before falling back to AI output or "MAKE IT HAPPEN"
     if explicit_headline:
         headline = explicit_headline.upper()
+    else:
+        headline = str(r.get("headline") or "").strip().upper() or "MAKE IT HAPPEN"
+        if len(headline) > hl_max:
+            headline = headline[:hl_max].rsplit(" ", 1)[0]
+    cta = str(r.get("cta") or "GET STARTED").upper()
     if explicit_cta:
         cta = explicit_cta.upper()
 
@@ -706,14 +707,31 @@ async def _agent_image_prompter(
         )
         bg_prompt = await _acall_gemini(fallback_system, fallback_user,
                                         temperature=0.5, agent_name="image_prompter")
-        bg_prompt = bg_prompt.strip().strip('"')
+        bg_prompt = bg_prompt.strip().strip('"').strip("'")
+        # Discard JSON failure responses like "{}", "null", empty
+        if bg_prompt in ("{}", "{", "}", "null", "none", "") or len(bg_prompt) < 15:
+            bg_prompt = ""
 
-    base_negative = str(r.get("negative_prompt") or "text, words, letters, watermark, blurry, low quality")
+    # Hard negative — always block text in background image regardless of model
+    _HARD_NEGATIVE = (
+        "text, words, letters, numbers, typography, captions, labels, watermark, "
+        "logo text, brand name, headline, subtitle, written words, fonts, script, "
+        "calligraphy, signage, UI overlay, HUD, interface elements, blurry, low quality"
+    )
+    base_negative = _HARD_NEGATIVE
     if forbidden_additions:
         base_negative = f"{base_negative}, {forbidden_additions}"
 
+    industry = triage.get("industry", "general")
+    mood = creative.get("mood", "energetic")
+    style = creative.get("visual_style", "photorealistic")
+    _smart_fallback = (
+        f"cinematic {industry} scene, {mood} atmosphere, {style} style, "
+        f"dramatic lighting, deep shadows in bottom third, no text, clean background"
+    )
+
     return {
-        "background_prompt": bg_prompt or f"cinematic {triage.get('industry','product')} scene, dramatic lighting, no text",
+        "background_prompt": bg_prompt or _smart_fallback,
         "negative_prompt":   base_negative,
         "model_preference":  str(r.get("model_preference") or "ideogram_quality"),
     }

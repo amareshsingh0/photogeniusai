@@ -960,6 +960,107 @@ _MODEL_KEY_ALIASES: Dict[str, str] = {
 }
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# CDI — Creative Director Integration System (Stage B universal upgrade)
+# Replaces single-model params prompts with a full multi-variant schema.
+# Gemini acts as Creative Director who selects model, writes prompt, maps emotion.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_CDI_SYSTEM = """You are a world-class Creative Director and prompt engineer simultaneously.
+Your job: take a Creative Brief and produce a complete Creative Director Integration (CDI) schema
+that will be used to drive AI image generation at the highest possible quality.
+
+AVAILABLE MODELS (use exact keys):
+- flux_pro       → Flux 2 Pro via fal.ai. Best for: cinematic photography, luxury products, editorial beauty, complex lighting, realistic humans. Handles 100-140 word descriptive sentences best.
+- flux_dev       → Flux 2 Dev. Best for: artistic/painterly scenes, concept art, expressive styles, moody atmosphere. 80-100 words.
+- flux_schnell   → Flux Schnell. Best for: fast drafts, simple scenes. Max 50 words, comma tags.
+- ideogram_quality → Ideogram v3 Quality. Best for: text-in-image ads, bold typography, graphic design posters, logos. ONLY model that renders text reliably.
+- ideogram_turbo   → Ideogram v3 Turbo. Best for: same as quality but faster, lower detail.
+- hunyuan_image    → Hunyuan. Best for: Asian aesthetics, fashion, portraits with East Asian cultural elements.
+
+PROMPT ENGINEERING RULES per model:
+flux_pro: Natural SENTENCES (not tag lists). Always include: camera body + lens (e.g. "Shot on Hasselblad X2D 110mm f/2"). Include exact lighting position, film stock or color grade. Subject first, then scene, then light, then camera.
+flux_dev: Painterly language. Emotion and texture over camera specs. Art movement references work well.
+flux_schnell: SHORT comma tags. Most important element first. Skip lighting nuance.
+ideogram_quality/turbo: Quote text in double quotes. Describe typography style explicitly (font family, weight, size role). Dark luxury aesthetics need explicit direction.
+
+TRANSLATION PRINCIPLE:
+Every emotion or feeling in the brief MUST translate to a specific photography/visual language term.
+Examples:
+  "warm confidence" → "backlit amber rim light, skin luminosity, Kodak Vision3 film grade"
+  "trustworthy" → "eye-level camera, clean warm background, soft key light 45° camera-left"
+  "power" → "low angle, wide lens, dramatic shadow, deep blacks"
+  "celebration" → "motion blur on crowd, confetti bokeh, high key fill, peak action moment"
+  "luxury" → "shallow DOF, specular highlights on product, marble/leather surface detail"
+  "futuristic" → "neon underglow, volumetric fog, blue-cyan color grade, reflective surfaces"
+
+COLOR STRATEGY RULE:
+Convert color intentions to exact percentages + hex + lighting/material terms.
+"60% dark" → specify as background fill + shadow direction + fill ratio
+"30% amber" → specify as rim light color temperature (2700-3200K) + material surface
+
+TEXT HANDLING:
+If the brief has headline text, EXCLUDE it from the primary_output (flux) prompt.
+State this explicitly in text_handling.
+Create an ideogram_variant that renders the text graphically.
+
+PARAMETERS:
+steps: 4 (schnell), 20 (dev/ideogram), 28-32 (flux_pro simple), 36-40 (flux_pro complex lighting)
+guidance: 2.5-3.0 (creative/loose), 3.5 (balanced), 4.0-4.5 (prompt-adherent)
+
+Return ONLY valid JSON matching this exact schema:
+{
+  "schema": "cd_integration",
+  "creative_brief": {
+    "hook": "one-sentence core creative idea",
+    "emotion": "precise emotional territory with specific qualifiers (not generic)",
+    "platform": "primary format + secondary crop",
+    "composition": "named archetype + specific element positions",
+    "color_strategy": "3 hex values with % split + what each represents visually"
+  },
+  "translation_notes": "how the CD's emotional direction maps to specific photography/lighting/color language",
+  "text_handling": "whether text is excluded from primary and why, or included",
+  "recommended_model": "model key from available list",
+  "recommendation_reason": "one sentence: why this model is optimal for this specific visual challenge",
+  "primary_output": {
+    "model": "model key",
+    "prompt": "fully crafted prompt for this model (follow model rules above)",
+    "negative_prompt": "specific and relevant, not generic",
+    "parameters": {"steps": 32, "guidance": 3.5},
+    "prompt_notes": "2-3 sentences explaining the key creative decisions in the prompt"
+  },
+  "ideogram_variant": {
+    "model": "ideogram_quality or ideogram_turbo",
+    "prompt": "typography-focused prompt with text in double quotes",
+    "negative_prompt": "...",
+    "parameters": {"steps": 20, "guidance": 3.0},
+    "prompt_notes": "why this typography direction"
+  },
+  "draft_variant": {
+    "model": "flux_schnell",
+    "prompt": "short 30-50 word comma-tag version for quick composition check",
+    "negative_prompt": "...",
+    "parameters": {"steps": 4, "guidance": 3.5},
+    "prompt_notes": "what to check in this draft"
+  }
+}"""
+
+# CDI model key → our internal fal_model_key mapping
+_CDI_MODEL_MAP: Dict[str, str] = {
+    "flux_pro":         "flux_pro",
+    "flux_dev":         "flux_dev",
+    "flux_schnell":     "flux_schnell",
+    "ideogram_quality": "ideogram_quality",
+    "ideogram_turbo":   "ideogram_turbo",
+    "hunyuan_image":    "hunyuan_image",
+    "flux_kontext":     "flux_kontext",
+    # legacy aliases
+    "flux_2_pro":       "flux_pro",
+    "flux_2_dev":       "flux_dev",
+    "flux_schnell_pixazo": "flux_schnell",
+}
+
+
 def _resolve_params_system(model_key: str) -> str:
     """Pick model-specific params prompt. Fallback to flux_2_pro."""
     # Normalize: "Flux 2 Pro" → "flux_2_pro"
@@ -1289,52 +1390,93 @@ class GeminiPromptEngine:
         capability_bucket: str = "photorealism",
         critic_notes: Optional[str] = None,
     ) -> Dict:
-        """Stage B: Creative Brief → model-specific generation params JSON."""
+        """Stage B: Creative Brief → CDI schema (multi-variant, model-aware, emotion-translated)."""
         if not self.enabled or brief.get("_source") == "heuristic":
             return self._heuristic_params(brief, capability_bucket)
 
-        # Compact JSON — fewer input tokens billed
-        # Translate hex colors to natural language before sending to model (APEX model-native syntax)
+        # Translate hex colors to natural language before sending (APEX model-native syntax)
         brief_clean = {k: v for k, v in brief.items() if not k.startswith("_")}
         brief_clean = _translate_brief_colors(brief_clean)
-        brief_str = json.dumps(brief_clean, separators=(",", ":"))
-        system = _resolve_params_system(model_name)
 
-        user_msg = f"Creative Brief:\n{brief_str}\n\nTarget model: {model_name}"
-
+        # For typography bucket: tell CDI that text will be composited separately
         _has_ad_copy = (
             capability_bucket == "typography"
             and isinstance(brief.get("ad_copy"), dict)
             and bool(brief["ad_copy"].get("headline"))
         )
+        ad_hint = ""
         if _has_ad_copy:
-            vc = brief.get("visual_concept", "")
-            product = brief.get("subject", "")
-            user_msg += (
-                f"\n\nIMPORTANT: PosterCompositor will add all text on top. "
-                f"Generate ONLY the hero background scene — NO TEXT in the image.\n"
-                f"visual_concept: {vc}\nproduct/subject: {product}\n"
-                f"Negative prompt MUST include: text, words, letters, typography, watermark, UI overlay, labels\n"
-                f"Focus entirely on scene quality: lighting, atmosphere, composition, realism."
+            ad_copy = brief["ad_copy"]
+            ad_hint = (
+                f"\n\nPOSTER MODE: PosterCompositor will render these text layers on top of the image:\n"
+                f"  Headline: \"{ad_copy.get('headline','')}\"\n"
+                f"  Subheadline: \"{ad_copy.get('subheadline','')}\"\n"
+                f"  CTA: \"{ad_copy.get('cta','')}\"\n"
+                f"primary_output MUST exclude all text — background scene only.\n"
+                f"ideogram_variant should render this as a standalone typographic ad.\n"
+                f"Bottom {30}% of the primary image must be darker to allow text legibility."
             )
 
         if critic_notes:
-            user_msg += f"\n\nCritic refinements to incorporate:\n{critic_notes}"
+            ad_hint += f"\n\nCritic refinements to incorporate:\n{critic_notes}"
+
+        brief_str = json.dumps(brief_clean, separators=(",", ":"))
+        user_msg = (
+            f"Creative Brief:\n{brief_str}\n\n"
+            f"Router selected model: {model_name} (you may override with a better choice)\n"
+            f"Capability bucket: {capability_bucket}{ad_hint}"
+        )
 
         try:
-            raw = await self._call(system, user_msg, stage="params", temperature=0.80)
-            params = _extract_json(raw)
-            params["_source"] = "gemini"
+            raw = await self._call(_CDI_SYSTEM, user_msg, stage="params", temperature=0.85)
+            cdi = _extract_json(raw)
 
-            issues = _validate_params(params, capability_bucket, has_ad_copy=_has_ad_copy)
-            if issues:
-                logger.warning("[gemini-engine] params issues %s: %s", model_name, issues)
+            if cdi.get("_parse_error") or not cdi.get("primary_output"):
+                raise ValueError("CDI parse failed or missing primary_output")
 
-            logger.info("[gemini-engine] params OK model=%s", model_name)
-            return params
+            primary = cdi["primary_output"]
+            prompt = str(primary.get("prompt") or "").strip()
+            negative = str(primary.get("negative_prompt") or "").strip()
+            cdi_params = primary.get("parameters") or {}
+
+            if not prompt or len(prompt) < 20:
+                raise ValueError(f"CDI primary prompt too short: {repr(prompt[:40])}")
+
+            # Resolve model key: CDI recommendation overrides router, mapped to our fal keys
+            cdi_model_raw = (cdi.get("recommended_model") or model_name).strip().lower()
+            recommended_model = _CDI_MODEL_MAP.get(cdi_model_raw, model_name)
+
+            # For poster mode: override to use background-only model (not ideogram)
+            if _has_ad_copy and recommended_model in ("ideogram_quality", "ideogram_turbo"):
+                recommended_model = "flux_pro"
+
+            result: Dict = {
+                "prompt":            prompt,
+                "negative_prompt":   negative,
+                "recommended_model": recommended_model,
+                "parameters": {
+                    "steps":    int(cdi_params.get("steps", 32)),
+                    "guidance": float(cdi_params.get("guidance", 3.5)),
+                },
+                "cdi_schema":           cdi,
+                "creative_brief_cdi":   cdi.get("creative_brief", {}),
+                "translation_notes":    cdi.get("translation_notes", ""),
+                "recommendation_reason": cdi.get("recommendation_reason", ""),
+                "prompt_notes":         primary.get("prompt_notes", ""),
+                "ideogram_variant":     cdi.get("ideogram_variant"),
+                "draft_variant":        cdi.get("draft_variant"),
+                "style_notes":          cdi.get("creative_brief", {}).get("emotion", ""),
+                "_source":              "cdi",
+            }
+
+            logger.info(
+                "[gemini-engine] CDI OK model=%s→%s prompt=%d chars",
+                model_name, recommended_model, len(prompt),
+            )
+            return result
 
         except Exception as e:
-            logger.warning("[gemini-engine] params failed (%s), heuristic fallback", e)
+            logger.warning("[gemini-engine] CDI failed (%s), heuristic fallback", e)
             return self._heuristic_params(brief, capability_bucket)
 
     # ── Critic (hard buckets, premium/ultra only) ─────────────────────────────

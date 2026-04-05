@@ -274,21 +274,41 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             "trace_id":       trace_id,
         })
 
-        # ── Stage B: Build generation params ──────────────────────────────
+        # ── Stage B: CDI — Creative Director Integration ──────────────────
         params = await gemini_prompt_engine.build_params(brief, model_label, bucket)
-        enhanced_prompt = params.get("prompt", req.prompt)
+        enhanced_prompt = params.get("prompt") or req.prompt
         negative_prompt = params.get("negative_prompt", "")
         if req.negative_prompt is not None:
             negative_prompt = f"{req.negative_prompt}, {negative_prompt}" if negative_prompt else req.negative_prompt
 
-        inference_steps = _QUALITY_STEPS.get(quality, 20)
-        guidance_scale = _MODEL_GUIDANCE.get(fal_model_key, _DEFAULT_GUIDANCE)
+        # CDI model override — AI picks better model than router when context warrants it
+        _cdi_recommended = params.get("recommended_model", "")
+        if _cdi_recommended and _cdi_recommended in _MODEL_LABELS:
+            if _cdi_recommended != fal_model_key:
+                logger.info(
+                    "[stream][%s] CDI model override: %s → %s (%s)",
+                    trace_id, fal_model_key, _cdi_recommended,
+                    params.get("recommendation_reason", "")[:80],
+                )
+            fal_model_key = _cdi_recommended
+            model_label = _MODEL_LABELS.get(fal_model_key, fal_model_key)
+
+        # CDI steps/guidance override — AI knows scene complexity better than static tables
+        _cdi_p = params.get("parameters") or {}
+        inference_steps = int(_cdi_p.get("steps") or _QUALITY_STEPS.get(quality, 20))
+        guidance_scale = float(_cdi_p.get("guidance") or _MODEL_GUIDANCE.get(fal_model_key, _DEFAULT_GUIDANCE))
+
+        # Store draft variant for potential quick preview use
+        _draft_variant = params.get("draft_variant")
+        _ideogram_variant = params.get("ideogram_variant")
 
         yield _sse("generating", {
             "model":                   model_label,
             "bucket":                  bucket,
             "estimated_seconds":       _QUALITY_SECONDS.get(quality, 25),
             "enhanced_prompt_preview": enhanced_prompt[:120],
+            "cdi_emotion":             params.get("style_notes", "")[:80],
+            "recommendation_reason":   params.get("recommendation_reason", "")[:100],
             "trace_id":                trace_id,
         })
 
