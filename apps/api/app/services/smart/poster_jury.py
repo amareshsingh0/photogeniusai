@@ -31,13 +31,142 @@ Feature Flags:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
+import os
 from typing import Dict, List, Optional, TypedDict, Tuple
 import base64
 import io
 
 logger = logging.getLogger(__name__)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CREA Quality Gate — Gemini Vision scoring against Creative Bible
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def gemini_vision_score(
+    image_url: str,
+    creative_bible: Dict,
+    background_prompt: str = "",
+) -> Dict:
+    """
+    Uses Gemini 2.5 Flash (multimodal) to score generated image against Creative Bible.
+
+    Scoring weights (CREA framework):
+      palette_match    30% — does dominant color story match?
+      emotional_match  25% — does image evoke the emotional territory?
+      forbidden_ok     20% — are forbidden elements absent?
+      composition      15% — does composition match archetype?
+      copy_space       10% — is there clean space for text overlay?
+
+    Returns:
+      { palette_score, emotional_score, forbidden_score, composition_score,
+        copy_space_score, total, grade, critique, auto_rerun }
+    """
+    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_AI_API_KEY", "")
+    if not gemini_key:
+        logger.warning("[quality_gate] GEMINI_API_KEY not set, skipping vision score")
+        return {"total": 75, "grade": "B", "critique": "", "auto_rerun": False, "_skipped": True}
+
+    try:
+        import httpx
+        from google import genai
+        from google.genai import types as gtypes
+
+        # Download image to base64
+        async with httpx.AsyncClient(timeout=20.0) as http:
+            if image_url.startswith("data:"):
+                # data URL — extract base64 part
+                _, b64_part = image_url.split(",", 1)
+                img_bytes = base64.b64decode(b64_part)
+                mime = "image/jpeg"
+            else:
+                resp = await http.get(image_url)
+                resp.raise_for_status()
+                img_bytes = resp.content
+                mime = resp.headers.get("content-type", "image/jpeg").split(";")[0]
+
+        img_b64 = base64.b64encode(img_bytes).decode("ascii")
+
+        # Build scoring prompt
+        emotional_territory = creative_bible.get("emotional_territory", "")
+        forbidden = creative_bible.get("forbidden_elements") or []
+        color_story = creative_bible.get("dominant_color_story", "")
+        composition_arch = creative_bible.get("composition_archetype", "")
+
+        scoring_prompt = f"""You are a senior Art Director evaluating an AI-generated poster background.
+Score this image against the Creative Bible guidelines below. Be strict and honest.
+
+CREATIVE BIBLE:
+- Emotional territory: "{emotional_territory}"
+- Color story: "{color_story}"
+- Composition archetype: "{composition_arch}"
+- Forbidden elements: {forbidden}
+- Original scene brief: "{background_prompt[:200]}"
+
+SCORING CRITERIA (score each 0-100):
+1. palette_score (30%): Do the dominant colors match the color story?
+2. emotional_score (25%): Does the image evoke the emotional territory?
+3. forbidden_score (20%): Are all forbidden elements absent? (100=none present, 0=major violation)
+4. composition_score (15%): Does the composition match the archetype?
+5. copy_space_score (10%): Is the bottom portion clean enough for text overlay?
+
+Return ONLY valid JSON:
+{{"palette_score":85,"emotional_score":70,"forbidden_score":100,"composition_score":75,"copy_space_score":80,"critique":"one sentence on the biggest weakness","total":82}}
+
+Calculate total as: (palette*0.30) + (emotional*0.25) + (forbidden*0.20) + (composition*0.15) + (copy_space*0.10)"""
+
+        client = genai.Client(api_key=gemini_key)
+        resp = await client.aio.models.generate_content(
+            model="gemini-2.5-flash-preview-05-20",
+            contents=[{
+                "role": "user",
+                "parts": [
+                    {"inline_data": {"mime_type": mime, "data": img_b64}},
+                    {"text": scoring_prompt},
+                ],
+            }],
+            config=gtypes.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=200,
+            ),
+        )
+        raw = (resp.text or "{}").strip()
+        # Strip markdown fences
+        import re
+        raw = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`").strip()
+        import json
+        scores = json.loads(raw)
+
+        total = float(scores.get("total") or (
+            scores.get("palette_score", 70) * 0.30 +
+            scores.get("emotional_score", 70) * 0.25 +
+            scores.get("forbidden_score", 100) * 0.20 +
+            scores.get("composition_score", 70) * 0.15 +
+            scores.get("copy_space_score", 70) * 0.10
+        ))
+
+        grade = "A" if total >= 85 else "B" if total >= 70 else "C" if total >= 55 else "D"
+        auto_rerun = total < 50
+
+        logger.info("[quality_gate] vision score=%.1f grade=%s auto_rerun=%s", total, grade, auto_rerun)
+        return {
+            "palette_score":     scores.get("palette_score", 70),
+            "emotional_score":   scores.get("emotional_score", 70),
+            "forbidden_score":   scores.get("forbidden_score", 100),
+            "composition_score": scores.get("composition_score", 70),
+            "copy_space_score":  scores.get("copy_space_score", 70),
+            "total":             round(total, 1),
+            "grade":             grade,
+            "critique":          str(scores.get("critique") or ""),
+            "auto_rerun":        auto_rerun,
+        }
+
+    except Exception as e:
+        logger.warning("[quality_gate] gemini_vision_score failed: %s", e)
+        return {"total": 75, "grade": "B", "critique": "", "auto_rerun": False, "_error": str(e)}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Feature Flags

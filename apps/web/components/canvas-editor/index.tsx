@@ -224,7 +224,7 @@ export function CanvasEditor({
             lockMovementX: true,
             lockMovementY: true,
             opacity:    spec.opacity ?? 1,
-            data:       { elementId: spec.id, ...spec._meta },
+            data:       { ...spec._meta, elementId: spec.id },
           })
           canvas.add(img)
           canvas.sendToBack(img)
@@ -250,7 +250,7 @@ export function CanvasEditor({
         lockMovementX: spec._meta.locked ?? false,
         lockMovementY: spec._meta.locked ?? false,
         shadow:     spec.shadow,
-        data:       { elementId: spec.id, ...spec._meta },
+        data:       { ...spec._meta, elementId: spec.id },
       })
       canvas.add(obj)
       return
@@ -268,7 +268,7 @@ export function CanvasEditor({
         opacity:    spec.opacity ?? 1,
         selectable: spec.selectable !== false,
         shadow:     spec.shadow,
-        data:       { elementId: spec.id, ...spec._meta },
+        data:       { ...spec._meta, elementId: spec.id },
       })
       canvas.add(obj)
 

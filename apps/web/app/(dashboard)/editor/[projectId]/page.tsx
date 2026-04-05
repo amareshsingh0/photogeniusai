@@ -224,6 +224,7 @@ export default function EditorPage() {
       {/* Pack Modal */}
       {showPack && project.heroUrl && brief.ad_copy && (
         <PosterPackModal
+          open={showPack}
           heroUrl={project.heroUrl}
           adCopy={brief.ad_copy as any}
           posterDesign={(brief.poster_design || {}) as any}

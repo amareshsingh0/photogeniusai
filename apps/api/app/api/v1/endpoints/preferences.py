@@ -287,6 +287,113 @@ async def save_brand_kit(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Prompt DNA extraction ─────────────────────────────────────────────────────
+
+class DnaExtractRequest(BaseModel):
+    prompt:           str  = Field(..., description="Original or enhanced prompt")
+    bucket:           str  = Field(default="photorealism", description="Capability bucket")
+    liked:            bool = Field(..., description="True = thumbs up, False = thumbs down")
+    enhanced_prompt:  str  = Field(default="", description="Full Flux/Ideogram prompt used")
+    user_id:          str  = Field(default="", description="DB user ID (passed from Next.js layer)")
+
+
+@router.post(
+    "/extract-prompt-dna",
+    summary="Extract Prompt DNA keywords from a prompt using Gemini",
+)
+async def extract_prompt_dna(
+    req: DnaExtractRequest,
+    db: DbSession,
+) -> dict:
+    # Accept user_id from body (internal call from Next.js thumbs route)
+    user_id = req.user_id.strip() if req.user_id else None
+    """
+    Phase 4 / Reflexion: use Gemini to extract winning/failing style keywords
+    from the prompt, then accumulate them in User.preferences.prompt_dna[bucket].
+
+    After run_count >= 5, the design_agent_chain uses these keywords as a
+    self-improving memory prefix in the image prompter.
+    """
+    if not user_id:
+        return {"success": False, "error": "user_id required"}
+
+    import os, json as _json
+    from datetime import date
+
+    # ── Gemini extraction ──────────────────────────────────────────────────────
+    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_AI_API_KEY", "")
+    keywords: list = []
+    patterns: list = []
+
+    if gemini_key:
+        try:
+            from google import genai
+            from google.genai import types as gtypes
+
+            source = req.enhanced_prompt.strip() or req.prompt.strip()
+            action = "liked" if req.liked else "disliked"
+            system = (
+                "You are a prompt analyst. Extract the key style/visual descriptors "
+                f"from this image prompt that the user {action}.\n"
+                "Return ONLY valid JSON:\n"
+                '{"keywords":["3-7 short descriptors that define the visual style"],'
+                '"patterns":["1-3 phrases that describe what works or fails"]}'
+            )
+            client = genai.Client(api_key=gemini_key)
+            resp = await client.aio.models.generate_content(
+                model="gemini-2.5-flash-preview-05-20",
+                contents=[{"role": "user", "parts": [{"text": source[:500]}]}],
+                config=gtypes.GenerateContentConfig(
+                    system_instruction=system,
+                    temperature=0.2,
+                    max_output_tokens=150,
+                ),
+            )
+            import re as _re
+            raw = (resp.text or "{}").strip()
+            raw = _re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`")
+            extracted = _json.loads(raw)
+            keywords = extracted.get("keywords") or []
+            patterns = extracted.get("patterns") or []
+        except Exception as e:
+            logger.warning("[dna_extract] Gemini failed: %s", e)
+
+    # ── Accumulate in User.preferences.prompt_dna ────────────────────────────
+    try:
+        user = await db.user.find_first(where={"id": user_id})
+        prefs: dict = (user.preferences or {}) if user else {}
+        dna_all: dict = prefs.get("prompt_dna", {})
+        bucket_dna: dict = dna_all.get(req.bucket, {
+            "winning_keywords": [], "failing_patterns": [],
+            "run_count": 0, "last_updated": "",
+        })
+
+        if req.liked:
+            existing = set(bucket_dna.get("winning_keywords", []))
+            for kw in keywords:
+                if kw and kw not in existing:
+                    existing.add(kw)
+            # Keep last 30 winning keywords
+            bucket_dna["winning_keywords"] = list(existing)[-30:]
+        else:
+            existing_fail = set(bucket_dna.get("failing_patterns", []))
+            for p in patterns:
+                if p and p not in existing_fail:
+                    existing_fail.add(p)
+            bucket_dna["failing_patterns"] = list(existing_fail)[-15:]
+
+        bucket_dna["run_count"] = bucket_dna.get("run_count", 0) + 1
+        bucket_dna["last_updated"] = date.today().isoformat()
+        dna_all[req.bucket] = bucket_dna
+        prefs["prompt_dna"] = dna_all
+
+        await db.user.update(where={"id": user_id}, data={"preferences": prefs})
+        return {"success": True, "bucket": req.bucket, "dna": bucket_dna}
+    except Exception as e:
+        logger.warning("[dna_extract] DB update failed: %s", e)
+        return {"success": False, "error": str(e)}
+
+
 # ── Brand Research Agent ───────────────────────────────────────────────────────
 
 class BrandResearchRequest(BaseModel):

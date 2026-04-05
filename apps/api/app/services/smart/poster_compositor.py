@@ -260,12 +260,26 @@ class PosterCompositor:
 
         # ── Extract content (all null-safe) ───────────────────────────────────
         brand_name  = str(ad.get("brand_name")  or "").strip()
+        logo_url    = str(ad.get("logo_url")    or "").strip()
         headline    = str(ad.get("headline")    or "").strip().upper()
         subheadline = str(ad.get("subheadline") or "").strip()
         body_text   = str(ad.get("body")        or "").strip()
         cta_text    = str(ad.get("cta")         or "GET STARTED").strip().upper()
         cta_url     = str(ad.get("cta_url")     or "").strip()
         tagline     = str(ad.get("tagline")     or "").strip()
+
+        # Fetch logo image if URL provided (non-fatal)
+        logo_img: Optional[Image.Image] = None
+        if logo_url:
+            try:
+                import httpx as _httpx
+                _resp = _httpx.get(logo_url, timeout=5.0, follow_redirects=True)
+                _resp.raise_for_status()
+                logo_img = Image.open(io.BytesIO(_resp.content)).convert("RGBA")
+                logger.info("[compositor] logo loaded from %s (%dx%d)", logo_url, logo_img.width, logo_img.height)
+            except Exception as _e:
+                logger.warning("[compositor] logo fetch failed (%s): %s", logo_url, _e)
+                logo_img = None
 
         # Features: must be list of dicts with at least "title"
         raw_features = ad.get("features") or []
@@ -342,7 +356,7 @@ class PosterCompositor:
         feat_card_h = int(W * 0.26) if features else 0  # approximate; see actual drawing
 
         # ── Section height estimates ──────────────────────────────────────────
-        BRAND_BAR_H = int(W * 0.10) if brand_name else 0
+        BRAND_BAR_H = int(W * 0.10) if (brand_name or logo_url) else 0
         sl_h = int(W * 0.026) + 4 if features else 0  # "KEY FEATURES" label
 
         text_section_h = (
@@ -381,14 +395,38 @@ class PosterCompositor:
         y = 0
 
         # ── Zone 1: Brand bar ─────────────────────────────────────────────────
-        if brand_name and BRAND_BAR_H > 0:
+        if (brand_name or logo_img) and BRAND_BAR_H > 0:
             draw.rectangle([0, 0, W, BRAND_BAR_H], fill=accent + (255,))
-            brand_wrapped = _wrap(draw, brand_name, fn_brand, inner_w)
-            _, bh = _text_size(draw, brand_wrapped, fn_brand)
-            _draw_text_centered(
-                draw, brand_wrapped, fn_brand, W,
-                (BRAND_BAR_H - bh) // 2, accent_text + (255,),
-            )
+
+            if logo_img:
+                # Fit logo inside brand bar with padding, left-aligned
+                logo_bar_h = int(BRAND_BAR_H * 0.65)
+                logo_bar_w = int(logo_bar_h * (logo_img.width / max(logo_img.height, 1)))
+                logo_bar_w = min(logo_bar_w, W // 3)  # cap at 1/3 canvas width
+                logo_resized = logo_img.resize(
+                    (logo_bar_w, logo_bar_h), Image.Resampling.LANCZOS
+                )
+                logo_x = PAD
+                logo_y = (BRAND_BAR_H - logo_bar_h) // 2
+                canvas.paste(logo_resized, (logo_x, logo_y), logo_resized)
+
+                # Brand name to the right of logo (if both present)
+                if brand_name:
+                    text_x = logo_x + logo_bar_w + PAD // 2
+                    brand_wrapped = _wrap(draw, brand_name, fn_brand, W - text_x - PAD)
+                    _, bh = _text_size(draw, brand_wrapped, fn_brand)
+                    draw.text(
+                        (text_x, (BRAND_BAR_H - bh) // 2),
+                        brand_wrapped, font=fn_brand, fill=accent_text + (255,),
+                    )
+            else:
+                # No logo — centered brand name
+                brand_wrapped = _wrap(draw, brand_name, fn_brand, inner_w)
+                _, bh = _text_size(draw, brand_wrapped, fn_brand)
+                _draw_text_centered(
+                    draw, brand_wrapped, fn_brand, W,
+                    (BRAND_BAR_H - bh) // 2, accent_text + (255,),
+                )
             y = BRAND_BAR_H
 
         # ── Zone 2: Hero image (aspect-preserved cover crop) ─────────────────

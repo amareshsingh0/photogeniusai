@@ -59,13 +59,13 @@ def _get_gemini_client():
     return _gemini_client
 
 
-# Per-agent max tokens (tuned to actual output sizes)
+# Per-agent max tokens — generous enough for Gemini to think fully
 _AGENT_MAX_TOKENS = {
-    "triage":           300,
-    "brand_intel":      250,
-    "creative_director":350,
-    "copy_writer":      700,
-    "image_prompter":   500,
+    "triage":           600,
+    "brand_intel":      500,
+    "creative_director":900,   # +200 for creative_bible JSON
+    "copy_writer":      1200,
+    "image_prompter":   800,
 }
 
 
@@ -184,13 +184,19 @@ async def _acall_gemini(
 
 async def _agent_triage(prompt: str) -> Dict:
     system = (
-        "You are a marketing strategist AI. Classify a design request.\n"
-        'Return ONLY valid JSON: {"creative_type":"ad|poster|social_post|banner|story|thumbnail",'
-        '"platform":"instagram|instagram_story|linkedin|twitter|print|default",'
-        '"goal":"product_launch|brand_awareness|sale_promotion|event|app_download|lead_gen",'
-        '"audience":"b2b|b2c|youth|professional|general",'
-        '"brand_hint":"brand or product name or empty",'
-        '"industry":"saas|food|fashion|fitness|real_estate|healthcare|finance|education|tech|general",'
+        "You are a senior marketing strategist. Read the design request carefully and use your judgment.\n"
+        "Infer the industry from context clues — 'gym' means fitness, 'cafe' means food, "
+        "'app launch' means saas, etc. Think like a human creative director.\n"
+        "If the user quoted specific text (e.g. 'TRANSFORM'), that is their intended headline — note it.\n"
+        'Return ONLY valid JSON:\n'
+        '{"creative_type":"ad|poster|social_post|banner|story|thumbnail",\n'
+        '"platform":"instagram|instagram_story|linkedin|twitter|print|default",\n'
+        '"goal":"product_launch|brand_awareness|sale_promotion|event|app_download|lead_gen",\n'
+        '"audience":"b2b|b2c|youth|professional|general",\n'
+        '"brand_hint":"brand or product name if mentioned, else empty",\n'
+        '"industry":"saas|food|fashion|fitness|real_estate|healthcare|finance|education|tech|general",\n'
+        '"explicit_headline":"exact text user quoted as headline, or empty",\n'
+        '"explicit_cta":"exact text user quoted as CTA/button, or empty",\n'
         '"is_festival":false,"festival_name":""}'
     )
     raw = await _acall_gemini(system, "Design request: " + prompt, temperature=0.3, agent_name="triage")
@@ -199,9 +205,9 @@ async def _agent_triage(prompt: str) -> Dict:
         "creative_type": "poster", "platform": "instagram",
         "goal": "brand_awareness", "audience": "general",
         "brand_hint": "", "industry": "general",
+        "explicit_headline": "", "explicit_cta": "",
         "is_festival": False, "festival_name": "",
     }
-    # Only apply non-None LLM values
     for k, v in r.items():
         if v is not None and not k.startswith("_"):
             defaults[k] = v
@@ -268,11 +274,19 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
 
     system = (
         "You are a senior Creative Director (Wieden+Kennedy level).\n"
+        "In addition to visual direction, produce a Creative Bible — a locked creative contract\n"
+        "that all downstream agents must obey.\n"
         'Return ONLY valid JSON: {"theme":"word","mood":"word",'
         '"visual_style":"photorealistic|illustration|3d_render|graphic_flat|editorial",'
         '"layout_archetype":"hero_top_features_bottom|split_left_right|full_bleed|minimal_centered|grid",'
         '"hero_occupies":"top_60|top_50|full_bleed|center_50",'
-        '"atmosphere":"brief description","avoid":["elements"]}'
+        '"atmosphere":"brief description","avoid":["elements"],'
+        '"creative_bible":{'
+        '"emotional_territory":"ONE precise phrase capturing the exact feeling this design must evoke",'
+        '"visual_metaphors":["concrete noun 1","concrete noun 2","concrete noun 3"],'
+        '"forbidden_elements":["no generic element","no cliché element","no off-brand element"],'
+        '"dominant_color_story":"one sentence describing how colors work together in natural language",'
+        '"composition_archetype":"describe the diagonal/tension/balance as a sentence"}}'
     )
     context = (
         f"Prompt: {prompt}\nBrand: {brand.get('brand_name','')} Tone: {brand.get('tone','')}\n"
@@ -281,6 +295,17 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
     )
     raw = await _acall_gemini(system, context, temperature=0.8, agent_name="creative_director")
     r = _extract_json(raw)
+
+    # Extract and validate creative_bible
+    raw_bible = r.get("creative_bible") or {}
+    creative_bible = {
+        "emotional_territory": str(raw_bible.get("emotional_territory") or ""),
+        "visual_metaphors":    raw_bible.get("visual_metaphors") if isinstance(raw_bible.get("visual_metaphors"), list) else [],
+        "forbidden_elements":  raw_bible.get("forbidden_elements") if isinstance(raw_bible.get("forbidden_elements"), list) else [],
+        "dominant_color_story": str(raw_bible.get("dominant_color_story") or ""),
+        "composition_archetype": str(raw_bible.get("composition_archetype") or ""),
+    }
+
     return {
         "theme":            r.get("theme", "bold"),
         "mood":             r.get("mood", "energetic"),
@@ -290,6 +315,7 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
         "atmosphere":       r.get("atmosphere", ""),
         "avoid":            r.get("avoid") if isinstance(r.get("avoid"), list) else [],
         "palette":          palette,
+        "creative_bible":   creative_bible,
     }
 
 
@@ -301,53 +327,159 @@ async def _agent_copy_writer(
 ) -> Dict:
     platform = triage.get("platform", "instagram")
     hl_max = {"instagram": 30, "instagram_story": 20, "linkedin": 50, "default": 40}.get(platform, 40)
+
+    # Tell the AI what the user explicitly typed — it should use these verbatim
+    explicit_headline = triage.get("explicit_headline", "").strip()
+    explicit_cta      = triage.get("explicit_cta", "").strip()
+    explicit_hint = ""
+    if explicit_headline:
+        explicit_hint += f'\nUSER EXPLICITLY WANTS headline: "{explicit_headline}" — use this EXACTLY, do not change it.'
+    if explicit_cta:
+        explicit_hint += f'\nUSER EXPLICITLY WANTS cta: "{explicit_cta}" — use this EXACTLY.'
+
     festival_hint = ""
     if triage.get("is_festival") and triage.get("festival_name"):
         festival_hint = f"\nFestival context: {triage['festival_name']} — include cultural warmth."
 
+    # Creative Bible injection — copy must align with the locked emotional territory
+    bible = creative.get("creative_bible") or {}
+    bible_hint = ""
+    if bible.get("emotional_territory"):
+        bible_hint += f'\nCreative Bible — emotional territory: "{bible["emotional_territory"]}"'
+        bible_hint += " — every word of copy must evoke this feeling."
+    if bible.get("forbidden_elements"):
+        bible_hint += f'\nForbidden: avoid themes of: {", ".join(bible["forbidden_elements"][:3])}'
+
     system = (
-        f"You are a world-class Ad Copywriter. Platform: {platform}. "
-        f"Tone: {brand.get('tone','bold')}. Goal: {triage.get('goal','brand_awareness')}. "
-        f"HEADLINE max {hl_max} chars ALL CAPS.{festival_hint}\n"
+        f"You are a world-class Ad Copywriter (Ogilvy / Leo Burnett level).\n"
+        f"Platform: {platform}. Tone: {brand.get('tone','bold')}. "
+        f"Goal: {triage.get('goal','brand_awareness')}. Industry: {triage.get('industry','general')}.\n"
+        f"Think deeply about what this business needs. Write copy that converts.\n"
+        f"HEADLINE max {hl_max} chars ALL CAPS.{festival_hint}{explicit_hint}{bible_hint}\n"
+        f"For features: generate 4 REAL, SPECIFIC benefits relevant to this industry — not generic placeholders.\n"
         'Return ONLY valid JSON: {"brand_name":"","headline":"ALL CAPS",'
-        '"subheadline":"sentence case","body":"1-2 sentences",'
-        '"cta":"2-4 WORDS","cta_url":"","tagline":"",'
-        '"features":[{"icon":"emoji","title":"name","desc":"one line"},'
-        '{"icon":"emoji","title":"name","desc":"one line"},'
-        '{"icon":"emoji","title":"name","desc":"one line"},'
-        '{"icon":"emoji","title":"name","desc":"one line"}]}'
+        '"subheadline":"sentence case, compelling","body":"1-2 punchy sentences",'
+        '"cta":"2-4 WORDS ACTION","cta_url":"","tagline":"",'
+        '"features":[{"icon":"emoji","title":"specific benefit","desc":"one concrete line"},'
+        '{"icon":"emoji","title":"specific benefit","desc":"one concrete line"},'
+        '{"icon":"emoji","title":"specific benefit","desc":"one concrete line"},'
+        '{"icon":"emoji","title":"specific benefit","desc":"one concrete line"}]}'
     )
     context = (
-        f"Request: {prompt}\nTheme: {creative.get('theme','')} Mood: {creative.get('mood','')}\n"
-        f"Industry: {triage.get('industry','')} Audience: {triage.get('audience','general')}"
+        f"User request: {prompt}\n"
+        f"Theme: {creative.get('theme','')}  Mood: {creative.get('mood','')}\n"
+        f"Audience: {triage.get('audience','general')}"
     )
+
     raw = await _acall_gemini(system, context, temperature=0.85, agent_name="copy_writer")
     r = _extract_json(raw)
 
-    # Validate features: must be list of dicts with "title" key
+    # Validate features — if AI returned good ones use them, else retry with stricter prompt
     raw_features = r.get("features")
     if not isinstance(raw_features, list):
         raw_features = []
-    features = [f for f in raw_features if isinstance(f, dict) and f.get("title")][:4]
-    while len(features) < 4:
-        n = len(features) + 1
-        features.append({"icon": "⭐", "title": f"Feature {n}", "desc": "Key benefit"})
+    features = [f for f in raw_features if isinstance(f, dict) and f.get("title")
+                and "Feature" not in f.get("title","") and "Key benefit" not in f.get("desc","")][:4]
 
-    headline = str(r.get("headline") or "MAKE IT HAPPEN").upper()
-    # Word-boundary trim if over limit
+    # If AI returned placeholder garbage, ask again with zero temperature
+    if len(features) < 2:
+        logger.warning("[copy_writer] AI returned placeholder features, retrying")
+        retry_system = (
+            f"Write 4 specific feature benefits for a {triage.get('industry','general')} business ad.\n"
+            f"Context: {prompt}\n"
+            "Each feature must be concrete and industry-relevant. NO generic text like 'Key benefit'.\n"
+            'Return ONLY: [{"icon":"emoji","title":"specific title","desc":"specific one-liner"}] — 4 items.'
+        )
+        retry_raw = await _acall_gemini(retry_system, f"Industry: {triage.get('industry')} Request: {prompt}",
+                                        temperature=0.0, agent_name="copy_writer")
+        retry_r = _extract_json(retry_raw)
+        if isinstance(retry_r, list):
+            features = [f for f in retry_r if isinstance(f, dict) and f.get("title")][:4]
+        elif isinstance(retry_r.get("features"), list):
+            features = retry_r["features"][:4]
+
+    # Last resort: AI generates 4 sensible defaults from scratch
+    while len(features) < 4:
+        features.append({"icon": "⭐", "title": f"Feature {len(features)+1}", "desc": "Coming soon"})
+
+    headline = str(r.get("headline") or "").strip().upper() or "MAKE IT HAPPEN"
     if len(headline) > hl_max:
         headline = headline[:hl_max].rsplit(" ", 1)[0]
+    cta = str(r.get("cta") or "GET STARTED").upper()
+
+    # Triage already extracted explicit user text — always wins
+    if explicit_headline:
+        headline = explicit_headline.upper()
+    if explicit_cta:
+        cta = explicit_cta.upper()
 
     return {
         "brand_name":  str(r.get("brand_name") or brand.get("brand_name", "") or ""),
         "headline":    headline,
         "subheadline": str(r.get("subheadline") or "The fastest way to get results"),
         "body":        str(r.get("body") or ""),
-        "cta":         str(r.get("cta") or "GET STARTED").upper(),
+        "cta":         cta,
         "cta_url":     str(r.get("cta_url") or ""),
         "tagline":     str(r.get("tagline") or brand.get("tagline", "") or ""),
         "features":    features,
     }
+
+
+_PLATFORM_CHAR_LIMITS = {
+    "instagram":       {"headline": 40, "subheadline": 90, "cta": 20, "body": 160},
+    "instagram_story": {"headline": 30, "subheadline": 70, "cta": 18, "body": 120},
+    "linkedin":        {"headline": 60, "subheadline": 110, "cta": 25, "body": 220},
+    "twitter":         {"headline": 35, "subheadline": 80, "cta": 20, "body": 140},
+    "print":           {"headline": 55, "subheadline": 110, "cta": 28, "body": 260},
+    "default":         {"headline": 45, "subheadline": 100, "cta": 22, "body": 180},
+}
+
+
+async def _enforce_char_limits(copy_blocks: Dict, platform: str) -> Dict:
+    """
+    Secondary micro-agent (Phase 5 / Prompt Agent PDF dual-agent pattern):
+    Checks each copy field against platform character limits.
+    Only calls Gemini when a field is actually over limit.
+    """
+    limits = _PLATFORM_CHAR_LIMITS.get(platform, _PLATFORM_CHAR_LIMITS["default"])
+    fields_over = {}
+    for field in ("headline", "subheadline", "cta", "body"):
+        val = str(copy_blocks.get(field) or "")
+        limit = limits.get(field, 200)
+        if len(val) > limit:
+            fields_over[field] = (val, limit)
+
+    if not fields_over:
+        return copy_blocks  # nothing to fix
+
+    # Build a single micro-call to trim all over-limit fields
+    over_desc = "\n".join(
+        f'  {f}: "{v[:80]}..." ({len(v)} chars, limit {lim})'
+        for f, (v, lim) in fields_over.items()
+    )
+    system = (
+        "You are a copy editor. Rewrite only the specified text fields to fit within character limits.\n"
+        "Keep the same language, tone, and meaning — just trim. Return ONLY valid JSON with the same field names."
+    )
+    user = (
+        f"Platform: {platform}. Rewrite these fields to fit their character limits:\n{over_desc}\n\n"
+        f"Return JSON with keys: {list(fields_over.keys())}"
+    )
+    raw = await _acall_gemini(system, user, temperature=0.2, agent_name="copy_writer")
+    r = _extract_json(raw)
+
+    result = dict(copy_blocks)
+    for field, (original, limit) in fields_over.items():
+        trimmed = str(r.get(field) or "").strip()
+        if trimmed and len(trimmed) <= limit + 5:  # +5 tolerance
+            result[field] = trimmed
+            logger.info("[char_guard] %s: %d→%d chars", field, len(original), len(trimmed))
+        else:
+            # Hard truncate as last resort
+            result[field] = original[:limit].rsplit(" ", 1)[0]
+            logger.warning("[char_guard] %s hard-truncated to %d chars", field, limit)
+
+    return result
 
 
 def _agent_layout_planner(
@@ -441,6 +573,7 @@ async def _agent_image_prompter(
     triage: Dict,
     creative: Dict,
     copy: Dict,
+    prompt_dna: Optional[Dict] = None,
 ) -> Dict:
     festival_hint = ""
     if triage.get("is_festival") and triage.get("festival_name"):
@@ -449,10 +582,38 @@ async def _agent_image_prompter(
     hero_pct = {"top_60": 0.60, "top_50": 0.50}.get(creative.get("hero_occupies", "top_60"), 0.60)
     dark_zone_pct = int((1.0 - hero_pct) * 100)
 
+    # Prompt DNA — inject winning style memory when run_count >= 5 (Reflexion framework)
+    dna_hint = ""
+    if prompt_dna and isinstance(prompt_dna, dict):
+        run_count = prompt_dna.get("run_count", 0)
+        winning = prompt_dna.get("winning_keywords") or []
+        failing = prompt_dna.get("failing_patterns") or []
+        if run_count >= 5 and winning:
+            dna_hint += f"\nStyle memory (from {run_count} past generations you liked): {', '.join(winning[:8])}"
+        if failing:
+            dna_hint += f"\nAvoid (patterns that failed before): {', '.join(failing[:4])}"
+
+    # Creative Bible — inject visual metaphors and forbidden elements into scene prompt
+    bible = creative.get("creative_bible") or {}
+    bible_hint = ""
+    if bible.get("visual_metaphors"):
+        metaphors = [m for m in bible["visual_metaphors"] if m][:3]
+        if metaphors:
+            bible_hint += f"\nVisual metaphors to weave in: {', '.join(metaphors)}"
+    if bible.get("dominant_color_story"):
+        bible_hint += f"\nColor story: {bible['dominant_color_story']}"
+    if bible.get("composition_archetype"):
+        bible_hint += f"\nComposition: {bible['composition_archetype']}"
+
+    # Forbidden elements → negative prompt additions
+    forbidden_additions = ""
+    if bible.get("forbidden_elements"):
+        forbidden_additions = ", ".join(bible["forbidden_elements"][:3])
+
     system = (
         "You are an Ideogram V3 / Flux Pro background scene generator for poster ads.\n"
         "CRITICAL: Generate ONLY the hero background — NO TEXT in the image.\n"
-        f"Bottom {dark_zone_pct}% must be naturally darker (text will overlay here).{festival_hint}\n"
+        f"Bottom {dark_zone_pct}% must be naturally darker (text will overlay here).{festival_hint}{bible_hint}{dna_hint}\n"
         "Scene must be REALISTIC and RELEVANT:\n"
         "- SaaS/Tech: laptop/phone with dashboard UI, soft bokeh, modern desk\n"
         "- Festival: cultural scene, atmospheric bokeh lights, vibrant colors\n"
@@ -468,13 +629,40 @@ async def _agent_image_prompter(
         f"Mood: {creative.get('mood','energetic')} Style: {creative.get('visual_style','photorealistic')}\n"
         f"Atmosphere: {creative.get('atmosphere','')}\n"
         f"Accent: {creative.get('palette',{}).get('primary','#6C63FF')}\n"
-        f"Avoid: {', '.join(creative.get('avoid') or [])}"
+        f"Avoid: {', '.join((creative.get('avoid') or []) + ([forbidden_additions] if forbidden_additions else []))}"
     )
     raw = await _acall_gemini(system, context, temperature=0.75, agent_name="image_prompter")
     r = _extract_json(raw)
+
+    # Fallback: let AI generate one more time with the full original prompt as hint
+    bg_prompt = str(r.get("prompt") or "").strip()
+    if not bg_prompt or len(bg_prompt) < 20:
+        logger.warning("[image_prompter] empty/short prompt, regenerating with original context")
+        industry  = triage.get("industry", "general")
+        mood      = creative.get("mood", "professional")
+        atmosphere = creative.get("atmosphere", "")
+        # Give AI the original request and let it think — no hardcoded scenes
+        fallback_system = (
+            "You are a cinematographer. Based on the ad request below, describe the ideal "
+            "background hero image (NO text in image). Be specific about setting, lighting, "
+            "mood. Max 80 words. Return plain text only."
+        )
+        fallback_user = (
+            f"Ad request: {context}\n"
+            f"Industry: {industry}, Mood: {mood}, Atmosphere: {atmosphere}\n"
+            "Describe the background scene (no text, no UI overlays)."
+        )
+        bg_prompt = await _acall_gemini(fallback_system, fallback_user,
+                                        temperature=0.5, agent_name="image_prompter")
+        bg_prompt = bg_prompt.strip().strip('"')
+
+    base_negative = str(r.get("negative_prompt") or "text, words, letters, watermark, blurry, low quality")
+    if forbidden_additions:
+        base_negative = f"{base_negative}, {forbidden_additions}"
+
     return {
-        "background_prompt": str(r.get("prompt") or f"cinematic {triage.get('industry','product')} scene, dramatic lighting, no text"),
-        "negative_prompt":   str(r.get("negative_prompt") or "text, words, letters, watermark, blurry"),
+        "background_prompt": bg_prompt or f"cinematic {triage.get('industry','product')} scene, dramatic lighting, no text",
+        "negative_prompt":   base_negative,
         "model_preference":  str(r.get("model_preference") or "ideogram_quality"),
     }
 
@@ -493,6 +681,7 @@ class DesignAgentChain:
         brand_kit: Optional[Dict] = None,
         width: int = 1024,
         height: int = 1536,
+        prompt_dna: Optional[Dict] = None,
     ) -> Dict:
         brief = _empty_brief()
         agent_times: Dict[str, float] = {}
@@ -549,12 +738,24 @@ class DesignAgentChain:
             })
 
             # ── Stage 3: Copy Writer + Image Prompter (PARALLEL) ────────────
+            # Extract bucket-specific DNA (active when run_count >= 5)
+            bucket_key = triage.get("industry", "general")
+            bucket_dna: Dict = {}
+            if prompt_dna and isinstance(prompt_dna, dict):
+                bucket_dna = prompt_dna.get(bucket_key, prompt_dna.get("typography", {})) or {}
+
             t = time.time()
             copy, img = await asyncio.gather(
                 _agent_copy_writer(triage, brand, creative, safe_prompt),
-                _agent_image_prompter(triage, creative, {"brand_name": brand.get("brand_name", "")}),
+                _agent_image_prompter(triage, creative, {"brand_name": brand.get("brand_name", "")},
+                                      prompt_dna=bucket_dna),
             )
             agent_times["copy_image_parallel"] = round(time.time() - t, 2)
+
+            # ── Stage 3b: Character limit guard (fires only when over limit) ─
+            t = time.time()
+            copy = await _enforce_char_limits(copy, triage.get("platform", "instagram"))
+            agent_times["char_guard"] = round(time.time() - t, 3)
 
             # ── Stage 4: Layout Planner (pure Python, instant) ───────────────
             t = time.time()
@@ -562,10 +763,11 @@ class DesignAgentChain:
             agent_times["layout_planner"] = round(time.time() - t, 3)
 
             # ── Assemble final brief ─────────────────────────────────────────
-            brief["triage"]    = triage
-            brief["brand"]     = brand
-            brief["creative"]  = creative
-            brief["copy_blocks"] = copy
+            brief["triage"]         = triage
+            brief["brand"]          = brand
+            brief["creative"]       = creative
+            brief["creative_bible"] = creative.get("creative_bible", {})
+            brief["copy_blocks"]    = copy
             brief["ad_copy"]   = {
                 "brand_name":  copy["brand_name"],
                 "headline":    copy["headline"],
@@ -575,6 +777,7 @@ class DesignAgentChain:
                 "cta_url":     copy["cta_url"],
                 "tagline":     copy["tagline"],
                 "features":    copy["features"],
+                "logo_url":    brand.get("logo_url", ""),  # from brand kit
             }
             brief["elements"] = elements
 

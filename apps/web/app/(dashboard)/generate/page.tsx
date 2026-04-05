@@ -16,6 +16,8 @@ import {
   Sparkles,
   Loader2,
   Download,
+  Globe,
+  X as XIcon,
   RotateCcw,
   AlertCircle,
   Plus,
@@ -97,6 +99,8 @@ interface GenerationResult {
   message?: string
   generationId?: string
   quality_score?: number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  quality_gate?: any         // CREA quality gate result { total, grade, critique, auto_rerun }
   total_time?: number
   model_used?: string
   creative_os?: CreativeOSData
@@ -109,14 +113,17 @@ interface GenerationResult {
   capability_bucket?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   design_brief?: any         // full DesignBrief from agent chain — for canvas editor
+  image_url_experimental?: string  // Phase 6: dual variant experimental image
 }
 
 // SSE-driven stage labels — updated by real backend events
 const SSE_STAGES: Record<string, { label: string; sub: string; pct: number }> = {
-  intent:     { label: "Reading your vision",     sub: "Detecting intent & creative type",  pct: 10 },
-  brief:      { label: "Creative brief ready",    sub: "Photographer mindset applied",      pct: 35 },
-  generating: { label: "Rendering with AI",       sub: "AI processing your image",          pct: 55 },
-  done:       { label: "Finishing touches",       sub: "Optimizing quality",                pct: 95 },
+  intent:          { label: "Reading your vision",     sub: "Detecting intent & creative type",    pct: 10 },
+  brief:           { label: "Creative brief ready",    sub: "Photographer mindset applied",        pct: 35 },
+  generating:      { label: "Rendering with AI",       sub: "AI processing your image",            pct: 55 },
+  compositing:     { label: "Compositing design",      sub: "Applying text layout & brand style",  pct: 80 },
+  quality_checking:{ label: "AI quality review",       sub: "Scoring against Creative Bible",      pct: 88 },
+  done:            { label: "Finishing touches",       sub: "Optimizing quality",                  pct: 95 },
 }
 // Fallback array for dot indicator (4 stages)
 const GENERATION_STAGES = [
@@ -313,6 +320,13 @@ export default function GeneratePage() {
   const [posterHeadline, setPosterHeadline] = useState("")
   const [posterSubtitle, setPosterSubtitle] = useState("")
   const [posterCta, setPosterCta] = useState("")
+  // Brand kit inline (poster mode)
+  const [brandUrl,       setBrandUrl]       = useState("")
+  const [brandResearching, setBrandResearching] = useState(false)
+  const [brandKit, setBrandKit] = useState<{
+    brand_name?: string; logo_url?: string
+    primary_color?: string; secondary_color?: string; tone?: string
+  } | null>(null)
   const [negativePrompt, setNegativePrompt] = useState("")
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showFullPrompt, setShowFullPrompt] = useState(false)
@@ -329,6 +343,8 @@ export default function GeneratePage() {
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   // Poster inline editor state (updated image replaces result.image_url)
   const [posterImageUrl, setPosterImageUrl] = useState<string | null>(null)
+  // Dual variant toggle (Phase 6)
+  const [activeVariant, setActiveVariant] = useState<"safe" | "experimental">("safe")
   const stageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const promptHistoryRef = useRef<string[]>([])
@@ -404,6 +420,31 @@ export default function GeneratePage() {
     setEditSourceImage(null)
     setEditSourceUrl("")
   }, [])
+
+  // Brand research — scrapes company URL inline on poster panel
+  const handleBrandResearch = useCallback(async () => {
+    const url = brandUrl.trim()
+    if (!url) return
+    setBrandResearching(true)
+    try {
+      const res  = await fetch("/api/brand/research", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ url }),
+      })
+      const data = await res.json()
+      if (data.brand_name || data.primary_color) {
+        setBrandKit({
+          brand_name:      data.brand_name      || "",
+          logo_url:        data.logo_url        || "",
+          primary_color:   data.primary_color   || "",
+          secondary_color: data.secondary_color || "",
+          tone:            data.tone            || "",
+        })
+      }
+    } catch { /* silent */ }
+    finally { setBrandResearching(false) }
+  }, [brandUrl])
 
   const handleGenerate = useCallback(async (promptText?: string) => {
     const rawPrompt = promptText ?? prompt
@@ -502,6 +543,7 @@ export default function GeneratePage() {
           style: selectedStyle !== "Auto" ? selectedStyle : undefined,
           reference_image: referenceImage || undefined,
           negative_prompt: negativePrompt.trim() || undefined,
+          brand_kit: (creationMode === "poster" && brandKit) ? brandKit : undefined,
         }),
       })
 
@@ -551,10 +593,19 @@ export default function GeneratePage() {
             setGenProgress(SSE_STAGES.generating.pct)
             if (data.model) setActiveModel(data.model)
 
+          } else if (event === "compositing") {
+            setSseStage("compositing")
+            setGenProgress(SSE_STAGES.compositing.pct)
+
+          } else if (event === "quality_checking") {
+            setSseStage("quality_checking")
+            setGenProgress(SSE_STAGES.quality_checking.pct)
+
           } else if (event === "final_ready") {
             setSseStage("done")
             setGenProgress(100)
             setPosterImageUrl(null) // reset inline editor override
+            setActiveVariant("safe") // reset variant toggle
             setResult({
               success: true,
               image_url: data.image_url,
@@ -569,6 +620,7 @@ export default function GeneratePage() {
               model_used: data.model_used,
               total_time: data.total_time,
               quality_score: data.quality_score,
+              quality_gate: data.quality_gate,
               generationId: data.generationId,
               creative_os: data.creative_os,
               // Poster fields
@@ -577,6 +629,7 @@ export default function GeneratePage() {
               hero_url: data.hero_url,
               capability_bucket: data.capability_bucket,
               design_brief: data.design_brief,
+              image_url_experimental: data.image_url_experimental ?? undefined,
             })
 
           } else if (event === "error") {
@@ -687,6 +740,7 @@ export default function GeneratePage() {
             ? (result.creative_os.intent as { creative_type?: string }).creative_type ?? "photorealism"
             : "photorealism",
           tier: qualityTier,
+          enhancedPrompt: result.enhanced_prompt ?? "",
         }),
       })
     } catch { /* silent — feedback is best-effort */ }
@@ -808,6 +862,29 @@ export default function GeneratePage() {
 
             {/* Image + inline editor column */}
             <div className="flex flex-col gap-0">
+              {/* Dual Variant toggle — shown when experimental variant exists */}
+              {result.image_url_experimental && (
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    onClick={() => setActiveVariant("safe")}
+                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                    style={{
+                      background: activeVariant === "safe" ? "rgba(109,99,255,0.25)" : "rgba(255,255,255,0.05)",
+                      border: `1px solid ${activeVariant === "safe" ? "#6C63FF" : "rgba(255,255,255,0.1)"}`,
+                      color: activeVariant === "safe" ? "#a78bfa" : "#888",
+                    }}
+                  >Safe</button>
+                  <button
+                    onClick={() => setActiveVariant("experimental")}
+                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                    style={{
+                      background: activeVariant === "experimental" ? "rgba(236,72,153,0.2)" : "rgba(255,255,255,0.05)",
+                      border: `1px solid ${activeVariant === "experimental" ? "#ec4899" : "rgba(255,255,255,0.1)"}`,
+                      color: activeVariant === "experimental" ? "#f472b6" : "#888",
+                    }}
+                  >Creative ✨</button>
+                </div>
+              )}
               <motion.div
                 initial={{ opacity: 0, scale: 0.97 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -816,7 +893,7 @@ export default function GeneratePage() {
                 style={{ ...aspectStyle, maxHeight: "78vh" }}
               >
                 <Image
-                  src={posterImageUrl ?? result.image_url}
+                  src={posterImageUrl ?? (activeVariant === "experimental" && result.image_url_experimental ? result.image_url_experimental : result.image_url)}
                   alt="Generated"
                   fill
                   className="object-contain"
@@ -874,7 +951,19 @@ export default function GeneratePage() {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-2">
-                  {result.quality_score != null && (
+                  {result.quality_gate?.total != null && (
+                    <div className="flex items-center gap-1.5" title={result.quality_gate.critique || "AI quality score"}>
+                      <Star className="h-3 w-3 text-amber-400 shrink-0" />
+                      <span className="text-xs font-semibold text-amber-400">
+                        {Math.round(result.quality_gate.total)}/100
+                      </span>
+                      <span className="text-[10px] text-muted-foreground/60">
+                        grade {result.quality_gate.grade}
+                        {result.quality_gate.auto_rerun_done ? " · refined" : ""}
+                      </span>
+                    </div>
+                  )}
+                  {result.quality_score != null && result.quality_gate?.total == null && (
                     <div className="flex items-center gap-1.5">
                       <Star className="h-3 w-3 text-amber-400 shrink-0" />
                       <span className="text-xs font-semibold text-amber-400">{Math.round(result.quality_score * 100)}%</span>
@@ -1414,9 +1503,11 @@ export default function GeneratePage() {
                   className="overflow-hidden"
                 >
                   <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4 space-y-3">
+
+                    {/* Header row */}
                     <div className="flex items-center justify-between">
                       <p className="flex items-center gap-2 text-xs font-semibold text-foreground/80">
-                        <Type className="h-3.5 w-3.5 text-primary" /> Poster Text
+                        <Type className="h-3.5 w-3.5 text-primary" /> Ad / Poster
                       </p>
                       <button
                         onClick={() => setShowTemplateModal(true)}
@@ -1425,12 +1516,64 @@ export default function GeneratePage() {
                         <Sparkles className="h-3 w-3" /> Templates
                       </button>
                     </div>
+
+                    {/* ── Brand section ── */}
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Your Brand</p>
+
+                      {/* If brand is researched — show chip */}
+                      {brandKit ? (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                          {brandKit.logo_url && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={brandKit.logo_url} alt="" className="h-5 w-5 rounded object-contain shrink-0" />
+                          )}
+                          {brandKit.primary_color && (
+                            <span className="w-3.5 h-3.5 rounded-full shrink-0 border border-white/20"
+                              style={{ background: brandKit.primary_color }} />
+                          )}
+                          <span className="text-xs text-white/80 flex-1 truncate">
+                            {brandKit.brand_name || "Brand imported"}
+                          </span>
+                          <button onClick={() => { setBrandKit(null); setBrandUrl("") }}
+                            className="text-white/20 hover:text-white/60 transition-colors">
+                            <XIcon className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        /* URL import row */
+                        <div className="flex gap-2">
+                          <input
+                            type="url"
+                            value={brandUrl}
+                            onChange={e => setBrandUrl(e.target.value)}
+                            onKeyDown={e => e.key === "Enter" && handleBrandResearch()}
+                            placeholder="yourcompany.com"
+                            disabled={isGenerating || brandResearching}
+                            className="flex-1 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 outline-none focus:border-purple-500/40 disabled:opacity-40 transition-colors"
+                          />
+                          <button
+                            onClick={handleBrandResearch}
+                            disabled={!brandUrl.trim() || brandResearching || isGenerating}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-white disabled:opacity-40 transition-all"
+                            style={{ background: "rgba(124,58,237,0.2)", border: "1px solid rgba(124,58,237,0.3)" }}
+                          >
+                            {brandResearching
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Globe className="h-3.5 w-3.5" />}
+                            {brandResearching ? "Reading…" : "Import"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Poster text ── */}
                     <div className="grid grid-cols-1 gap-2">
                       <input
                         type="text"
                         value={posterHeadline}
                         onChange={(e) => setPosterHeadline(e.target.value)}
-                        placeholder="Headline — SUMMER SALE"
+                        placeholder="Headline — SUMMER SALE (optional, AI generates)"
                         disabled={isGenerating}
                         className="px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 focus:bg-primary/5 disabled:opacity-50 transition-colors"
                       />
@@ -1438,7 +1581,7 @@ export default function GeneratePage() {
                         type="text"
                         value={posterSubtitle}
                         onChange={(e) => setPosterSubtitle(e.target.value)}
-                        placeholder="Subtitle — Up to 50% OFF"
+                        placeholder="Subtitle — Up to 50% OFF (optional)"
                         disabled={isGenerating}
                         className="px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 focus:bg-primary/5 disabled:opacity-50 transition-colors"
                       />
@@ -1446,12 +1589,14 @@ export default function GeneratePage() {
                         type="text"
                         value={posterCta}
                         onChange={(e) => setPosterCta(e.target.value)}
-                        placeholder="CTA — Shop Now"
+                        placeholder="CTA — Shop Now (optional)"
                         disabled={isGenerating}
                         className="px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 focus:bg-primary/5 disabled:opacity-50 transition-colors"
                       />
                     </div>
-                    <p className="text-[10px] text-muted-foreground/50">AI renders these as professional poster text with effects</p>
+                    <p className="text-[10px] text-muted-foreground/40">
+                      Text fields optional — AI writes copy from your prompt. Brand URL gives it your colors + identity.
+                    </p>
                   </div>
                 </motion.div>
               )}

@@ -97,6 +97,7 @@ class StreamRequest(BaseModel):
     reference_image_url: Optional[str] = Field(default=None)
     negative_prompt: Optional[str] = Field(default=None)
     brand_kit: Optional[dict] = Field(default=None)
+    prompt_dna: Optional[dict] = Field(default=None)   # User.preferences.prompt_dna from Next.js
 
     @field_validator("quality")
     @classmethod
@@ -224,6 +225,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                     brand_kit=req.brand_kit,
                     width=req.width,
                     height=req.height,
+                    prompt_dna=req.prompt_dna,
                 )
                 if brief.get("_error"):
                     raise RuntimeError(f"DesignAgentChain: {brief['_error']}")
@@ -293,20 +295,42 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         # ── Generation via multi-provider client (with keepalives) ─────────
         from app.services.external.multi_provider_client import multi_client
 
-        # Run generation in thread, emit keepalives every 15s so proxies don't drop
-        gen_task = asyncio.create_task(
-            multi_client.generate(
-                model_key=fal_model_key,
-                prompt=enhanced_prompt,
-                negative_prompt=negative_prompt,
-                num_images=num_images,
-                image_size=_pick_image_size(req.width, req.height),
-                num_inference_steps=inference_steps,
-                guidance_scale=guidance_scale,
-                reference_image_url=req.reference_image_url,
-                rendering_speed=model_cfg.get("rendering_speed", "BALANCED"),
-            )
+        # Dual Variant (Phase 6): premium/ultra + creative_bible → Safe + Experimental in parallel
+        _creative_bible = brief.get("creative_bible") or {}
+        _run_dual = (
+            quality in ("quality", "ultra")
+            and bool(_creative_bible.get("visual_metaphors"))
         )
+        _experimental_prompt: Optional[str] = None
+        if _run_dual:
+            _metaphors = [m for m in _creative_bible.get("visual_metaphors", []) if m]
+            if _metaphors:
+                _experimental_prompt = (
+                    f"{enhanced_prompt} — experimental: {_metaphors[-1]}, "
+                    f"unexpected juxtaposition, push creative boundaries"
+                )[:500]
+
+        # Run generation in thread, emit keepalives every 15s so proxies don't drop
+        _gen_kwargs = dict(
+            model_key=fal_model_key,
+            prompt=enhanced_prompt,
+            negative_prompt=negative_prompt,
+            num_images=num_images,
+            image_size=_pick_image_size(req.width, req.height),
+            num_inference_steps=inference_steps,
+            guidance_scale=guidance_scale,
+            reference_image_url=req.reference_image_url,
+            rendering_speed=model_cfg.get("rendering_speed", "BALANCED"),
+        )
+        gen_task = asyncio.create_task(multi_client.generate(**_gen_kwargs))
+
+        # Experimental variant fires concurrently (dual variant — phase 6)
+        exp_task: Optional[asyncio.Task] = None
+        if _experimental_prompt:
+            _exp_kwargs = dict(_gen_kwargs, prompt=_experimental_prompt, num_images=1)
+            exp_task = asyncio.create_task(multi_client.generate(**_exp_kwargs))
+
+        # Wait for main gen with keepalives
         while not gen_task.done():
             try:
                 gen = await asyncio.wait_for(asyncio.shield(gen_task), timeout=15.0)
@@ -317,6 +341,14 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             gen = gen_task.result()
 
         generation_time = time.time() - start
+
+        # Collect experimental result (already running, just await — should be done or close)
+        gen_experimental: Optional[dict] = None
+        if exp_task is not None:
+            try:
+                gen_experimental = await asyncio.wait_for(exp_task, timeout=30.0)
+            except Exception as _exp_err:
+                logger.warning("[stream][%s] experimental variant failed: %s", trace_id, _exp_err)
 
         if not gen.get("success"):
             yield _sse("error", {
@@ -381,6 +413,75 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         if bucket == "typography" and isinstance(ad_copy, dict) and composite_status in ("success", "skipped"):
             _design_brief = _build_design_brief(brief, ad_copy, poster_design, raw_hero_url)
 
+        # ── Stage D: CREA Quality Gate (non-fast tiers, when creative_bible exists) ──
+        quality_gate_result = None
+        creative_bible = brief.get("creative_bible") or {}
+        _run_quality_gate = (
+            quality != "fast"
+            and bool(creative_bible.get("emotional_territory"))
+        )
+        if _run_quality_gate:
+            yield _sse("quality_checking", {
+                "message":  "AI quality review in progress",
+                "trace_id": trace_id,
+            })
+            try:
+                from app.services.smart.poster_jury import gemini_vision_score
+                # Score the hero image (before compositor overlay)
+                _score_url = raw_hero_url
+                quality_gate_result = await gemini_vision_score(
+                    image_url=_score_url,
+                    creative_bible=creative_bible,
+                    background_prompt=brief.get("background_prompt", brief.get("visual_concept", "")),
+                )
+
+                # Auto re-run once if score < 50
+                if quality_gate_result.get("auto_rerun") and not quality_gate_result.get("_skipped"):
+                    logger.info("[stream][%s] quality_gate score=%.1f < 50, triggering re-run", trace_id, quality_gate_result["total"])
+                    critique = quality_gate_result.get("critique", "")
+                    # Inject critique as mutation note into a new generation
+                    mutation_prompt = (
+                        f"{enhanced_prompt} — IMPROVE: {critique}"
+                        if critique else enhanced_prompt
+                    ) [:500]
+                    gen_retry = await multi_client.generate(
+                        model_key=fal_model_key,
+                        prompt=mutation_prompt,
+                        negative_prompt=negative_prompt,
+                        num_images=1,
+                        image_size=_pick_image_size(req.width, req.height),
+                        num_inference_steps=inference_steps,
+                        guidance_scale=guidance_scale,
+                        reference_image_url=req.reference_image_url,
+                        rendering_speed=model_cfg.get("rendering_speed", "BALANCED"),
+                    )
+                    if gen_retry.get("success") and gen_retry.get("image_url"):
+                        raw_hero_url = gen_retry["image_url"]
+                        final_image_url = raw_hero_url
+                        quality_gate_result["auto_rerun_done"] = True
+                        # Re-composite if typography
+                        if bucket == "typography" and isinstance(ad_copy, dict) and ad_copy.get("headline"):
+                            try:
+                                from app.services.smart.poster_compositor import poster_compositor as _pc
+                                http = _get_http_client()
+                                img_resp2 = await http.get(raw_hero_url)
+                                img_resp2.raise_for_status()
+                                img_b64_retry = base64.b64encode(img_resp2.content).decode("ascii")
+                                composed_b64_retry = await asyncio.to_thread(
+                                    _pc.composite,
+                                    hero_b64=img_b64_retry,
+                                    ad_copy=ad_copy,
+                                    poster_design=poster_design,
+                                    target_width=req.width,
+                                    target_height=min(int(req.height * 1.5), 3072),
+                                )
+                                final_image_url = f"data:image/jpeg;base64,{composed_b64_retry}"
+                            except Exception as _retry_comp_err:
+                                logger.warning("[stream][%s] retry compositor failed: %s", trace_id, _retry_comp_err)
+            except Exception as _qg_err:
+                logger.warning("[stream][%s] quality_gate failed (non-fatal): %s", trace_id, _qg_err)
+                quality_gate_result = None
+
         total_time = time.time() - start
 
         # Safe extraction of gen fields
@@ -398,7 +499,9 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             "prompt_engine":     brief.get("_source", "heuristic"),
             "generation_time":   gen.get("generation_time", generation_time),
             "total_time":        total_time,
-            "quality_score":     None,
+            "quality_score":          quality_gate_result.get("total") if quality_gate_result else None,
+            "quality_gate":           quality_gate_result,
+            "image_url_experimental": gen_experimental.get("image_url") if gen_experimental and gen_experimental.get("success") else None,
             "poster_composite_status": composite_status,
             # Poster / inline editor fields
             "ad_copy":      ad_copy,

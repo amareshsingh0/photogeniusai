@@ -37,6 +37,7 @@ export async function POST(req: Request) {
     height?: number;
     reference_image?: string;
     negative_prompt?: string;
+    brand_kit?: Record<string, string>;
   };
 
   const {
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
     height = 1024,
     reference_image,
     negative_prompt,
+    brand_kit,
   } = body;
 
   if (!prompt || prompt.trim().length < 3) {
@@ -58,14 +60,36 @@ export async function POST(req: Request) {
     process.env.NEXT_PUBLIC_API_URL ||
     "http://localhost:8003";
 
-  // Get auth early — can't await inside ReadableStream
-  let clerkId: string | null = null;
+  // Get user ID from custom auth (no Clerk)
+  let userId: string | null = null;
   try {
     const session = await auth();
-    clerkId = session?.userId ?? null;
+    userId = session?.userId ?? null;
   } catch {}
 
   const creditsUsed = CREDITS_MAP[quality] ?? 2;
+
+  // Fetch user's saved brand kit from DB and merge with inline brand_kit
+  // Inline brand_kit (from generate page URL import) wins over saved DB values
+  let resolvedBrandKit: Record<string, string> | undefined = undefined;
+  let resolvedPromptDna: Record<string, unknown> | undefined = undefined;
+  try {
+    if (userId) {
+      const dbUser = await prisma.user.findFirst({
+        where: { OR: [{ clerkId: userId }, { id: userId }] },
+        select: { preferences: true },
+      });
+      const prefs = dbUser?.preferences as Record<string, unknown> | null;
+      const savedBrandKit = prefs?.brand_kit as Record<string, string> | undefined;
+      if (savedBrandKit || brand_kit) {
+        resolvedBrandKit = { ...(savedBrandKit ?? {}), ...(brand_kit ?? {}) };
+      }
+      // Pass Prompt DNA to backend for self-improving generation
+      resolvedPromptDna = (prefs?.prompt_dna as Record<string, unknown> | undefined) ?? undefined;
+    } else if (brand_kit) {
+      resolvedBrandKit = brand_kit;
+    }
+  } catch { /* non-fatal — generate without brand kit */ }
 
   // Connect to FastAPI SSE endpoint
   let backendRes: Response;
@@ -81,6 +105,8 @@ export async function POST(req: Request) {
         height,
         reference_image_url: reference_image,
         negative_prompt,
+        brand_kit: resolvedBrandKit || undefined,
+        prompt_dna: resolvedPromptDna || undefined,
       }),
     });
   } catch {
@@ -123,13 +149,13 @@ export async function POST(req: Request) {
                 const data = JSON.parse(dataMatch[1]);
                 let generationId: string | undefined;
 
-                if (clerkId && data.image_url) {
+                if (userId && data.image_url) {
                   try {
                     const dbUser = await prisma.user.upsert({
-                      where: { clerkId },
+                      where: { clerkId: userId },
                       create: {
-                        clerkId,
-                        email: `${clerkId}@photogenius.local`,
+                        clerkId: userId,
+                        email: `${userId}@photogenius.local`,
                         creditsBalance: 1000,
                       },
                       update: {},

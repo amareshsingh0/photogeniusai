@@ -36,6 +36,7 @@ export async function POST(req: Request) {
       style?: string;
       bucket?: string;
       tier?: string;
+      enhancedPrompt?: string;
     };
 
     const generationId = (body.generationId ?? "").trim();
@@ -44,6 +45,7 @@ export async function POST(req: Request) {
     const style = body.style ?? "Auto";
     const bucket = body.bucket ?? "photorealism";
     const tier = body.tier ?? "balanced";
+    const enhancedPrompt = (body.enhancedPrompt ?? "").trim();
     const liked = thumbs === "up";
     const rating = liked ? 5 : 1;
 
@@ -140,6 +142,29 @@ export async function POST(req: Request) {
       } catch (e) {
         if (!isPrismaDbUnavailable(e)) console.warn("[thumbs] PreferencePair skipped:", e);
       }
+    }
+
+    // ── 4. Prompt DNA extraction (fire-and-forget, non-blocking) ─────────────
+    const apiBase = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
+    if (generationId) {
+      // Get original prompt from generation for DNA extraction
+      prisma.generation.findFirst({
+        where: { id: generationId, userId: dbUser.id },
+        select: { originalPrompt: true },
+      }).then(gen => {
+        if (!gen?.originalPrompt) return;
+        return fetch(`${apiBase}/api/v1/preferences/extract-prompt-dna`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: gen.originalPrompt,
+            bucket,
+            liked,
+            enhanced_prompt: enhancedPrompt,
+            user_id: dbUser.id,
+          }),
+        });
+      }).catch(() => {}); // non-fatal
     }
 
     return NextResponse.json({ success: true, style_dna: updatedDna });

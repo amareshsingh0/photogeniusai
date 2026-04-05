@@ -38,6 +38,7 @@ export interface DesignBriefElement {
   visible?: boolean
   features?: Array<{ icon: string; title: string; desc: string }>
   accent_color?: string
+  bg_color?: string
 }
 
 export interface DesignBrief {
