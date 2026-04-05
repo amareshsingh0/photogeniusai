@@ -132,6 +132,7 @@ class FalClient:
         reference_image_url: Optional[str] = None,
         # Ideogram-specific
         rendering_speed: str = "BALANCED",      # TURBO / BALANCED / QUALITY
+        ideogram_style_type: str = "REALISTIC", # REALISTIC / GENERAL / DESIGN / RENDER_3D / ANIME
         # Recraft-specific
         style: Optional[str] = None,            # "realistic_image", "digital_illustration"
     ) -> Dict:
@@ -146,7 +147,8 @@ class FalClient:
         # ── Build model-specific payload ───────────────────────────────────────
         if model_id in _IDEOGRAM_MODELS:
             payload = self._ideogram_payload(
-                prompt, resolved_size, num_images, rendering_speed, negative_prompt
+                prompt, resolved_size, num_images, rendering_speed,
+                negative_prompt, ideogram_style_type
             )
         elif model_id in _RECRAFT_MODELS:
             payload = self._recraft_payload(
@@ -296,12 +298,14 @@ class FalClient:
         return p
 
     def _ideogram_payload(self, prompt, image_size, num_images,
-                          rendering_speed, negative_prompt) -> Dict:
+                          rendering_speed, negative_prompt,
+                          style_type: str = "REALISTIC") -> Dict:
         p: Dict = {
             "prompt": prompt,
             "image_size": image_size,
             "num_images": num_images,
-            "rendering_speed": rendering_speed,  # TURBO / BALANCED / QUALITY
+            "rendering_speed": rendering_speed,
+            "style_type": style_type,  # REALISTIC prevents text generation in background
         }
         if negative_prompt:
             p["negative_prompt"] = negative_prompt

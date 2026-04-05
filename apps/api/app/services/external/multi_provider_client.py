@@ -655,6 +655,7 @@ class MultiProviderClient:
             p: Dict = {
                 "prompt": prompt, "image_size": image_size,
                 "num_images": num_images, "rendering_speed": rendering_speed,
+                "style_type": "REALISTIC",  # prevents text/signage generation in background
             }
             if negative_prompt:
                 p["negative_prompt"] = negative_prompt

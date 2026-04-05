@@ -426,6 +426,14 @@ async def _agent_copy_writer(
     raw = await _acall_gemini(system, context, temperature=0.85, agent_name="copy_writer")
     r = _extract_json(raw)
 
+    # If main call failed entirely (parse error or missing headline), retry full call once
+    if r.get("_parse_error") or not str(r.get("headline") or "").strip():
+        logger.warning("[copy_writer] main call missing headline, retrying full call")
+        raw2 = await _acall_gemini(system, context, temperature=0.7, agent_name="copy_writer")
+        r2 = _extract_json(raw2)
+        if not r2.get("_parse_error") and str(r2.get("headline") or "").strip():
+            r = r2  # full retry succeeded
+
     # Validate features — if AI returned good ones use them, else retry with stricter prompt
     raw_features = r.get("features")
     if not isinstance(raw_features, list):
