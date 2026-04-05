@@ -7,6 +7,10 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { projectId: string } },
 ) {
+  // Local fallback project (DB unavailable)
+  if (params.projectId.startsWith('local_')) {
+    return NextResponse.json({ project: { id: params.projectId, canvasState: null } })
+  }
   try {
     const userId = await getUserId()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -28,6 +32,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { projectId: string } },
 ) {
+  if (params.projectId.startsWith('local_')) {
+    return NextResponse.json({ ok: true, updated: 0, _local: true })
+  }
   try {
     const userId = await getUserId()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
