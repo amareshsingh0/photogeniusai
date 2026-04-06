@@ -86,7 +86,7 @@ def _get_gemini_client():
 
 
 # Model — use env var so free-tier users can switch to gemini-2.0-flash (higher RPM)
-_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-preview-05-20")
+_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Per-agent max tokens — generous enough for Gemini to think fully
 _AGENT_MAX_TOKENS = {

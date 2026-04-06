@@ -157,7 +157,7 @@ def _is_gemini_enabled() -> bool:
 USE_GEMINI_ENGINE: bool = _is_gemini_enabled()
 
 # Model name (env-configurable, no deploy required for upgrade)
-_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-preview-05-20")
+_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Buckets that get a critic agent on premium/ultra
 _HARD_BUCKETS = {"anime", "typography", "editing", "interior_arch", "character_consistency"}
