@@ -186,7 +186,7 @@ class MultiProviderClient:
             key = self._keys.get(provider, "")
             auth_header = (
                 f"Key {key}"       if provider == "fal"       else
-                f"Bearer {key}"    if provider in ("fireworks", "together") else
+                f"Bearer {key}"    if provider in ("fireworks", "together", "kie") else
                 f"Token {key}"     if provider == "replicate"  else
                 ""
             )
