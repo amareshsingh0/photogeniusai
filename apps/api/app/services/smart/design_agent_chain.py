@@ -35,6 +35,30 @@ from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Import enhanced Brand Intelligence Agent
+try:
+    from app.services.agents.brand_intelligence_agent import brand_intel_agent
+    _BRAND_INTEL_AGENT_AVAILABLE = True
+except ImportError as e:
+    logger.warning("[design_chain] Enhanced brand_intel_agent not available: %s", e)
+    _BRAND_INTEL_AGENT_AVAILABLE = False
+
+# Import Design Director Agent
+try:
+    from app.services.smart.design_director import design_director_agent
+    _DESIGN_DIRECTOR_AVAILABLE = True
+except ImportError as e:
+    logger.warning("[design_chain] design_director not available: %s", e)
+    _DESIGN_DIRECTOR_AVAILABLE = False
+
+# Import Cultural Intelligence Layer
+try:
+    from app.services.smart.cultural_intelligence import CulturalIntelligence
+    _CULTURAL_INTELLIGENCE_AVAILABLE = True
+except ImportError as e:
+    logger.warning("[design_chain] cultural_intelligence not available: %s", e)
+    _CULTURAL_INTELLIGENCE_AVAILABLE = False
+
 # ── Hex color validator ──────────────────────────────────────────────────────
 _HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _QUOTED_TEXT_RE = re.compile(r"""['"]([^'"]{1,200})['"]""")
@@ -1025,6 +1049,29 @@ _IMAGE_PROMPT_ENGINEER_KB = """
 - ideogram_quality → ONLY for bold graphic/abstract scenes or when text must appear in the image. Put text in quotes in prompt. Steps=auto
 - recraft_v4     → design assets, illustration, icons. Use DESIGN language not photography language. Specify hex colors.
 
+## CAMERA & LENS REFERENCES (Worth 50 other modifiers!)
+CAMERA MODELS BY USE CASE:
+  Portrait: Leica M11 | Hasselblad X2D | Sony A7R V
+  Fashion: Phase One IQ4 | Fujifilm GFX 100S
+  Street: Leica Q3 | Sony A7 IV | Ricoh GR III
+  Product: Hasselblad H6D-400c | Phase One XT | Cambo Actus
+  Cinematic: ARRI Alexa 35 | RED V-RAPTOR | Sony VENICE 2
+
+LENS SPECS THAT WORK:
+  Bokeh: 85mm f/1.2 | 105mm f/1.4
+  Wide: 24mm f/1.4 | 35mm f/1.4
+  Telephoto: 200mm f/2.8
+  Macro: 100mm macro, 1:1 ratio
+
+USAGE: "Shot on Hasselblad X2D, 85mm f/1.4" → massive quality signal
+
+## FLUX PRO POWER MODIFIERS (Premium only)
+  - "[Color] Pantone [code]" → model understands Pantone references precisely
+  - "hyper-detailed [material]" → glass/fabric/metal texture rendering
+  - "subsurface scattering" → realistic skin (not plastic)
+  - "chromatic aberration, subtle" → lens authenticity
+  - "[photographer name] photography" → Annie Leibovitz | Roger Deakins | Steve McCurry
+
 ## PER-MODEL PROMPT TEMPLATES
 
 ### flux_schnell
@@ -1071,11 +1118,37 @@ composition_archetype → camera angle, framing, visual weight
 RULE: Subject from user brief stays in frame. Never replace with abstract landscape.
 RULE: Headline/copy text NEVER goes into image prompt.
 
-## NEGATIVE PROMPTS — precision only, no generic negatives
-Always: "text, words, letters, signs, watermark, typography, UI overlay, captions"
-flux models add: "blurry, overexposed, plastic skin, bad anatomy, deformed"
-ideogram add: "photorealistic, lens blur, noise, photography"
-hunyuan add: "harsh lighting, overexposed skin, cartoon, anime"
+## QUALITY STACK (Top Tier Signals - use max 5)
+✅ USE THESE (Professional signals):
+  "award-winning commercial photography"
+  "published in [Vogue/WIRED/Wallpaper*/Kinfolk]"
+  "[Photographer name] photography" (Annie Leibovitz, Steve McCurry, Roger Deakins)
+  "medium format photography"
+  "color graded by [reference]"
+
+❌ NEVER USE (Generic noise):
+  "hyperrealistic" | "8K" | "trending on artstation" | "masterpiece" | "best quality" | "ultra detailed"
+
+## INDIA MARKET PROMPTS (Cultural Authenticity)
+FACES (dignified, specific):
+  "Indian {gender}, {age} years old, {skin_tone}, {region} aesthetic, {expression}, {styling}"
+  Skin tones: warm brown | medium brown | deep brown | golden brown
+  Regions: South Indian | North Indian | Bengali | Punjabi | Marathi
+  Styling: contemporary urban | traditional | fusion
+  FORBIDDEN: "exotic" | "dusky" | "ethnic" (colonial/othering language)
+
+SETTINGS (authentic):
+  Modern: "Contemporary Mumbai apartment, floor-to-ceiling windows, city skyline, clean lines, warm afternoon light"
+  Heritage: "Haveli interior, Rajasthan, carved sandstone arches, jali screens, colored glass shadows, antique brass"
+  Festival: "Diwali courtyard, clay diyas in rows, marigold garlands, rangoli pattern, families in soft focus"
+  Street: "Colaba Causeway/Linking Road, colorful stalls, monsoon-wet streets, golden evening light, authentic crowd"
+
+## NEGATIVE PROMPTS (Model-Specific Artifact Targeting)
+BASE (all models): "text, words, letters, signs, watermark, typography, UI overlay, captions"
+FLUX portrait add: "plastic skin, smooth skin, overexposed highlights, blown-out whites, lens distortion, unnatural poses, merged hands, extra fingers"
+FLUX product add: "floating elements, merged objects, inconsistent shadows"
+IDEOGRAM add: "photorealistic, lens blur, noise, photography, camera artifacts"
+HUNYUAN add: "harsh lighting, overexposed skin, cartoon, anime, illustration"
 """
 
 
@@ -1363,57 +1436,401 @@ _PLATFORM_DIMS: Dict[str, tuple] = {
 }
 
 
+# ── BEAST-LEVEL TRIAGE KNOWLEDGE BASES ────────────────────────────────────────
+
+_CULTURAL_MOMENTS_DB = {
+    # Indian Festivals
+    "diwali": {"type": "seasonal_festival", "keywords": ["celebration", "lights", "prosperity", "fortune"], "palette_override": True},
+    "holi": {"type": "seasonal_festival", "keywords": ["color", "joy", "spring", "playful"], "palette_override": True},
+    "navratri": {"type": "seasonal_festival", "keywords": ["dance", "energy", "devotion", "vibrant"], "palette_override": True},
+    "durga_puja": {"type": "seasonal_festival", "keywords": ["goddess", "power", "tradition", "grand"], "palette_override": True},
+    "eid": {"type": "seasonal_festival", "keywords": ["togetherness", "peace", "prayer", "festive"], "palette_override": True},
+    "raksha_bandhan": {"type": "seasonal_festival", "keywords": ["sibling", "bond", "protection", "tradition"], "palette_override": False},
+    "onam": {"type": "seasonal_festival", "keywords": ["harvest", "unity", "floral", "kerala"], "palette_override": False},
+    "pongal": {"type": "seasonal_festival", "keywords": ["harvest", "gratitude", "prosperity", "tamil"], "palette_override": False},
+    "baisakhi": {"type": "seasonal_festival", "keywords": ["harvest", "punjab", "energy", "celebration"], "palette_override": False},
+    "ugadi": {"type": "seasonal_festival", "keywords": ["new_year", "fresh_start", "tradition", "south"], "palette_override": False},
+    "bihu": {"type": "seasonal_festival", "keywords": ["harvest", "assam", "dance", "spring"], "palette_override": False},
+    "ganesh_chaturthi": {"type": "seasonal_festival", "keywords": ["new_beginnings", "wisdom", "devotion", "grand"], "palette_override": True},
+
+    # Global Festivals
+    "christmas": {"type": "seasonal_festival", "keywords": ["joy", "giving", "family", "festive"], "palette_override": True},
+    "new_year": {"type": "seasonal_festival", "keywords": ["fresh_start", "celebration", "resolution", "optimism"], "palette_override": False},
+    "valentine": {"type": "seasonal_festival", "keywords": ["romance", "love", "passion", "connection"], "palette_override": True},
+    "women_day": {"type": "seasonal_festival", "keywords": ["empowerment", "strength", "equality", "celebration"], "palette_override": False},
+
+    # Global Events
+    "world_cup": {"type": "global_moment", "keywords": ["passion", "competition", "pride", "energy"], "palette_override": False},
+    "olympics": {"type": "global_moment", "keywords": ["excellence", "unity", "achievement", "glory"], "palette_override": False},
+    "ipl": {"type": "global_moment", "keywords": ["cricket", "excitement", "energy", "india"], "palette_override": False},
+    "super_bowl": {"type": "global_moment", "keywords": ["sports", "entertainment", "grand", "american"], "palette_override": False},
+
+    # Industry Moments
+    "sale_season": {"type": "industry_moment", "keywords": ["urgency", "deals", "limited_time", "excitement"], "palette_override": False},
+    "black_friday": {"type": "industry_moment", "keywords": ["massive_deals", "urgency", "shopping", "excitement"], "palette_override": False},
+    "cyber_monday": {"type": "industry_moment", "keywords": ["online_deals", "tech", "urgency", "digital"], "palette_override": False},
+    "independence_day": {"type": "seasonal_festival", "keywords": ["patriotic", "pride", "freedom", "national"], "palette_override": True},
+}
+
+_EMOTION_LIBRARY = {
+    # Primary emotions with trigger patterns
+    "urgency": ["sale", "limited", "today", "now", "hurry", "ends", "last_chance", "flash", "24h", "asap"],
+    "desire": ["luxury", "premium", "exclusive", "indulge", "crave", "want", "dream", "perfect"],
+    "trust": ["proven", "certified", "guarantee", "safe", "reliable", "authentic", "verified", "expert"],
+    "curiosity": ["discover", "reveal", "secret", "new", "unlock", "find_out", "explore", "learn"],
+    "pride": ["achieve", "accomplish", "winner", "best", "champion", "elite", "master", "pro"],
+    "nostalgia": ["classic", "vintage", "remember", "tradition", "heritage", "timeless", "original"],
+    "aspiration": ["transform", "become", "upgrade", "elevate", "level_up", "grow", "advance", "next_level"],
+    "belonging": ["community", "together", "join", "family", "connect", "tribe", "belong", "we"],
+    "exclusivity": ["exclusive", "members", "vip", "limited", "private", "select", "invite", "elite"],
+    "joy": ["happy", "fun", "celebrate", "smile", "enjoy", "delight", "cheerful", "bright"],
+    "calm": ["peace", "relax", "serene", "tranquil", "harmony", "zen", "soothing", "gentle"],
+    "power": ["strong", "bold", "fierce", "unstoppable", "dominant", "force", "mighty", "conquer"],
+    "rebellion": ["break", "disrupt", "rebel", "challenge", "different", "unconventional", "dare"],
+    "warmth": ["cozy", "comfort", "nurture", "care", "home", "embrace", "tender", "loving"],
+    "awe": ["amazing", "stunning", "breathtaking", "spectacular", "magnificent", "extraordinary"],
+    "fomo": ["missing_out", "everyone", "trending", "viral", "popular", "hottest", "everyone_is"],
+    "excitement": ["thrill", "adventure", "dynamic", "energetic", "electrifying", "pumped", "fired_up"],
+}
+
+_PSYCHOGRAPHIC_MAP = {
+    # Industry + Tone → Psychographic
+    ("fitness", "bold"): "achiever",
+    ("fitness", "energetic"): "achiever",
+    ("fashion", "luxury"): "status-seeker",
+    ("fashion", "elegant"): "status-seeker",
+    ("tech", "professional"): "achiever",
+    ("saas", "professional"): "pragmatist",
+    ("food", "playful"): "belonging-seeker",
+    ("food", "professional"): "value-seeker",
+    ("real_estate", "professional"): "security-seeker",
+    ("finance", "professional"): "security-seeker",
+    ("healthcare", "professional"): "security-seeker",
+    ("education", "professional"): "pragmatist",
+    ("general", "playful"): "explorer",
+    ("general", "energetic"): "explorer",
+    ("general", "minimal"): "creative",
+    ("general", "bold"): "achiever",
+}
+
+_ATTENTION_BUDGET_MAP = {
+    # Platform → Seconds
+    "instagram_story": 2,
+    "tiktok_story": 0.5,
+    "instagram_portrait": 2,
+    "instagram_square": 2,
+    "facebook_landscape": 3,
+    "linkedin": 5,
+    "youtube_thumbnail": 1,
+    "twitter": 2,
+    "pinterest": 3,
+    "print_flyer": 10,
+    "print_a4": 10,
+    "banner_leaderboard": 1,
+    "banner_rectangle": 2,
+    "default": 2,
+}
+
+_PIPELINE_ROUTING_RULES = {
+    # Complexity markers → pipeline mode
+    "fast_path_keywords": ["simple", "quick", "basic", "minimal", "clean", "single"],
+    "premium_keywords": ["campaign", "launch", "complex", "multiple", "professional", "festival", "cultural"],
+    "urgency_keywords": ["urgent", "asap", "today", "now", "immediately", "rush", "emergency"],
+}
+
+
+def _detect_cultural_moment(prompt: str) -> Optional[Dict]:
+    """Detect cultural/seasonal moments from prompt."""
+    prompt_lower = prompt.lower()
+
+    for moment_key, moment_data in _CULTURAL_MOMENTS_DB.items():
+        if moment_key in prompt_lower:
+            return {
+                "type": moment_data["type"],
+                "name": moment_key.replace("_", " ").title(),
+                "palette_override": moment_data["palette_override"],
+                "keywords": moment_data["keywords"],
+            }
+
+    return None
+
+
+def _detect_emotion_target(prompt: str, goal: str) -> str:
+    """Detect primary emotional target from prompt and goal."""
+    prompt_lower = prompt.lower()
+
+    # Score each emotion
+    scores = {}
+    for emotion, triggers in _EMOTION_LIBRARY.items():
+        score = sum(1 for trigger in triggers if trigger in prompt_lower)
+        if score > 0:
+            scores[emotion] = score
+
+    # Goal-based defaults
+    goal_emotion_map = {
+        "sale_promotion": "urgency",
+        "product_launch": "curiosity",
+        "brand_awareness": "aspiration",
+        "event": "excitement",
+        "lead_gen": "curiosity",
+        "app_download": "desire",
+    }
+
+    if scores:
+        # Return highest scoring emotion
+        return max(scores.items(), key=lambda x: x[1])[0]
+    else:
+        # Fallback to goal-based emotion
+        return goal_emotion_map.get(goal, "aspiration")
+
+
+def _detect_psychographic(industry: str, tone: str, prompt: str) -> str:
+    """Detect audience psychographic from industry, tone, and prompt context."""
+    # Try exact mapping first
+    key = (industry, tone)
+    if key in _PSYCHOGRAPHIC_MAP:
+        return _PSYCHOGRAPHIC_MAP[key]
+
+    # Fallback: industry-based defaults
+    industry_defaults = {
+        "fitness": "achiever",
+        "fashion": "status-seeker",
+        "tech": "achiever",
+        "saas": "pragmatist",
+        "food": "value-seeker",
+        "real_estate": "security-seeker",
+        "finance": "security-seeker",
+        "healthcare": "security-seeker",
+        "education": "pragmatist",
+    }
+
+    return industry_defaults.get(industry, "explorer")
+
+
+def _detect_pipeline_mode(prompt: str, industry: str, cultural_moment: Optional[Dict], brand_hint: str) -> str:
+    """Intelligent pipeline routing based on complexity signals."""
+    prompt_lower = prompt.lower()
+
+    # Crisis mode - urgent keywords
+    if any(keyword in prompt_lower for keyword in _PIPELINE_ROUTING_RULES["urgency_keywords"]):
+        return "crisis"
+
+    # Premium mode triggers
+    premium_triggers = 0
+
+    # Cultural sensitivity
+    if cultural_moment and cultural_moment.get("palette_override"):
+        premium_triggers += 1
+
+    # Complex keywords
+    if any(keyword in prompt_lower for keyword in _PIPELINE_ROUTING_RULES["premium_keywords"]):
+        premium_triggers += 1
+
+    # Known brand (database lookup will happen)
+    if brand_hint and len(brand_hint) > 2:
+        premium_triggers += 1
+
+    # Long prompt = complex requirement
+    if len(prompt) > 200:
+        premium_triggers += 1
+
+    # Industry complexity
+    if industry in ("fashion", "finance", "healthcare"):
+        premium_triggers += 1
+
+    if premium_triggers >= 3:
+        return "premium"
+
+    # Fast path triggers
+    if any(keyword in prompt_lower for keyword in _PIPELINE_ROUTING_RULES["fast_path_keywords"]):
+        if premium_triggers == 0:
+            return "fast_path"
+
+    # Default: standard
+    return "standard"
+
+
+def _detect_cultural_context(industry: str, prompt: str) -> str:
+    """Detect cultural/geographic context from industry and prompt."""
+    prompt_lower = prompt.lower()
+
+    # Tier-1 metro markers
+    metro_markers = ["mumbai", "delhi", "bangalore", "pune", "hyderabad", "chennai", "kolkata", "metro", "urban", "city"]
+    if any(marker in prompt_lower for marker in metro_markers):
+        return "tier1_metro"
+
+    # Tier-2 India markers
+    tier2_markers = ["tier2", "tier-2", "small_city", "town", "regional", "local", "indian"]
+    if any(marker in prompt_lower for marker in tier2_markers):
+        return "tier2_india"
+
+    # Western markers
+    western_markers = ["global", "international", "western", "us", "uk", "europe", "america"]
+    if any(marker in prompt_lower for marker in western_markers):
+        return "western"
+
+    # Default: tier1_metro (Indian market default)
+    return "tier1_metro"
+
+
+def _detect_device_context(platform: str) -> str:
+    """Detect device context from platform."""
+    mobile_platforms = ["instagram_story", "tiktok_story", "instagram_portrait", "instagram_square"]
+    desktop_platforms = ["linkedin", "banner_leaderboard", "banner_rectangle"]
+
+    if platform in mobile_platforms:
+        return "mobile-first"
+    elif platform in desktop_platforms:
+        return "desktop-work"
+    elif platform == "youtube_thumbnail":
+        return "large-screen-tv"
+    else:
+        return "mobile-first"  # Default
+
+
 # ── Individual agents (all async) ─────────────────────────────────────────────
 
 async def _agent_triage(prompt: str) -> Dict:
+    """
+    BEAST-LEVEL TRIAGE AGENT — Military-grade request intelligence.
+
+    Phase 1: Basic Classification (LLM)
+    Phase 2: Cultural Intelligence (Heuristic)
+    Phase 3: Audience Intelligence (Heuristic)
+    Phase 4: Emotional Target (Heuristic)
+    Phase 5: Pipeline Routing (Heuristic)
+
+    Output: Comprehensive triage package with 20+ fields.
+    """
+
+    # ── PHASE 1: LLM-Based Basic Classification ──────────────────────────────────
     system = (
-        "You are a senior marketing strategist AND platform expert.\n"
-        "Read the design request carefully and use your judgment.\n"
-        "Infer industry from context: 'gym'→fitness, 'cafe'→food, 'app launch'→saas, etc.\n"
-        "If user quoted specific text (e.g. 'text: TRANSFORM'), that is their intended headline.\n"
+        "You are a senior marketing strategist AND platform expert with 15+ years at Wieden+Kennedy.\n"
+        "Your job: decode what the client ACTUALLY needs, even from a poorly written brief.\n"
         "\n"
         "== PLATFORM FORMAT KNOWLEDGE ==\n"
         f"{_PLATFORM_FORMATS_KB}\n"
         "== END KNOWLEDGE ==\n"
         "\n"
-        "Use the INFERENCE RULES above to pick the correct platform.\n"
+        "CRITICAL RULES:\n"
+        "1. If user quoted specific text (e.g. 'headline: TRANSFORM'), extract it EXACTLY to explicit_headline\n"
+        "2. Infer industry from context: 'gym'→fitness, 'cafe'→food, 'app launch'→saas\n"
+        "3. Detect festivals: 'Diwali sale'→is_festival=true, festival_name='diwali'\n"
+        "4. Use INFERENCE RULES to pick the correct platform\n"
+        "5. Brand hint: extract brand/product name if mentioned\n"
+        "\n"
         "Return ONLY valid JSON:\n"
-        '{"creative_type":"ad|poster|social_post|banner|story|thumbnail",\n'
-        '"platform":"instagram_portrait|instagram_square|instagram_story|facebook_landscape|'
-        'twitter|linkedin|youtube_thumbnail|pinterest|tiktok_story|print_flyer|print_a4|'
-        'banner_leaderboard|banner_rectangle|banner_half_page|default",\n'
-        '"goal":"product_launch|brand_awareness|sale_promotion|event|app_download|lead_gen",\n'
-        '"audience":"b2b|b2c|youth|professional|general",\n'
-        '"brand_hint":"brand or product name if mentioned, else empty",\n'
-        '"industry":"saas|food|fashion|fitness|real_estate|healthcare|finance|education|tech|general",\n'
-        '"explicit_headline":"exact text user quoted as headline, or empty string",\n'
-        '"explicit_cta":"exact text user quoted as CTA/button, or empty string",\n'
-        '"explicit_subheadline":"second quoted text if user specified subheadline/subtitle, else empty",\n'
-        '"is_festival":false,"festival_name":""}'
+        '{\n'
+        '  "creative_type": "ad|poster|social_post|banner|story|thumbnail",\n'
+        '  "platform": "instagram_portrait|instagram_square|instagram_story|facebook_landscape|twitter|linkedin|youtube_thumbnail|pinterest|tiktok_story|print_flyer|print_a4|banner_leaderboard|banner_rectangle|banner_half_page|default",\n'
+        '  "goal": "product_launch|brand_awareness|sale_promotion|event|app_download|lead_gen",\n'
+        '  "audience": "b2b|b2c|youth|professional|general",\n'
+        '  "brand_hint": "brand or product name if mentioned, else empty",\n'
+        '  "industry": "saas|food|fashion|fitness|real_estate|healthcare|finance|education|tech|general",\n'
+        '  "tone": "professional|playful|luxury|energetic|minimal|bold|elegant",\n'
+        '  "explicit_headline": "exact quoted headline text or empty",\n'
+        '  "explicit_cta": "exact quoted CTA text or empty",\n'
+        '  "explicit_subheadline": "exact quoted subheadline or empty",\n'
+        '  "is_festival": false,\n'
+        '  "festival_name": ""\n'
+        '}'
     )
+
     raw = await _acall_gemini(system, "Design request: " + prompt, temperature=0.3, agent_name="triage")
     r = _extract_json(raw)
-    defaults = {
-        "creative_type": "poster", "platform": "instagram_portrait",
-        "goal": "brand_awareness", "audience": "general",
-        "brand_hint": "", "industry": "general",
-        "explicit_headline": "", "explicit_cta": "", "explicit_subheadline": "",
-        "is_festival": False, "festival_name": "",
+
+    # Base defaults
+    triage = {
+        "creative_type": "poster",
+        "platform": "instagram_portrait",
+        "goal": "brand_awareness",
+        "audience": "general",
+        "brand_hint": "",
+        "industry": "general",
+        "tone": "professional",
+        "explicit_headline": "",
+        "explicit_cta": "",
+        "explicit_subheadline": "",
+        "is_festival": False,
+        "festival_name": "",
     }
+
+    # Merge LLM output
     for k, v in r.items():
         if v is not None and not k.startswith("_"):
-            defaults[k] = v
+            triage[k] = v
 
-    # Resolve platform → recommended dimensions
-    dims = _PLATFORM_DIMS.get(defaults["platform"], _PLATFORM_DIMS["default"])
-    defaults["recommended_width"]  = dims[0]
-    defaults["recommended_height"] = dims[1]
-
+    # Extract explicit texts (fallback if LLM missed quoted text)
     explicit_text = _extract_explicit_texts(prompt)
     for key, value in explicit_text.items():
-        if value and not str(defaults.get(key) or "").strip():
-            defaults[key] = value
-    return defaults
+        if value and not str(triage.get(key) or "").strip():
+            triage[key] = value
+
+    # ── PHASE 2: Cultural Moment Detection ───────────────────────────────────────
+    cultural_moment = _detect_cultural_moment(prompt)
+    if not cultural_moment and triage.get("is_festival") and triage.get("festival_name"):
+        # LLM detected festival, build cultural moment object
+        festival_key = triage["festival_name"].lower().replace(" ", "_")
+        festival_data = _CULTURAL_MOMENTS_DB.get(festival_key)
+        if festival_data:
+            cultural_moment = {
+                "type": festival_data["type"],
+                "name": triage["festival_name"],
+                "palette_override": festival_data["palette_override"],
+                "keywords": festival_data["keywords"],
+            }
+
+    triage["cultural_moment"] = cultural_moment
+
+    # ── PHASE 3: Emotional Target ────────────────────────────────────────────────
+    emotion_target = _detect_emotion_target(prompt, triage["goal"])
+    triage["emotion_target"] = emotion_target
+
+    # ── PHASE 4: Audience Intelligence ───────────────────────────────────────────
+    psychographic = _detect_psychographic(triage["industry"], triage["tone"], prompt)
+    cultural_context = _detect_cultural_context(triage["industry"], prompt)
+    device_context = _detect_device_context(triage["platform"])
+    attention_budget = _ATTENTION_BUDGET_MAP.get(triage["platform"], 2)
+
+    # Age range inference (basic heuristic)
+    age_range = [18, 45]  # Default
+    if "youth" in triage["audience"] or "gen-z" in prompt.lower() or "young" in prompt.lower():
+        age_range = [18, 25]
+    elif "b2b" in triage["audience"] or "professional" in triage["audience"]:
+        age_range = [25, 45]
+    elif "senior" in prompt.lower() or "mature" in prompt.lower():
+        age_range = [45, 65]
+
+    triage["audience_intelligence"] = {
+        "age_range": age_range,
+        "psychographic": psychographic,
+        "cultural_context": cultural_context,
+        "device_context": device_context,
+        "attention_budget_seconds": attention_budget,
+    }
+
+    # ── PHASE 5: Pipeline Routing ────────────────────────────────────────────────
+    pipeline_mode = _detect_pipeline_mode(prompt, triage["industry"], cultural_moment, triage["brand_hint"])
+
+    # Urgency classification
+    urgency_map = {
+        "crisis": "critical",
+        "premium": "premium",
+        "standard": "standard",
+        "fast_path": "draft",
+    }
+    urgency = urgency_map.get(pipeline_mode, "standard")
+
+    triage["pipeline_mode"] = pipeline_mode
+    triage["urgency"] = urgency
+    triage["quality_passes"] = 1  # Default (Quality Critic will decide if 2nd pass needed)
+
+    # ── PHASE 6: Platform Dimensions ─────────────────────────────────────────────
+    dims = _PLATFORM_DIMS.get(triage["platform"], _PLATFORM_DIMS["default"])
+    triage["recommended_width"] = dims[0]
+    triage["recommended_height"] = dims[1]
+
+    return triage
 
 
 async def _agent_brand_intel(
@@ -1421,7 +1838,16 @@ async def _agent_brand_intel(
     brand_kit: Optional[Dict],
     prompt: str,
 ) -> Dict:
-    """Always run LLM to fill gaps; brand_kit values override LLM output."""
+    """Enhanced brand intelligence with full palette system, typography DNA, visual equity."""
+    if _BRAND_INTEL_AGENT_AVAILABLE:
+        try:
+            # Use enhanced Brand Intelligence Agent (Phase 1-7)
+            result = await brand_intel_agent.extract(prompt, triage, brand_kit)
+            return result.get("brand_intelligence", result)
+        except Exception as e:
+            logger.warning("[design_chain] Enhanced brand_intel failed (%s), falling back to basic", e)
+
+    # Fallback: Basic brand intel (legacy)
     defaults = _request_strategy(triage, prompt)
     system = (
         "You are a brand analyst AI. Extract or infer brand identity.\n"
@@ -1569,13 +1995,31 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
         '"dominant_color_story":"<one sentence: how the 60-30-10 colors work together>",'
         '"composition_archetype":"<one sentence: describe the diagonal/tension/balance specifically>"}}'
     )
+    # Beast-level context enrichment
+    emotion_target = triage.get("emotion_target", "aspiration")
+    cultural_moment = triage.get("cultural_moment")
+    audience_intel = triage.get("audience_intelligence", {})
+    psychographic = audience_intel.get("psychographic", "general")
+    attention_budget = audience_intel.get("attention_budget_seconds", 2)
+
+    cultural_context = ""
+    if cultural_moment:
+        cultural_context = (
+            f"\n🎯 CULTURAL MOMENT: {cultural_moment['name']} ({cultural_moment['type']})\n"
+            f"   Keywords: {', '.join(cultural_moment['keywords'])}\n"
+            f"   Palette Override: {'YES — use festival colors' if cultural_moment.get('palette_override') else 'NO — keep brand colors'}"
+        )
+
     context = (
         f"Brief: {prompt}\n"
         f"Brand: {brand.get('brand_name','')} | Tone: {brand.get('tone','')} | Industry: {industry}\n"
         f"Platform: {platform} | Goal: {goal} | Audience: {triage.get('audience','general')}\n"
-        f"Primary color: {palette.get('primary','#6C63FF')} | "
-        f"Secondary: {palette.get('secondary','#4FACFE')}\n"
-        f"Creative guardrails: {strategy['creative_guardrails']}"
+        f"Primary color: {palette.get('primary','#6C63FF')} | Secondary: {palette.get('secondary','#4FACFE')}\n"
+        f"\n🎯 BEAST-LEVEL INTELLIGENCE:\n"
+        f"   Target Emotion: {emotion_target.upper()} — Your creative direction MUST trigger this emotion\n"
+        f"   Psychographic: {psychographic} — Design for this mindset\n"
+        f"   Attention Budget: {attention_budget}s — You have THIS LONG to make impact{cultural_context}\n"
+        f"\nCreative guardrails: {strategy['creative_guardrails']}"
     )
     raw = await _acall_gemini(system, context, temperature=0.82, agent_name="creative_director")
     r = _extract_json(raw)
@@ -1592,6 +2036,19 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
     for forbidden in [s.strip() for s in strategy["negative_guardrails"].split(",") if s.strip()]:
         if forbidden not in creative_bible["forbidden_elements"]:
             creative_bible["forbidden_elements"].append(forbidden)
+
+    # ── BEAST MODE: Enrich Creative Bible with Cultural Intelligence ──────────
+    if _CULTURAL_INTELLIGENCE_AVAILABLE:
+        try:
+            creative_bible = CulturalIntelligence.enrich_with_cultural_context(
+                creative_bible=creative_bible,
+                industry=industry,
+                audience=triage.get("audience", "general"),
+                platform=platform
+            )
+            logger.info(f"[creative_director] Cultural Intelligence: {creative_bible.get('cultural_intelligence', {}).get('aesthetic_direction')}")
+        except Exception as e:
+            logger.warning(f"[creative_director] Cultural Intelligence enrichment failed: {e}")
 
     layout_archetype = str(r.get("layout_archetype") or strategy["layout_archetype"])
     hero_occupies = str(r.get("hero_occupies") or strategy["hero_occupies"])
@@ -1641,8 +2098,16 @@ async def _agent_copy_writer(
     if explicit_cta:
         explicit_hint += f'\nUSER EXPLICITLY WANTS cta: "{explicit_cta}" — use this EXACTLY.'
 
+    # Beast-level intelligence injection
+    emotion_target = triage.get("emotion_target", "aspiration")
+    cultural_moment = triage.get("cultural_moment")
+    audience_intel = triage.get("audience_intelligence", {})
+    psychographic = audience_intel.get("psychographic", "general")
+
     festival_hint = ""
-    if triage.get("is_festival") and triage.get("festival_name"):
+    if cultural_moment:
+        festival_hint = f"\nCultural Moment: {cultural_moment['name']} — weave in {', '.join(cultural_moment['keywords'][:2])}."
+    elif triage.get("is_festival") and triage.get("festival_name"):
         festival_hint = f"\nFestival context: {triage['festival_name']} — include cultural warmth."
 
     # Creative Bible injection — copy must align with the locked emotional territory
@@ -1654,13 +2119,24 @@ async def _agent_copy_writer(
     if bible.get("forbidden_elements"):
         bible_hint += f'\nForbidden: avoid themes of: {", ".join(bible["forbidden_elements"][:3])}'
 
+    # Psychographic copy hints
+    psycho_map = {
+        "achiever": "Use performance, results, transformation language.",
+        "value-seeker": "Emphasize savings, smart choice, ROI.",
+        "status-seeker": "Use exclusivity, premium, elevated status language.",
+        "security-seeker": "Use trust, safety, reliability language.",
+        "explorer": "Use adventure, discovery, new experience language.",
+    }
+    psycho_hint = f"\nPsychographic: {psychographic} — {psycho_map.get(psychographic, '')}"
+    emotion_hint = f"\nTarget Emotion: {emotion_target.upper()} — trigger this emotion in headline."
+
     system = (
         f"You are a world-class Ad Copywriter (Ogilvy / Leo Burnett level).\n"
         f"Platform: {platform}. Tone: {brand.get('tone','bold')}. "
         f"Goal: {triage.get('goal','brand_awareness')}. Industry: {triage.get('industry','general')}.\n"
         f"Think deeply about what this business needs. Write copy that converts.\n"
         f"Commercial copy guardrails: {strategy['copy_guardrails']}\n"
-        f"HEADLINE max {hl_max} chars ALL CAPS.{festival_hint}{explicit_hint}{bible_hint}\n"
+        f"HEADLINE max {hl_max} chars ALL CAPS.{festival_hint}{explicit_hint}{bible_hint}{psycho_hint}{emotion_hint}\n"
         f"For features: generate 4 REAL, SPECIFIC benefits relevant to this industry — not generic placeholders.\n"
         'Return ONLY valid JSON: {"brand_name":"","headline":"ALL CAPS",'
         '"subheadline":"sentence case, compelling","body":"1-2 punchy sentences",'
@@ -1808,11 +2284,18 @@ async def _agent_layout_planner(
     copy: Dict,
     aspect_ratio: float = 0.667,
     design_room: Optional[Dict] = None,
+    design_decree: Optional[Dict] = None,
+    variant: str = "safe",  # "safe" | "bold" | "disruptive"
 ) -> List[Dict]:
     """
     Gemini-powered layout agent — thinks about optimal element placement
     for a full-bleed poster (hero image fills 100% canvas, text overlaid).
     Returns normalized Fabric.js element list (x/y/w/h in 0.0–1.0 range).
+
+    NEW: Supports 3 variants via variant parameter:
+    - safe: Proven composition, minimal risk, commercial-first
+    - bold: Strong execution, branded distinctiveness, confident
+    - disruptive: Breaks conventions intentionally, attention-maximizing
     """
     palette = creative.get("palette", {})
     pri = _safe_hex(palette.get("primary"), "#6C63FF")
@@ -1919,6 +2402,80 @@ async def _agent_layout_planner(
     # Fallback: deterministic full-bleed layout
     logger.warning("[layout_planner] Gemini failed, using deterministic full-bleed layout")
     return _layout_fallback(copy, creative, aspect_ratio, copy_space=preferred_copy_space or "bottom")
+
+
+def _score_layout_variant(
+    elements: List[Dict],
+    variant_type: str,
+    creative_bible: Dict,
+    design_decree: Optional[Dict] = None,
+) -> float:
+    """
+    Simple jury scorer for layout variants.
+    Returns score 0.0-10.0 based on hierarchy, readability, brand fit.
+
+    Scoring:
+    - safe: High brand fit, proven patterns (7.5-8.5 baseline)
+    - bold: Strong execution, visual tension (7.0-9.0 range)
+    - disruptive: Attention-maximizing, risk-taking (6.5-9.5 range)
+    """
+    if not elements:
+        return 0.0
+
+    score = 5.0  # Base score
+
+    # Check hierarchy (headline should exist and be prominent)
+    headline_found = any(e.get("id") == "headline" for e in elements)
+    cta_found = any(e.get("id") in ["cta_button", "cta"] for e in elements)
+
+    if headline_found:
+        score += 1.5
+    if cta_found:
+        score += 1.0
+
+    # Check y-positions (nothing should exceed 0.97)
+    max_y = max((e.get("bounds", {}).get("y", 0) + e.get("bounds", {}).get("h", 0)) for e in elements)
+    if max_y <= 0.97:
+        score += 1.0
+    else:
+        score -= 1.0  # Penalty for overflow
+
+    # Variant-specific scoring
+    if variant_type == "safe":
+        # Prefer centered layouts, proven patterns
+        headline_el = next((e for e in elements if e.get("id") == "headline"), None)
+        if headline_el:
+            x = headline_el.get("bounds", {}).get("x", 0.5)
+            # Centered headline gets bonus (x close to 0.05 for full-width centered)
+            if 0.03 <= x <= 0.07:
+                score += 1.0
+        score += 0.5  # Safe baseline bonus
+
+    elif variant_type == "bold":
+        # Prefer asymmetry, visual tension
+        headline_el = next((e for e in elements if e.get("id") == "headline"), None)
+        if headline_el:
+            x = headline_el.get("bounds", {}).get("x", 0.5)
+            w = headline_el.get("bounds", {}).get("w", 0.9)
+            # Asymmetric positioning gets bonus
+            if x < 0.30 or x > 0.30:
+                score += 0.8
+            # Larger headline bonus
+            if w > 0.80:
+                score += 0.5
+
+    elif variant_type == "disruptive":
+        # Prefer unconventional, high impact
+        cta_el = next((e for e in elements if e.get("id") in ["cta_button", "cta"]), None)
+        if cta_el:
+            y = cta_el.get("bounds", {}).get("y", 0.82)
+            # Unconventional CTA placement bonus
+            if y < 0.75 or y > 0.90:
+                score += 1.0
+        score += 0.3  # Risk-taking baseline
+
+    # Cap score at 10.0
+    return min(score, 10.0)
 
 
 def _layout_fallback(copy: Dict, creative: Dict, aspect_ratio: float, copy_space: str = "bottom") -> List[Dict]:
@@ -2280,10 +2837,24 @@ async def _agent_image_prompter(
     prompt_dna: Optional[Dict] = None,
 ) -> Dict:
     strategy = _request_strategy(triage, triage.get("original_prompt", ""), {"tone": creative.get("mood", "")})
+
+    # Beast-level intelligence extraction
+    emotion_target = triage.get("emotion_target", "aspiration")
+    cultural_moment = triage.get("cultural_moment")
+    audience_intel = triage.get("audience_intelligence", {})
+    attention_budget = audience_intel.get("attention_budget_seconds", 2)
+
     # Full-bleed: image fills 100% canvas, text overlaid. Bottom 50% must be dark.
     festival_hint = ""
-    if triage.get("is_festival") and triage.get("festival_name"):
+    if cultural_moment:
+        festival_hint = (
+            f"\nCultural Moment: {cultural_moment['name']} — authentic {cultural_moment['type']} visuals. "
+            f"Visual keywords: {', '.join(cultural_moment['keywords'][:3])}."
+        )
+    elif triage.get("is_festival") and triage.get("festival_name"):
         festival_hint = f"\nFestival context: {triage['festival_name']} — weave in authentic cultural visual elements."
+
+    attention_hint = f"\nAttention Budget: {attention_budget}s — image must make impact IMMEDIATELY. Hero subject must dominate."
 
     dna_hint = ""
     if prompt_dna and isinstance(prompt_dna, dict):
@@ -2346,26 +2917,61 @@ async def _agent_image_prompter(
 }'''
 
     system = (
-        "You are a world-class AI Image Prompt Engineer AND Senior Art Director.\n"
-        "Task: Generate the optimized background image prompt for a full-bleed poster ad.\n"
-        "Input comes from the Creative Director agent — translate it into production-ready image prompts.\n"
+        "You are a SENIOR PROMPT ENGINEER — you speak BOTH languages: human creative intention AND diffusion model attention weights.\n"
+        "Task: Translate Creative Director's brief into beast-level, model-optimized image prompts.\n"
         "\n"
         "== KNOWLEDGE BASE ==\n"
         f"{_IMAGE_PROMPT_ENGINEER_KB}\n"
         "== END KNOWLEDGE BASE ==\n"
         "\n"
-        "WORKFLOW:\n"
-        "1. IDENTIFY the subject from user's brief (product, person, place, concept)\n"
-        "2. GROUND the scene — subject must be visually present\n"
-        "3. ELEVATE with CD's mood/metaphors as TREATMENT (not scene replacement)\n"
-        "4. SELECT model using MODEL SELECTION guide\n"
-        "5. ENGINEER prompt using the model's template from knowledge base\n"
-        "6. VALIDATE: prompt starts with subject, bottom 50% is naturally dark, zero text\n"
-        "7. PRODUCE draft_variant as a ≤60 word flux_schnell version for fast iteration\n"
-        "8. If a design-room consensus is provided, treat the chosen backdrop direction as locked unless it contradicts the user brief\n"
+        "🎯 9-STEP BUILD PROCESS (MANDATORY):\n"
+        "\n"
+        "STEP 1: SUBJECT CORE\n"
+        "  → Extract main subject from brief. 2-3 sentences with HYPER-SPECIFIC physical attributes.\n"
+        "  → Example: 'Indian woman, 28 years old, sari in deep magenta silk, carrying woven basket'\n"
+        "\n"
+        "STEP 2: ENVIRONMENT/SETTING\n"
+        "  → NOT 'outdoors' — 'narrow street in Mumbai Colaba market, monsoon-wet cobblestones reflecting orange streetlight'\n"
+        "\n"
+        "STEP 3: LIGHTING (MOST CRITICAL)\n"
+        "  → Source: sun/studio/neon/natural\n"
+        "  → Direction: from upper-left/backlit/frontal/below\n"
+        "  → Quality: hard/soft/diffused/harsh\n"
+        "  → Color temp: warm 3200K/neutral 5600K/cool 8000K\n"
+        "  → Shadows: deep/subtle/absent\n"
+        "\n"
+        "STEP 4: CAMERA/LENS (Worth 50 other modifiers!)\n"
+        "  → 'Shot on [camera from KB] + [lens spec from KB]'\n"
+        "  → Pick based on industry: Portrait→Hasselblad X2D, Product→Phase One XT, etc.\n"
+        "\n"
+        "STEP 5: COMPOSITION\n"
+        "  → Translate CD archetype: hero-dominant→'subject centered, full-frame', diagonal→'subject angled 45°'\n"
+        "\n"
+        "STEP 6: COLOR PALETTE TRANSLATION\n"
+        "  → Convert hex to descriptive: #F4A62A→'warm amber gold accent, like diya flame illumination'\n"
+        "\n"
+        "STEP 7: STYLE REGISTER\n"
+        "  → Map CD aesthetic to model vocab: 'brutalism×luxury'→'raw concrete, architectural negative space, expensive materials'\n"
+        "\n"
+        "STEP 8: QUALITY STACK\n"
+        "  → Add 3-5 APPROVED quality signals (NOT generic 'hyperrealistic/8K' noise)\n"
+        "  → Use: 'medium format photography', '[photographer name] style', 'published in Vogue'\n"
+        "\n"
+        "STEP 9: FINAL ASSEMBLY & VALIDATION\n"
+        "  → Combine all elements per model template\n"
+        "  → Validate: subject first, bottom 50% dark, zero text keywords, model-appropriate length\n"
+        "  → Draft variant: ≤60 words flux_schnell version\n"
+        "\n"
+        "CRITICAL RULES:\n"
+        "  - Subject ALWAYS first (not mood words)\n"
+        "  - Specificity > adjectives ('worn leather, brass buttons' NOT 'detailed jacket')\n"
+        "  - Use Camera/Lens references from KB (massive quality boost)\n"
+        "  - For India market: Use cultural authenticity prompts from KB (NO 'exotic/dusky/ethnic')\n"
+        "  - Negative prompts: Model-specific artifact targeting (NOT generic)\n"
+        "  - If backdrop direction provided: treat as locked unless contradicts user brief\n"
         f"Commercial taste guardrails: {strategy['image_guardrails']}\n"
         f"Detail budget: {strategy['detail_budget']}\n"
-        f"{festival_hint}{dna_hint}\n"
+        f"{festival_hint}{attention_hint}{dna_hint}\n"
         "\n"
         "VALIDATION BEFORE RETURNING:\n"
         "- prompt must START with the subject (not a mood word)\n"
@@ -2525,6 +3131,32 @@ class DesignAgentChain:
 
             palette = creative.get("palette", {})
 
+            # ── Stage 2b: Design Director — Visual System Decree ───────────
+            # Issues composition law, grid system, type scale, color rules
+            # This decree is NON-NEGOTIABLE for all downstream agents
+            design_decree = None
+            if _DESIGN_DIRECTOR_AVAILABLE:
+                try:
+                    t = time.time()
+                    design_decree = await design_director_agent(
+                        creative_bible=creative.get("creative_bible", {}),
+                        brand_palette={
+                            "primary_color": _safe_hex(palette.get("primary"), "#6C63FF"),
+                            "secondary_color": _safe_hex(palette.get("secondary"), "#4FACFE"),
+                            "accent_color": _safe_hex(palette.get("accent"), "#00D4FF"),
+                        },
+                        platform=triage.get("platform", "instagram"),
+                        aspect_ratio=aspect_ratio,
+                        triage=triage,
+                        industry=triage.get("industry", "general"),
+                        gemini_client=_GEMINI
+                    )
+                    agent_times["design_director"] = round(time.time() - t, 2)
+                    logger.info(f"[design_chain] Design Director decree: {design_decree.get('composition_law')}")
+                except Exception as e:
+                    logger.warning(f"[design_chain] Design Director failed: {e}, continuing without decree")
+                    design_decree = None
+
             # Update brief with palette and design
             brief["brand_colors"].update({
                 "primary":        _safe_hex(palette.get("primary"), "#6C63FF"),
@@ -2569,12 +3201,60 @@ class DesignAgentChain:
             typography_direction = _build_typography_direction(triage, brand, creative, copy, design_room)
             agent_times["typography_director"] = round(time.time() - t, 3)
 
-            # ── Stage 4: Image Prompter + Layout Planner (PARALLEL) ────────
+            # ── Stage 4: Image Prompter + Layout Planner (PARALLEL or MULTI-VARIANT) ────────
+            # Multi-variant logic: Generate 3 layout variants for PREMIUM+ tiers
+            tier = str(triage.get("tier", "standard")).lower()
+            enable_multi_variant = tier in ["premium", "ultra"] and design_decree is not None
+
             t = time.time()
-            img, elements = await asyncio.gather(
-                _agent_image_prompter(triage, creative, copy, design_room=design_room, prompt_dna=bucket_dna),
-                _agent_layout_planner(triage, creative, copy, aspect_ratio=aspect_ratio, design_room=design_room),
-            )
+            if enable_multi_variant:
+                # PREMIUM/ULTRA: Generate 3 variants in parallel
+                logger.info("[design_chain] Multi-variant mode: generating 3 layout variants")
+                img, safe_layout, bold_layout, disruptive_layout = await asyncio.gather(
+                    _agent_image_prompter(triage, creative, copy, design_room=design_room, prompt_dna=bucket_dna),
+                    _agent_layout_planner(triage, creative, copy, aspect_ratio=aspect_ratio, design_room=design_room, design_decree=design_decree, variant="safe"),
+                    _agent_layout_planner(triage, creative, copy, aspect_ratio=aspect_ratio, design_room=design_room, design_decree=design_decree, variant="bold"),
+                    _agent_layout_planner(triage, creative, copy, aspect_ratio=aspect_ratio, design_room=design_room, design_decree=design_decree, variant="disruptive"),
+                )
+
+                # Score all 3 variants
+                creative_bible = creative.get("creative_bible", {})
+                safe_score = _score_layout_variant(safe_layout, "safe", creative_bible, design_decree)
+                bold_score = _score_layout_variant(bold_layout, "bold", creative_bible, design_decree)
+                disruptive_score = _score_layout_variant(disruptive_layout, "disruptive", creative_bible, design_decree)
+
+                # Pick best variant (highest score)
+                variants = [
+                    {"type": "safe", "elements": safe_layout, "score": safe_score},
+                    {"type": "bold", "elements": bold_layout, "score": bold_score},
+                    {"type": "disruptive", "elements": disruptive_layout, "score": disruptive_score},
+                ]
+                best_variant = max(variants, key=lambda v: v["score"])
+                elements = best_variant["elements"]
+
+                logger.info(
+                    f"[design_chain] Variant scores: safe={safe_score:.1f}, bold={bold_score:.1f}, "
+                    f"disruptive={disruptive_score:.1f} → winner: {best_variant['type']}"
+                )
+
+                # Store variant info in brief for debugging
+                brief["_layout_variants"] = {
+                    "enabled": True,
+                    "winner": best_variant["type"],
+                    "scores": {
+                        "safe": safe_score,
+                        "bold": bold_score,
+                        "disruptive": disruptive_score,
+                    },
+                }
+            else:
+                # FAST/STANDARD: Single safe variant only
+                img, elements = await asyncio.gather(
+                    _agent_image_prompter(triage, creative, copy, design_room=design_room, prompt_dna=bucket_dna),
+                    _agent_layout_planner(triage, creative, copy, aspect_ratio=aspect_ratio, design_room=design_room, design_decree=design_decree, variant="safe"),
+                )
+                brief["_layout_variants"] = {"enabled": False, "winner": "safe"}
+
             agent_times["image_layout_parallel"] = round(time.time() - t, 3)
 
             # ── Assemble final brief ─────────────────────────────────────────
@@ -2612,6 +3292,7 @@ class DesignAgentChain:
             brief["brand"]          = brand
             brief["creative"]       = creative
             brief["creative_bible"] = creative.get("creative_bible", {})
+            brief["design_decree"]  = design_decree or {}
             brief["copy_blocks"]    = copy
             brief["ad_copy"]   = {
                 "brand_name":  copy["brand_name"],

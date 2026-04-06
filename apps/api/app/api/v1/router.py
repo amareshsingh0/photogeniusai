@@ -20,6 +20,7 @@ from app.api.v1.endpoints import (
     poster_recompose,
     content_planner,
     batch_generate,
+    learning,
 )
 
 api_router = APIRouter()
@@ -39,3 +40,4 @@ api_router.include_router(logo_overlay.router, tags=["logo"])
 api_router.include_router(poster_recompose.router, tags=["poster"])
 api_router.include_router(content_planner.router, prefix="/content", tags=["content-planner"])
 api_router.include_router(batch_generate.router, prefix="/batch", tags=["batch"])
+api_router.include_router(learning.router, prefix="/learning", tags=["learning"])

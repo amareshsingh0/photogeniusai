@@ -132,8 +132,8 @@ model User {
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   // Profile (community)
-  bio             String?   @db.VarChar(500)
-  displayName     String?   @db.VarChar(100)
+  bio                 String? @db.VarChar(500)
+  displayName         String? @db.VarChar(100)
   allowTrainingExport Boolean @default(false) // Data flywheel opt-in
 
   // Relationships
@@ -142,7 +142,7 @@ model User {
   consentRecords       ConsentRecord[]
   preferencePairs      PreferencePair[]
   transactions         Transaction[]
-  reportedAbuseReports AbuseReport[]    @relation("Reporter")
+  reportedAbuseReports AbuseReport[]         @relation("Reporter")
   safetyAuditLogs      SafetyAuditLog[]
   conversations        Conversation[]
   galleryLikes         GalleryLike[]
@@ -153,8 +153,8 @@ model User {
   challengeSubmissions ChallengeSubmission[]
   challengeVotes       ChallengeVote[]
   dataContributions    DataContribution[]
-  following            Follow[]           @relation("Following")
-  followers            Follow[]           @relation("Followers")
+  following            Follow[]              @relation("Following")
+  followers            Follow[]              @relation("Followers")
   activities           Activity[]
 
   @@index([email])
@@ -286,36 +286,36 @@ model Generation {
   reviewedAt       DateTime? @db.Timestamptz
 
   // Credits & Billing
-  creditsUsed Int
-  costUsd     Float?   @db.DoublePrecision // Cost profiling: SageMaker + Lambda + S3 per generation
-  qualityTierUsed String? @db.VarChar(20)  // FAST | STANDARD | PREMIUM | PERFECT (for cost/tier analytics)
-  cacheHit   Boolean   @default(false)     // True if served from semantic prompt cache ($0 inference)
+  creditsUsed     Int
+  costUsd         Float?  @db.DoublePrecision // Cost profiling: SageMaker + Lambda + S3 per generation
+  qualityTierUsed String? @db.VarChar(20) // FAST | STANDARD | PREMIUM | PERFECT (for cost/tier analytics)
+  cacheHit        Boolean @default(false) // True if served from semantic prompt cache ($0 inference)
 
   // Performance
   generationTimeSeconds Float?  @db.DoublePrecision
   gpuType               String? @db.VarChar(50)
 
   // Metadata
-  metadata Json? @db.JsonB
+  metadata      Json?   @db.JsonB
   correlationId String? @db.VarChar(64) // Full-stack tracing: X-Request-ID
 
   // User Actions
   isFavorite    Boolean @default(false)
   downloadCount Int     @default(0)
   sharedCount   Int     @default(0)
-  userRating   Int?    // 1-5 optional rating for training quality
+  userRating    Int? // 1-5 optional rating for training quality
 
   // Training data export (set from user consent at creation time; GDPR/CCPA)
   allowTrainingDataExport Boolean @default(false)
 
   // Public Gallery (opt-in)
-  isPublic           Boolean   @default(false)
-  publishedAt        DateTime? @db.Timestamptz
-  galleryCategory    String?   @db.VarChar(50)   // portrait, landscape, fashion, etc.
-  galleryStyle       String?   @db.VarChar(50)   // cinematic, artistic, etc.
-  galleryModeration  GalleryModerationStatus? @default(PENDING)
-  galleryLikesCount  Int       @default(0)
-  galleryCommentsCount Int     @default(0)
+  isPublic             Boolean                  @default(false)
+  publishedAt          DateTime?                @db.Timestamptz
+  galleryCategory      String?                  @db.VarChar(50) // portrait, landscape, fashion, etc.
+  galleryStyle         String?                  @db.VarChar(50) // cinematic, artistic, etc.
+  galleryModeration    GalleryModerationStatus? @default(PENDING)
+  galleryLikesCount    Int                      @default(0)
+  galleryCommentsCount Int                      @default(0)
 
   // Soft Delete
   isDeleted Boolean   @default(false)
@@ -326,13 +326,13 @@ model Generation {
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   // Relationships
-  abuseReports        AbuseReport[]
-  preferencePairsAsA  PreferencePair[] @relation("GenA")
-  preferencePairsAsB  PreferencePair[] @relation("GenB")
-  galleryLikes        GalleryLike[]
-  galleryComments     GalleryComment[]
+  abuseReports         AbuseReport[]
+  preferencePairsAsA   PreferencePair[]      @relation("GenA")
+  preferencePairsAsB   PreferencePair[]      @relation("GenB")
+  galleryLikes         GalleryLike[]
+  galleryComments      GalleryComment[]
   challengeSubmissions ChallengeSubmission[]
-  dataContributions   DataContribution[]
+  dataContributions    DataContribution[]
 
   // Composite index: covers the primary gallery query (userId + isDeleted + ORDER BY createdAt DESC)
   @@index([userId, isDeleted, createdAt(sort: Desc)])
@@ -353,23 +353,23 @@ model Generation {
 
 /// RLHF: pairwise preference (image A vs image B); source = thumbs, save, delete, download, variants
 model PreferencePair {
-  id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @db.Uuid
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  prompt        String   @db.VarChar(1000)
-  imageAUrl     String   @db.Text
-  imageBUrl     String   @db.Text
-  preferred     String   @db.VarChar(10) // A | B | EQUAL
-  source        String   @db.VarChar(50) // EXPLICIT_THUMBS | SAVE_GALLERY | DELETE | DOWNLOAD | REQUEST_VARIANTS
-  strength      Float?   @db.DoublePrecision // 0-1 optional (e.g. strong positive for download)
+  prompt    String @db.VarChar(1000)
+  imageAUrl String @db.Text
+  imageBUrl String @db.Text
+  preferred String @db.VarChar(10) // A | B | EQUAL
+  source    String @db.VarChar(50) // EXPLICIT_THUMBS | SAVE_GALLERY | DELETE | DOWNLOAD | REQUEST_VARIANTS
+  strength  Float? @db.DoublePrecision // 0-1 optional (e.g. strong positive for download)
 
-  generationIdA String?  @db.Uuid
-  generationIdB String?  @db.Uuid
+  generationIdA String?     @db.Uuid
+  generationIdB String?     @db.Uuid
   generationA   Generation? @relation("GenA", fields: [generationIdA], references: [id], onDelete: SetNull)
   generationB   Generation? @relation("GenB", fields: [generationIdB], references: [id], onDelete: SetNull)
 
-  createdAt     DateTime @default(now()) @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
 
   @@index([userId])
   @@index([source])
@@ -388,8 +388,8 @@ model ConsentRecord {
   consentText       String? @db.Text
 
   // Granular controls (GDPR/CCPA/EU AI Act)
-  allowTraining Boolean @default(false) // Opt-in to use generations for model improvement
-  allowShowcase Boolean @default(false) // Opt-in to showcase in marketing/gallery
+  allowTraining  Boolean @default(false) // Opt-in to use generations for model improvement
+  allowShowcase  Boolean @default(false) // Opt-in to showcase in marketing/gallery
   creditsGranted Boolean @default(false) // One-time +100 credits granted for opt-in
 
   // Legal Info
@@ -647,11 +647,11 @@ model Conversation {
 model ConversationMessage {
   id             String       @id @default(uuid()) @db.Uuid
   conversationId String       @db.Uuid
-  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   // Message content
-  role    String  @db.VarChar(20) // user/assistant
-  content String  @db.Text
+  role    String @db.VarChar(20) // user/assistant
+  content String @db.Text
 
   // Images (array of URLs)
   images Json? @db.JsonB
@@ -699,25 +699,25 @@ model GalleryComment {
 }
 
 model PromptTemplate {
-  id               String          @id @default(uuid()) @db.Uuid
-  userId           String          @db.Uuid
-  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name             String          @db.VarChar(200)
-  prompt           String          @db.Text
-  negativePrompt   String?         @db.Text
-  suggestedSettings Json?          @db.JsonB // { mode, guidanceScale, steps, etc. }
-  priceType        TemplatePriceType @default(FREE)
-  priceCredits     Int             @default(0)
-  usesCount        Int             @default(0)
-  successCount     Int             @default(0)
-  ratingSum        Int             @default(0)
-  ratingCount      Int             @default(0)
-  isPublic         Boolean         @default(true)
-  createdAt        DateTime        @default(now()) @db.Timestamptz
-  updatedAt        DateTime        @updatedAt @db.Timestamptz
+  id                String            @id @default(uuid()) @db.Uuid
+  userId            String            @db.Uuid
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String            @db.VarChar(200)
+  prompt            String            @db.Text
+  negativePrompt    String?           @db.Text
+  suggestedSettings Json?             @db.JsonB // { mode, guidanceScale, steps, etc. }
+  priceType         TemplatePriceType @default(FREE)
+  priceCredits      Int               @default(0)
+  usesCount         Int               @default(0)
+  successCount      Int               @default(0)
+  ratingSum         Int               @default(0)
+  ratingCount       Int               @default(0)
+  isPublic          Boolean           @default(true)
+  createdAt         DateTime          @default(now()) @db.Timestamptz
+  updatedAt         DateTime          @updatedAt @db.Timestamptz
 
-  ratings          TemplateRating[]
-  purchases        TemplatePurchase[]
+  ratings   TemplateRating[]
+  purchases TemplatePurchase[]
 
   @@index([userId])
   @@index([priceType])
@@ -727,13 +727,13 @@ model PromptTemplate {
 }
 
 model TemplateRating {
-  id         String        @id @default(uuid()) @db.Uuid
-  userId     String        @db.Uuid
-  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  templateId String        @db.Uuid
+  id         String         @id @default(uuid()) @db.Uuid
+  userId     String         @db.Uuid
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateId String         @db.Uuid
   template   PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  rating     Int           // 1-5
-  createdAt  DateTime      @default(now()) @db.Timestamptz
+  rating     Int // 1-5
+  createdAt  DateTime       @default(now()) @db.Timestamptz
 
   @@unique([userId, templateId])
   @@index([templateId])
@@ -741,15 +741,15 @@ model TemplateRating {
 }
 
 model TemplatePurchase {
-  id         String         @id @default(uuid()) @db.Uuid
-  userId     String         @db.Uuid
-  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  templateId String         @db.Uuid
-  template   PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  creditsPaid Int
-  creatorEarned Int        // 70% to creator
-  platformEarned Int       // 30% to platform
-  createdAt  DateTime       @default(now()) @db.Timestamptz
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String         @db.Uuid
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateId     String         @db.Uuid
+  template       PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  creditsPaid    Int
+  creatorEarned  Int // 70% to creator
+  platformEarned Int // 30% to platform
+  createdAt      DateTime       @default(now()) @db.Timestamptz
 
   @@index([userId])
   @@index([templateId])
@@ -757,16 +757,16 @@ model TemplatePurchase {
 }
 
 model Challenge {
-  id          String         @id @default(uuid()) @db.Uuid
-  title       String         @db.VarChar(200)
-  description String         @db.Text
-  theme       String         @db.VarChar(100)
-  startAt     DateTime       @db.Timestamptz
-  endAt       DateTime       @db.Timestamptz
-  status      ChallengeStatus @default(DRAFT)
-  prizeCredits Int           @default(0)
-  createdAt   DateTime       @default(now()) @db.Timestamptz
-  updatedAt   DateTime       @updatedAt @db.Timestamptz
+  id           String          @id @default(uuid()) @db.Uuid
+  title        String          @db.VarChar(200)
+  description  String          @db.Text
+  theme        String          @db.VarChar(100)
+  startAt      DateTime        @db.Timestamptz
+  endAt        DateTime        @db.Timestamptz
+  status       ChallengeStatus @default(DRAFT)
+  prizeCredits Int             @default(0)
+  createdAt    DateTime        @default(now()) @db.Timestamptz
+  updatedAt    DateTime        @updatedAt @db.Timestamptz
 
   submissions ChallengeSubmission[]
   votes       ChallengeVote[]
@@ -778,17 +778,17 @@ model Challenge {
 }
 
 model ChallengeSubmission {
-  id           String    @id @default(uuid()) @db.Uuid
-  challengeId  String    @db.Uuid
-  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  generationId String    @db.Uuid
+  id           String     @id @default(uuid()) @db.Uuid
+  challengeId  String     @db.Uuid
+  challenge    Challenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  generationId String     @db.Uuid
   generation   Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
-  userId       String    @db.Uuid
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  voteCount    Int       @default(0)
-  createdAt    DateTime  @default(now()) @db.Timestamptz
+  userId       String     @db.Uuid
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  voteCount    Int        @default(0)
+  createdAt    DateTime   @default(now()) @db.Timestamptz
 
-  votes        ChallengeVote[]
+  votes ChallengeVote[]
 
   @@unique([challengeId, generationId])
   @@index([challengeId])
@@ -797,14 +797,14 @@ model ChallengeSubmission {
 }
 
 model ChallengeVote {
-  id             String             @id @default(uuid()) @db.Uuid
-  challengeId    String             @db.Uuid
-  challenge      Challenge          @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  submissionId   String             @db.Uuid
-  submission     ChallengeSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  userId         String             @db.Uuid
-  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt      DateTime           @default(now()) @db.Timestamptz
+  id           String              @id @default(uuid()) @db.Uuid
+  challengeId  String              @db.Uuid
+  challenge    Challenge           @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  submissionId String              @db.Uuid
+  submission   ChallengeSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  userId       String              @db.Uuid
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime            @default(now()) @db.Timestamptz
 
   @@unique([challengeId, userId])
   @@index([submissionId])
@@ -813,14 +813,14 @@ model ChallengeVote {
 }
 
 model DataContribution {
-  id             String     @id @default(uuid()) @db.Uuid
-  userId         String     @db.Uuid
-  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  generationId   String     @db.Uuid
-  generation     Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
-  creditsEarned  Int
-  qualityBonus   Boolean    @default(false) // 2x when score > 8
-  createdAt      DateTime   @default(now()) @db.Timestamptz
+  id            String     @id @default(uuid()) @db.Uuid
+  userId        String     @db.Uuid
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generationId  String     @db.Uuid
+  generation    Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  creditsEarned Int
+  qualityBonus  Boolean    @default(false) // 2x when score > 8
+  createdAt     DateTime   @default(now()) @db.Timestamptz
 
   @@unique([generationId])
   @@index([userId])
@@ -830,9 +830,9 @@ model DataContribution {
 
 model Follow {
   id          String   @id @default(uuid()) @db.Uuid
-  followerId String   @db.Uuid
-  follower   User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
-  followingId String  @db.Uuid
+  followerId  String   @db.Uuid
+  follower    User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String   @db.Uuid
   following   User     @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now()) @db.Timestamptz
 
@@ -843,14 +843,14 @@ model Follow {
 }
 
 model Activity {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String   @db.VarChar(50) // PUBLISHED_GALLERY, NEW_FOLLOWER, LIKED, COMMENTED, etc.
-  targetType String  @db.VarChar(50) // generation, template, challenge
-  targetId  String?  @db.Uuid
-  metadata  Json?    @db.JsonB
-  createdAt DateTime @default(now()) @db.Timestamptz
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String   @db.VarChar(50) // PUBLISHED_GALLERY, NEW_FOLLOWER, LIKED, COMMENTED, etc.
+  targetType String   @db.VarChar(50) // generation, template, challenge
+  targetId   String?  @db.Uuid
+  metadata   Json?    @db.JsonB
+  createdAt  DateTime @default(now()) @db.Timestamptz
 
   @@index([userId])
   @@index([targetType])
@@ -862,30 +862,30 @@ model Activity {
 
 /// Saved poster project — stores Fabric.js canvas state + DesignBrief
 model PosterProject {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @db.Uuid
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
 
-  name        String   @default("Untitled Poster") @db.VarChar(255)
-  canvasState Json?    @db.JsonB   // Fabric.js canvas.toJSON() — all layers
-  designBrief Json?    @db.JsonB   // Full DesignBrief from agent chain
-  heroUrl     String?  @db.Text    // Raw Ideogram/Flux output URL (for recompose)
-  thumbnail   String?  @db.Text    // 256px preview data URI
+  name        String  @default("Untitled Poster") @db.VarChar(255)
+  canvasState Json?   @db.JsonB // Fabric.js canvas.toJSON() — all layers
+  designBrief Json?   @db.JsonB // Full DesignBrief from agent chain
+  heroUrl     String? @db.Text // Raw Ideogram/Flux output URL (for recompose)
+  thumbnail   String? @db.Text // 256px preview data URI
 
-  width       Int      @default(1080)
-  height      Int      @default(1080)
-  platform    String?  @db.VarChar(50)  // instagram | linkedin | print | etc.
-  bucket      String?  @db.VarChar(50)  // capability bucket (typography | photorealism | etc.)
+  width    Int     @default(1080)
+  height   Int     @default(1080)
+  platform String? @db.VarChar(50) // instagram | linkedin | print | etc.
+  bucket   String? @db.VarChar(50) // capability bucket (typography | photorealism | etc.)
 
   // Quality scores from jury
-  juryScore   Float?   @db.DoublePrecision
-  juryGrade   String?  @db.VarChar(2)
+  juryScore Float?  @db.DoublePrecision
+  juryGrade String? @db.VarChar(2)
 
   // Status
-  isArchived  Boolean  @default(false)
+  isArchived  Boolean   @default(false)
   publishedAt DateTime? @db.Timestamptz
 
-  createdAt   DateTime @default(now()) @db.Timestamptz
-  updatedAt   DateTime @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([userId])
   @@index([userId, isArchived, createdAt(sort: Desc)])
@@ -897,21 +897,21 @@ model PosterProject {
 
 /// Batch generation job (e.g. "generate 7 posts for Diwali week")
 model BatchJob {
-  id         String      @id @default(uuid()) @db.Uuid
-  userId     String      @db.Uuid
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
 
-  status     String      @default("pending") @db.VarChar(20)  // pending | running | done | failed
-  totalTasks Int
-  doneTasks  Int         @default(0)
-  failedTasks Int        @default(0)
+  status      String @default("pending") @db.VarChar(20) // pending | running | done | failed
+  totalTasks  Int
+  doneTasks   Int    @default(0)
+  failedTasks Int    @default(0)
 
-  name       String?     @db.VarChar(255)  // optional user-provided name
-  metadata   Json?       @db.JsonB
+  name     String? @db.VarChar(255) // optional user-provided name
+  metadata Json?   @db.JsonB
 
-  tasks      BatchTask[]
+  tasks BatchTask[]
 
-  createdAt  DateTime    @default(now()) @db.Timestamptz
-  updatedAt  DateTime    @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([userId])
   @@index([status])
@@ -921,37 +921,37 @@ model BatchJob {
 
 /// Individual task in a batch job
 model BatchTask {
-  id           String    @id @default(uuid()) @db.Uuid
-  batchJobId   String    @db.Uuid
-  batchJob     BatchJob  @relation(fields: [batchJobId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid()) @db.Uuid
+  batchJobId String   @db.Uuid
+  batchJob   BatchJob @relation(fields: [batchJobId], references: [id], onDelete: Cascade)
 
   // Generation params
-  prompt       String    @db.Text
-  quality      String    @default("balanced") @db.VarChar(20)
-  width        Int       @default(1080)
-  height       Int       @default(1080)
-  style        String?   @db.VarChar(100)
+  prompt  String  @db.Text
+  quality String  @default("balanced") @db.VarChar(20)
+  width   Int     @default(1080)
+  height  Int     @default(1080)
+  style   String? @db.VarChar(100)
 
   // Result
-  imageUrl     String?   @db.Text
-  imageB64     String?   @db.Text      // only kept short-term (null after upload)
-  projectId    String?   @db.Uuid      // → PosterProject if user opens in editor
+  imageUrl  String? @db.Text
+  imageB64  String? @db.Text // only kept short-term (null after upload)
+  projectId String? @db.Uuid // → PosterProject if user opens in editor
 
   // Scheduling & publishing
   scheduledFor DateTime? @db.Timestamptz
-  platform     String?   @db.VarChar(50)  // instagram | linkedin | twitter
+  platform     String?   @db.VarChar(50) // instagram | linkedin | twitter
   publishedAt  DateTime? @db.Timestamptz
   caption      String?   @db.Text
 
   // Status
-  status       String    @default("pending") @db.VarChar(20) // pending | generating | done | failed | scheduled | published
-  error        String?   @db.Text
+  status String  @default("pending") @db.VarChar(20) // pending | generating | done | failed | scheduled | published
+  error  String? @db.Text
 
   // Metadata (jury scores, model used, etc.)
-  metadata     Json?     @db.JsonB
+  metadata Json? @db.JsonB
 
-  createdAt    DateTime  @default(now()) @db.Timestamptz
-  updatedAt    DateTime  @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([batchJobId])
   @@index([status])
@@ -960,19 +960,69 @@ model BatchTask {
   @@map("batch_tasks")
 }
 
+// ==================== SPRINT 2: BRAND INTELLIGENCE DATABASE ====================
+
+/// Global brand intelligence storage — Known brands (Nike, Apple, etc.) + user brand kits
+model BrandIntelligence {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Brand Identity
+  brandName String  @unique @db.VarChar(255)
+  brandSlug String  @unique @db.VarChar(255) // nike, apple, cocacola
+  industry  String? @db.VarChar(100)
+
+  // Ownership (null = global known brand, userId = user custom brand)
+  userId   String? @db.Uuid
+  isGlobal Boolean @default(false) // true for Nike, Apple, etc.
+
+  // Full Brand Intelligence Package (from brand_intelligence_agent.py)
+  palette             Json  @db.JsonB // Full palette system (60-30-10, psychology, accessibility)
+  typography          Json? @db.JsonB // Typography DNA (personality, fonts, size scales)
+  equityElements      Json? @db.JsonB // Visual equity rules (must-always, must-never)
+  competitivePosition Json? @db.JsonB // Category positioning
+  seasonalPalettes    Json? @db.JsonB // Festival palettes if applicable
+
+  // Legacy Simple Fields (for backward compatibility)
+  primaryColor   String? @db.VarChar(7) // #RRGGBB
+  secondaryColor String? @db.VarChar(7) // #RRGGBB
+  logoUrl        String? @db.Text
+  tagline        String? @db.VarChar(500)
+  fontStyle      String? @db.VarChar(50)
+  tone           String? @db.VarChar(50)
+
+  // Metadata
+  confidenceLevel String  @default("inferred") @db.VarChar(20) // high | medium | inferred | generated
+  sourceType      String? @db.VarChar(50) // research_agent | user_input | ai_generated | known_brand
+
+  // Usage Stats
+  usageCount Int       @default(0)
+  lastUsedAt DateTime? @db.Timestamptz
+
+  // Timestamps
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([brandSlug])
+  @@index([userId])
+  @@index([isGlobal])
+  @@index([industry])
+  @@index([createdAt])
+  @@map("brand_intelligence")
+}
+
 // ==================== SPRINT 8: TEAM WORKSPACE ====================
 
 /// Team workspace for brand collaboration
 model Workspace {
-  id          String            @id @default(uuid()) @db.Uuid
-  name        String            @db.VarChar(255)
-  brandKit    Json?             @db.JsonB   // shared brand colors, fonts, logo
-  ownerId     String            @db.Uuid
+  id       String @id @default(uuid()) @db.Uuid
+  name     String @db.VarChar(255)
+  brandKit Json?  @db.JsonB // shared brand colors, fonts, logo
+  ownerId  String @db.Uuid
 
-  createdAt   DateTime          @default(now()) @db.Timestamptz
-  updatedAt   DateTime          @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
-  members     WorkspaceMember[]
+  members WorkspaceMember[]
 
   @@index([ownerId])
   @@map("workspaces")
@@ -983,13 +1033,68 @@ model WorkspaceMember {
   workspaceId String    @db.Uuid
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId      String    @db.Uuid
-  role        String    @db.VarChar(20)  // owner | editor | viewer
+  role        String    @db.VarChar(20) // owner | editor | viewer
 
-  invitedAt   DateTime  @default(now()) @db.Timestamptz
-  joinedAt    DateTime? @db.Timestamptz
+  invitedAt DateTime  @default(now()) @db.Timestamptz
+  joinedAt  DateTime? @db.Timestamptz
 
   @@unique([workspaceId, userId])
   @@index([workspaceId])
   @@index([userId])
   @@map("workspace_members")
+}
+
+// ==================== BEAST MODE: LEARNING ENGINE ====================
+
+/// Learning log for continuous quality improvement
+model LearningLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  timestamp DateTime @default(now()) @db.Timestamptz
+
+  // Input context
+  userPrompt String   @db.VarChar(500)
+  bucket     String   @db.VarChar(50)   // industry/category
+  platform   String   @db.VarChar(50)   // instagram, tiktok, etc.
+  aesthetic  String?  @db.VarChar(50)   // ai_native, quiet_luxury_loud, etc.
+
+  // Agent decisions
+  creativeConcept  String @db.VarChar(200)  // emotional_territory
+  visualDecreeId   String @db.VarChar(50)   // composition_law (hero_dominant, etc.)
+  layoutVariant    String @db.VarChar(20)   // safe | bold | disruptive
+  modelUsed        String @db.VarChar(50)   // flux_2_pro, ideogram_quality, etc.
+
+  // Quality metrics
+  qualityScore      Float          // 0.0-10.0 overall score
+  dimensionScores   Json  @db.JsonB // 12-dimension breakdown
+  beastGatesPassed  Int            // 0-10 gates passed
+  userFeedback      String?  @db.VarChar(20)  // thumbs_up | thumbs_down | neutral
+
+  // Performance
+  generationTimeMs Int   // Total time in milliseconds
+  costUsd          Float // API cost in USD
+  revisionCycles   Int   // Number of revision loops
+
+  @@index([bucket, platform, aesthetic])
+  @@index([qualityScore])
+  @@index([userFeedback])
+  @@index([timestamp])
+  @@index([modelUsed])
+  @@map("learning_logs")
+}
+
+/// Visual System Decree snapshots for analysis
+model VisualDecree {
+  id        String   @id @default(uuid()) @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  compositionLaw       String @db.VarChar(50)
+  gridSystem           Json   @db.JsonB
+  typeScale            Json   @db.JsonB
+  colorUsageRules      Json   @db.JsonB
+  hierarchyEnforcement Json   @db.JsonB
+  forbiddenViolations  Json   @db.JsonB
+
+  @@index([compositionLaw])
+  @@index([createdAt])
+  @@map("visual_decrees")
 }

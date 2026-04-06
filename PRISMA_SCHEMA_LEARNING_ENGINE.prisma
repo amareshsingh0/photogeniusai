@@ -1,0 +1,167 @@
+// Add to packages/database/prisma/schema.prisma
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Learning Engine Schema
+// ══════════════════════════════════════════════════════════════════════════════
+
+model LearningLog {
+  id              String   @id @default(cuid())
+  timestamp       DateTime @default(now())
+
+  // Input fingerprint
+  user_prompt     String   @db.Text
+  bucket          String   // photorealism, typography, vector, etc.
+  platform        String   // instagram, tiktok, linkedin, etc.
+  aesthetic       String?  // ai_native, brutalism_luxury, etc.
+
+  // Agent decisions (serialized as JSON or individual fields)
+  creative_concept     String   @db.Text  // Emotional territory
+  visual_decree_id     String?             // Reference to VisualDecree (if implemented)
+  layout_variant       String              // safe | bold | disruptive
+  model_used           String              // flux_2_pro, ideogram_v3, etc.
+
+  // Creative decisions JSON (full agent output)
+  creative_decisions   Json?               // Full creative brief for deep analysis
+
+  // Quality metrics
+  quality_score        Float               // Overall quality score 0-10
+  dimension_scores     Json                // 12-dimension breakdown
+  beast_gates_passed   Int                 // 0-10
+
+  // User feedback
+  user_feedback        String?             // thumbs_up | thumbs_down | neutral
+
+  // Performance tracking
+  generation_time_ms   Int                 // Total generation time
+  cost_usd             Float               // API cost
+  revision_cycles      Int                 // Number of revisions
+
+  // Final output
+  final_image_url      String?   @db.Text
+  final_verdict        String?             // APPROVED | REVISE | ESCALATE
+
+  // Metadata
+  user_id              String?             // Link to user (if auth enabled)
+  industry             String?             // fashion, food, tech, etc.
+  goal                 String?             // sale_promotion, brand_awareness, etc.
+  cultural_moment      String?             // diwali, black_friday, etc.
+
+  @@index([bucket, platform, aesthetic])
+  @@index([quality_score])
+  @@index([user_feedback])
+  @@index([model_used])
+  @@index([timestamp])
+  @@index([bucket, platform, quality_score])  // Composite for performance queries
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Visual Decree (for Sprint 2 - Design Director)
+// ══════════════════════════════════════════════════════════════════════════════
+
+model VisualDecree {
+  id                    String   @id @default(cuid())
+  created_at            DateTime @default(now())
+
+  // Visual system specification
+  composition_law       String              // asymmetric_grid, hero_dominant, etc.
+  grid_system           Json                // { columns, gutter, margins, safe_zones }
+  type_scale            Json                // { h1, h2, h3, body, caption }
+  color_usage_rules     Json                // { dominant, secondary, accent }
+  hierarchy_enforcement Json                // Array of rules
+  forbidden_violations  Json                // Array of anti-patterns
+
+  // Links
+  learning_logs         LearningLog[]       // Many generations can reference same decree
+
+  @@index([composition_law])
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Improvement Reports (Quarterly + Per-Asset-Type)
+// ══════════════════════════════════════════════════════════════════════════════
+
+model ImprovementReport {
+  id                String   @id @default(cuid())
+  created_at        DateTime @default(now())
+  report_type       String              // quarterly | asset_type | model_performance
+
+  // Context
+  asset_type        String?             // instagram_post, tiktok_reel, etc.
+  platform          String?
+  industry          String?
+  model_name        String?
+  period_start      DateTime
+  period_end        DateTime
+  sample_size       Int
+
+  // Analysis results (JSON)
+  whats_working     Json                // Array of high performers
+  whats_not_working Json                // Array of low performers
+  recommendations   Json                // Array of actionable improvements
+  routing_to        Json                // Array of agents to update
+
+  // Metrics
+  avg_quality_before Float?
+  avg_quality_after  Float?
+  improvement_pct    Float?
+
+  @@index([report_type, created_at])
+  @@index([asset_type, platform])
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Pattern Cache (for fast recommendation lookups)
+// ══════════════════════════════════════════════════════════════════════════════
+
+model PatternCache {
+  id                String   @id @default(cuid())
+  updated_at        DateTime @default(now()) @updatedAt
+
+  // Context key
+  context_key       String   @unique         // "instagram:fashion:photorealism:sale_promotion"
+
+  // Learned patterns (JSON)
+  model_preference  String                  // Best performing model
+  composition_pref  String                  // Best performing composition
+  color_palette     Json                    // Best performing colors
+  headline_style    String                  // Best performing headline style
+
+  // Confidence metrics
+  sample_size       Int
+  confidence        Float                   // 0.0-1.0
+  avg_quality       Float                   // Expected quality score
+
+  // Metadata
+  last_updated      DateTime @default(now())
+  version           Int      @default(1)
+
+  @@index([context_key])
+  @@index([confidence])
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Migration Notes
+// ══════════════════════════════════════════════════════════════════════════════
+
+/*
+To apply this schema:
+
+1. Copy these models into packages/database/prisma/schema.prisma
+
+2. Generate Prisma client:
+   cd packages/database
+   npx prisma generate
+
+3. Create migration:
+   npx prisma migrate dev --name add_learning_engine_tables
+
+4. Push to database:
+   npx prisma db push
+
+5. Verify tables created:
+   npx prisma studio
+
+6. Update Learning Engine to use Prisma client:
+   from packages.database import prisma
+   learning_log = await prisma.learninglog.create(data={...})
+*/
