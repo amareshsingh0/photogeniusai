@@ -1440,7 +1440,7 @@ class GeminiPromptEngine:
         brief_clean = {k: v for k, v in brief.items() if not k.startswith("_")}
         brief_clean = _translate_brief_colors(brief_clean)
 
-        # For typography bucket: tell CDI that text will be composited separately
+        # For typography bucket: CHANGED — AI should generate text as part of scene (3D native style)
         _has_ad_copy = (
             capability_bucket == "typography"
             and isinstance(brief.get("ad_copy"), dict)
@@ -1450,13 +1450,15 @@ class GeminiPromptEngine:
         if _has_ad_copy:
             ad_copy = brief["ad_copy"]
             ad_hint = (
-                f"\n\nPOSTER MODE: PosterCompositor will render these text layers on top of the image:\n"
-                f"  Headline: \"{ad_copy.get('headline','')}\"\n"
+                f"\n\n📢 NATIVE TEXT RENDERING:\n"
+                f"Generate text as integral part of the scene (3D objects, not overlays).\n"
+                f"  Main headline: \"{ad_copy.get('headline','')}\"\n"
                 f"  Subheadline: \"{ad_copy.get('subheadline','')}\"\n"
-                f"  CTA: \"{ad_copy.get('cta','')}\"\n"
-                f"primary_output MUST exclude all text — background scene only.\n"
-                f"ideogram_variant should render this as a standalone typographic ad.\n"
-                f"Bottom {30}% of the primary image must be darker to allow text legibility."
+                f"  CTA: \"{ad_copy.get('cta','')}\"\n\n"
+                f"CRITICAL: Text should be part of the 3D scene with proper lighting, shadows, depth.\n"
+                f"Style: Bold 3D letters, realistic materials (gold, glass, neon), cinematic lighting.\n"
+                f"Composition: Text integrated naturally with products/elements, not flat overlay.\n"
+                f"Examples: 3D typography on physical surfaces, neon signs, embossed text, floating letters with reflections."
             )
 
         if critic_notes:
@@ -1488,9 +1490,9 @@ class GeminiPromptEngine:
             cdi_model_raw = (cdi.get("recommended_model") or model_name).strip().lower()
             recommended_model = _CDI_MODEL_MAP.get(cdi_model_raw, _normalize_model_key(model_name))
 
-            # For poster mode: override to use background-only model (not ideogram)
-            if _has_ad_copy and recommended_model in ("ideogram_quality", "ideogram_turbo"):
-                recommended_model = "flux_2_pro"
+            # DISABLED: Ideogram is now PREFERRED for native text rendering (better than Flux for typography)
+            # if _has_ad_copy and recommended_model in ("ideogram_quality", "ideogram_turbo"):
+            #     recommended_model = "flux_2_pro"
 
             result: Dict = {
                 "prompt":            prompt,

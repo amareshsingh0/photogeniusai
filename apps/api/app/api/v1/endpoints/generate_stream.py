@@ -418,8 +418,8 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         poster_design   = brief.get("poster_design") or {}
         composite_status = "skipped"
 
-        # ── Stage C: Poster compositor (typography only) ────────────────────
-        if bucket == "typography" and isinstance(ad_copy, dict) and ad_copy.get("headline"):
+        # ── Stage C: Poster compositor (DISABLED — native AI text looks better) ────
+        if False and bucket == "typography" and isinstance(ad_copy, dict) and ad_copy.get("headline"):
             yield _sse("compositing", {
                 "message":  "Applying text layout",
                 "trace_id": trace_id,
@@ -501,7 +501,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                     image_url=raw_hero_url,
                     creative_bible=creative_bible,
                     design_brief=design_brief_for_critic,
-                    platform=req.platform or "instagram",
+                    platform=getattr(req, 'platform', 'instagram'),
                     revision_cycle=0,
                 )
 
@@ -586,7 +586,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                             image_url=image_2_url,
                             creative_bible=creative_bible,
                             design_brief=design_brief_for_critic,
-                            platform=req.platform or "instagram",
+                            platform=getattr(req, 'platform', 'instagram'),
                             revision_cycle=1,
                         )
 
