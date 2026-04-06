@@ -90,12 +90,12 @@ _GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Per-agent max tokens — generous enough for Gemini to think fully
 _AGENT_MAX_TOKENS = {
-    "triage":           800,
-    "brand_intel":      800,
-    "creative_director":1500,
-    "copy_writer":      1800,
-    "image_prompter":   1400,
-    "layout_planner":   1000,
+    "triage":           1000,
+    "brand_intel":      1200,
+    "creative_director":2500,  # KB + bible JSON needs room
+    "copy_writer":      2500,
+    "image_prompter":   2500,  # cd_integration schema is large
+    "layout_planner":   1800,
     "char_guard":       600,
 }
 
@@ -240,13 +240,38 @@ def _extract_json(text: str) -> Dict:
 def _repair_truncated_json(s: str) -> str:
     """
     Best-effort repair of JSON truncated mid-stream (token limit cut-off).
-    Closes any open strings, arrays, and objects in reverse nesting order.
+    Strategy:
+    1. Strip back to last COMPLETE key-value pair (remove dangling `,"key":` or `,"key":"partial`)
+    2. Close any open strings
+    3. Close any open arrays/objects
     """
-    # Remove trailing incomplete key-value (e.g. ends with `,"key":` or `,"key":"`)
-    s = s.rstrip().rstrip(",").rstrip()
+    s = s.rstrip()
 
-    # Close any open string (odd number of unescaped quotes after last complete token)
-    # Simple heuristic: if the last char is not a closing delimiter, check if inside string
+    # Strip trailing incomplete key-value pairs:
+    # Pattern: find last comma, check if the portion after it is a complete value
+    # If not complete, strip back to that comma
+    for _ in range(5):  # max 5 stripping passes
+        stripped = s.rstrip().rstrip(",").rstrip()
+        last_comma = stripped.rfind(",")
+        if last_comma < 1:
+            break
+        after = stripped[last_comma + 1:].strip()
+        # Complete value: ends with }, ], ", digit/bool/null close
+        is_complete = (
+            after.endswith("}") or after.endswith("]") or
+            (after.startswith('"') and after.endswith('"') and len(after) >= 2 and not after.endswith('\\"')) or
+            after in ("true", "false", "null") or
+            (after and after[-1].isdigit())
+        )
+        if not is_complete:
+            s = stripped[:last_comma]  # strip the incomplete pair
+        else:
+            s = stripped
+            break
+    else:
+        s = s.rstrip().rstrip(",").rstrip()
+
+    # Close any open string
     in_string = False
     escape_next = False
     for ch in s:
