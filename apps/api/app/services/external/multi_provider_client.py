@@ -37,6 +37,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+import json
 from typing import Dict, List, Optional
 
 import httpx
@@ -149,11 +150,41 @@ _SCHNELL_IDS  = {"fal-ai/flux/schnell", "accounts/fireworks/models/flux-1-schnel
 _IDEOGRAM_IDS = {"fal-ai/ideogram/v3"}
 _RECRAFT_IDS  = {"fal-ai/recraft/v4/text-to-image", "fal-ai/recraft/v4/text-to-vector"}
 _KONTEXT_IDS  = {"fal-ai/flux-pro/kontext", "fal-ai/flux-pro/kontext/max"}
+_KIE_ASPECT_RATIO_MAP = {
+    "square_hd": "1:1",
+    "landscape_16_9": "16:9",
+    "portrait_9_16": "9:16",
+    "landscape_4_3": "4:3",
+    "portrait_4_3": "3:4",
+}
 
 
 def _normalize_model_key(model_key: str) -> str:
     normalized = (model_key or "").strip().lower().replace(" ", "_").replace(".", "_").replace("-", "_")
     return _MODEL_KEY_ALIASES.get(normalized, normalized)
+
+
+def _kie_aspect_ratio_for_size(image_size: str) -> str:
+    return _KIE_ASPECT_RATIO_MAP.get(image_size, "1:1")
+
+
+def _extract_kie_urls(data: Dict) -> List[str]:
+    result_json = data.get("resultJson")
+    parsed = result_json
+    if isinstance(result_json, str):
+        try:
+            parsed = json.loads(result_json)
+        except json.JSONDecodeError:
+            parsed = {}
+
+    if isinstance(parsed, dict):
+        urls = parsed.get("resultUrls") or parsed.get("urls") or parsed.get("output") or []
+    else:
+        urls = parsed or []
+
+    if not isinstance(urls, list):
+        urls = [urls] if urls else []
+    return [u for u in urls if isinstance(u, str) and u]
 
 
 class MultiProviderClient:
@@ -461,25 +492,17 @@ class MultiProviderClient:
         import asyncio
         start = time.time()
         client = self._get_client("kie")
-        size_map = {
-            "square_hd": "1024*1024", "landscape_16_9": "1344*768",
-            "portrait_9_16": "768*1344", "landscape_4_3": "1152*896",
-        }
+        aspect_ratio = _kie_aspect_ratio_for_size(image_size)
         payload: Dict = {
             "model": model_id,
             "taskType": "txt2img",
             "input": {
                 "prompt": prompt,
-                "imageSize": size_map.get(image_size, "1024*1024"),
-                "numInferenceSteps": num_inference_steps,
-                "guidanceScale": guidance_scale,
-                "outputFormat": "jpeg",
+                "aspect_ratio": aspect_ratio,
+                "resolution": "1K",
+                "nsfw_checker": False,
             }
         }
-        if negative_prompt:
-            payload["input"]["negativePrompt"] = negative_prompt
-        if seed is not None:
-            payload["input"]["seed"] = seed
         try:
             sub = await client.post(f"{_KIE_BASE}/createTask", json=payload)
             sub.raise_for_status()
@@ -492,21 +515,16 @@ class MultiProviderClient:
             while waited < 120:
                 await asyncio.sleep(3)
                 waited += 3
-                res = await client.get(f"{_KIE_BASE}/getTask", params={"taskId": task_id})
+                res = await client.get(f"{_KIE_BASE}/recordInfo", params={"taskId": task_id})
                 res.raise_for_status()
                 data = res.json().get("data", {})
-                status = data.get("status", "")
-                if status in ("SUCCESS", "COMPLETED", "success"):
-                    outputs = data.get("output") or data.get("outputs") or []
-                    if isinstance(outputs, list):
-                        urls = [o.get("url") or o if isinstance(o, str) else None for o in outputs]
-                    else:
-                        urls = [outputs] if outputs else []
-                    urls = [u for u in urls if u]
+                status = str(data.get("state") or data.get("status") or "").lower()
+                if status == "success":
+                    urls = _extract_kie_urls(data)
                     if not urls:
                         raise ValueError(f"No output URLs from kie.ai: {data}")
                     return self._ok(urls, model_id, "kie.ai", time.time() - start)
-                elif status in ("FAILED", "ERROR", "failed"):
+                elif status == "fail":
                     raise RuntimeError(f"kie.ai task failed: {data}")
 
             raise TimeoutError("kie.ai timed out after 120s")

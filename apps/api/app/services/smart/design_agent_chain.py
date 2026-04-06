@@ -37,11 +37,53 @@ logger = logging.getLogger(__name__)
 
 # ── Hex color validator ──────────────────────────────────────────────────────
 _HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+_QUOTED_TEXT_RE = re.compile(r"""['"]([^'"]{1,200})['"]""")
 
 
 def _safe_hex(value: object, fallback: str) -> str:
     s = str(value or "").strip()
     return s if _HEX_RE.match(s) else fallback
+
+
+def _extract_explicit_texts(prompt: str) -> Dict[str, str]:
+    """
+    Deterministically preserve quoted copy from the raw user prompt.
+
+    This avoids losing explicit poster words when triage JSON is incomplete.
+    First quoted phrase -> headline, second -> subheadline, third -> CTA.
+    """
+    matches = [m.strip() for m in _QUOTED_TEXT_RE.findall(prompt or "") if m and m.strip()]
+    result = {
+        "explicit_headline": "",
+        "explicit_subheadline": "",
+        "explicit_cta": "",
+    }
+    if matches:
+        result["explicit_headline"] = matches[0]
+    if len(matches) > 1:
+        result["explicit_subheadline"] = matches[1]
+    if len(matches) > 2:
+        result["explicit_cta"] = matches[2]
+    return result
+
+
+def _aspect_ratio_label(width: int, height: int) -> str:
+    if width <= 0 or height <= 0:
+        return "4:5"
+    ratio = width / height
+    if abs(ratio - 1.0) <= 0.08:
+        return "1:1"
+    if ratio >= 1.7:
+        return "16:9"
+    if ratio >= 1.45:
+        return "3:2"
+    if ratio >= 1.2:
+        return "4:3"
+    if ratio <= 0.60:
+        return "9:16"
+    if ratio <= 0.72:
+        return "3:4"
+    return "4:5"
 
 
 # ── Gemini client pool (round-robin across multiple API keys) ─────────────────
@@ -96,8 +138,26 @@ _AGENT_MAX_TOKENS = {
     "copy_writer":      2500,
     "image_prompter":   2500,  # cd_integration schema is large
     "layout_planner":   1800,
+    "reconcile":        400,
     "char_guard":       600,
 }
+
+_COPY_SPACE_PROMPT_HINTS = {
+    "top": "preserve clean negative space in the upper third for headline overlay",
+    "bottom": "preserve clean negative space in the lower third for headline and CTA overlay",
+    "left": "preserve clean negative space on the left side for headline and supporting copy",
+    "right": "preserve clean negative space on the right side for headline and supporting copy",
+    "center": "preserve a clean central copy-safe area for headline overlay",
+}
+_TEXT_NEGATIVE_TERMS = [
+    "text",
+    "words",
+    "letters",
+    "typography",
+    "captions",
+    "labels",
+    "watermark",
+]
 
 # ── Image Prompt Engineer Knowledge Base ─────────────────────────────────────
 # Injected into _agent_image_prompter so Gemini has per-model prompt strategies.
@@ -495,6 +555,11 @@ async def _agent_triage(prompt: str) -> Dict:
     dims = _PLATFORM_DIMS.get(defaults["platform"], _PLATFORM_DIMS["default"])
     defaults["recommended_width"]  = dims[0]
     defaults["recommended_height"] = dims[1]
+
+    explicit_text = _extract_explicit_texts(prompt)
+    for key, value in explicit_text.items():
+        if value and not str(defaults.get(key) or "").strip():
+            defaults[key] = value
     return defaults
 
 
@@ -1026,6 +1091,165 @@ def _layout_fallback(copy: Dict, creative: Dict, aspect_ratio: float) -> List[Di
     return elements
 
 
+def _infer_copy_space(elements: List[Dict]) -> str:
+    headline_el = next(
+        (
+            el for el in elements
+            if isinstance(el, dict)
+            and el.get("id") in ("headline", "subheadline", "cta_text")
+            and isinstance(el.get("bounds"), dict)
+        ),
+        None,
+    )
+    if not headline_el:
+        return "bottom"
+
+    bounds = headline_el.get("bounds") or {}
+    x = float(bounds.get("x", 0.05) or 0.05)
+    y = float(bounds.get("y", 0.52) or 0.52)
+    w = float(bounds.get("w", 0.9) or 0.9)
+
+    if y <= 0.35:
+        return "top"
+    if y >= 0.68:
+        return "bottom"
+    if x <= 0.16 and w <= 0.60:
+        return "left"
+    if x >= 0.28 and w <= 0.60:
+        return "right"
+    return "center"
+
+
+def _remove_copy_text_from_prompt(prompt: str, values: List[str]) -> str:
+    cleaned = prompt or ""
+    for value in values:
+        val = str(value or "").strip()
+        if not val:
+            continue
+        cleaned = re.sub(re.escape(f'"{val}"'), "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(re.escape(f"'{val}'"), "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(re.escape(val), "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r",\s*,", ",", cleaned)
+    return cleaned.strip(" ,.")
+
+
+def _ensure_text_negatives(negative_prompt: str) -> str:
+    terms = [t.strip() for t in str(negative_prompt or "").split(",") if t.strip()]
+    seen = {t.lower() for t in terms}
+    for term in _TEXT_NEGATIVE_TERMS:
+        if term.lower() not in seen:
+            terms.append(term)
+            seen.add(term.lower())
+    return ", ".join(terms)
+
+
+def _sync_layout_elements(copy: Dict, creative: Dict, elements: List[Dict], aspect_ratio: float) -> List[Dict]:
+    base = [dict(el) for el in elements if isinstance(el, dict)] if isinstance(elements, list) else []
+    fallback = _layout_fallback(copy, creative, aspect_ratio)
+    by_id = {str(el.get("id")): el for el in base if el.get("id")}
+    fallback_by_id = {str(el.get("id")): el for el in fallback if el.get("id")}
+
+    desired_text = {
+        "brand_name": str(copy.get("brand_name") or "").strip().upper(),
+        "headline": str(copy.get("headline") or "").strip(),
+        "subheadline": str(copy.get("subheadline") or "").strip(),
+        "cta_text": str(copy.get("cta") or "").strip(),
+        "tagline": str(copy.get("tagline") or "").strip(),
+    }
+
+    for element_id, content in desired_text.items():
+        if not content:
+            continue
+        target = by_id.get(element_id)
+        if target is None and element_id in fallback_by_id:
+            target = dict(fallback_by_id[element_id])
+            base.append(target)
+            by_id[element_id] = target
+        if target is not None:
+            target["content"] = content
+
+    if desired_text["cta_text"] and "cta_button" not in by_id and "cta_button" in fallback_by_id:
+        base.append(dict(fallback_by_id["cta_button"]))
+
+    if desired_text["brand_name"] and "brand_bar" not in by_id and "brand_bar" in fallback_by_id:
+        base.append(dict(fallback_by_id["brand_bar"]))
+
+    return base
+
+
+def _agent_reconcile_outputs(
+    triage: Dict,
+    creative: Dict,
+    copy: Dict,
+    img: Dict,
+    elements: List[Dict],
+    aspect_ratio: float,
+) -> Dict:
+    copy_final = dict(copy)
+    explicit_headline = str(triage.get("explicit_headline") or "").strip()
+    explicit_subheadline = str(triage.get("explicit_subheadline") or "").strip()
+    explicit_cta = str(triage.get("explicit_cta") or "").strip()
+
+    if explicit_headline:
+        copy_final["headline"] = explicit_headline.upper()
+    if explicit_subheadline:
+        copy_final["subheadline"] = explicit_subheadline
+    if explicit_cta:
+        copy_final["cta"] = explicit_cta.upper()
+
+    img_final = dict(img)
+    copy_space = _infer_copy_space(elements)
+    notes: List[str] = []
+
+    bg_prompt = _remove_copy_text_from_prompt(
+        str(img_final.get("background_prompt") or ""),
+        [copy_final.get("headline"), copy_final.get("subheadline"), copy_final.get("cta")],
+    )
+    copy_space_hint = _COPY_SPACE_PROMPT_HINTS.get(copy_space, "")
+    if copy_space_hint and copy_space_hint.lower() not in bg_prompt.lower():
+        bg_prompt = f"{bg_prompt}. {copy_space_hint}".strip(". ")
+        notes.append(f"copy_space:{copy_space}")
+    img_final["background_prompt"] = bg_prompt
+    img_final["negative_prompt"] = _ensure_text_negatives(str(img_final.get("negative_prompt") or ""))
+
+    params = dict(img_final.get("parameters") or {})
+    params.setdefault(
+        "aspect_ratio",
+        _aspect_ratio_label(
+            int(triage.get("recommended_width") or 1080),
+            int(triage.get("recommended_height") or 1350),
+        ),
+    )
+    img_final["parameters"] = params
+
+    draft_variant = dict(img_final.get("draft_variant") or {})
+    if draft_variant:
+        draft_params = dict(draft_variant.get("parameters") or {})
+        draft_params.setdefault("aspect_ratio", params["aspect_ratio"])
+        draft_variant["parameters"] = draft_params
+        img_final["draft_variant"] = draft_variant
+
+    synced_elements = _sync_layout_elements(copy_final, creative, elements, aspect_ratio)
+
+    design_updates = {
+        "has_feature_grid": bool(copy_final.get("features")),
+        "has_cta_button": bool(str(copy_final.get("cta") or "").strip()),
+        "copy_space": copy_space,
+    }
+    if explicit_headline or explicit_subheadline or explicit_cta:
+        notes.append("explicit_copy_locked")
+
+    return {
+        "copy": copy_final,
+        "image": img_final,
+        "elements": synced_elements,
+        "poster_design": design_updates,
+        "copy_space": copy_space,
+        "notes": notes,
+    }
+
+
 async def _agent_image_prompter(
     triage: Dict,
     creative: Dict,
@@ -1257,6 +1481,7 @@ class DesignAgentChain:
             t = time.time()
             creative = await _agent_creative_director(triage, brand, safe_prompt)
             agent_times["creative_director"] = round(time.time() - t, 2)
+            creative["aspect_ratio"] = _aspect_ratio_label(width, height)
 
             palette = creative.get("palette", {})
 
@@ -1305,6 +1530,18 @@ class DesignAgentChain:
             agent_times["layout_planner"] = round(time.time() - t, 3)
 
             # ── Assemble final brief ─────────────────────────────────────────
+            t = time.time()
+            reconcile = _agent_reconcile_outputs(triage, creative, copy, img, elements, aspect_ratio)
+            copy = reconcile["copy"]
+            img = reconcile["image"]
+            elements = reconcile["elements"]
+            brief["poster_design"].update(reconcile.get("poster_design", {}))
+            brief["_reconcile"] = {
+                "copy_space": reconcile.get("copy_space", "bottom"),
+                "notes": reconcile.get("notes", []),
+            }
+            agent_times["reconcile"] = round(time.time() - t, 3)
+
             brief["triage"]         = triage
             brief["brand"]          = brand
             brief["creative"]       = creative

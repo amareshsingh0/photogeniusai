@@ -106,7 +106,10 @@ def _contrast_color(bg: Tuple[int,int,int]) -> Tuple[int,int,int]:
 def _text_size(draw: ImageDraw.ImageDraw, text: str, font) -> Tuple[int,int]:
     if not text:
         return 0, 0
-    bbox = draw.textbbox((0,0), text, font=font)
+    if "\n" in text and hasattr(draw, "multiline_textbbox"):
+        bbox = draw.multiline_textbbox((0, 0), text, font=font, spacing=0)
+    else:
+        bbox = draw.textbbox((0,0), text, font=font)
     return bbox[2]-bbox[0], bbox[3]-bbox[1]
 
 
@@ -146,16 +149,27 @@ def _draw_text_centered(
     shadow_color: Tuple = (0, 0, 0, 140),
     shadow_offset: int = 3,
 ) -> None:
-    """Draw centered multiline text with optional drop shadow."""
+    """Draw centered multiline text with optional drop shadow without relying on Pillow anchors."""
     if not text:
         return
-    x = canvas_w // 2
-    if shadow:
-        draw.text(
-            (x + shadow_offset, y + shadow_offset),
-            text, font=font, fill=shadow_color, anchor="mt", align="center",
-        )
-    draw.text((x, y), text, font=font, fill=fill, anchor="mt", align="center")
+    lines = [line for line in text.split("\n") if line]
+    if not lines:
+        return
+
+    line_sizes = [_text_size(draw, line, font) for line in lines]
+    cursor_y = y
+
+    for line, (line_w, line_h) in zip(lines, line_sizes):
+        x = (canvas_w - line_w) // 2
+        if shadow:
+            draw.text(
+                (x + shadow_offset, cursor_y + shadow_offset),
+                line,
+                font=font,
+                fill=shadow_color,
+            )
+        draw.text((x, cursor_y), line, font=font, fill=fill)
+        cursor_y += line_h
 
 
 def _rounded_rect(draw: ImageDraw.ImageDraw, xy: Tuple, radius: int, fill: Tuple) -> None:

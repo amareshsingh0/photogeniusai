@@ -40,6 +40,7 @@ import base64
 import io
 
 logger = logging.getLogger(__name__)
+_GEMINI_VISION_MODEL = os.getenv("GEMINI_VISION_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -120,7 +121,7 @@ Calculate total as: (palette*0.30) + (emotional*0.25) + (forbidden*0.20) + (comp
 
         client = genai.Client(api_key=gemini_key)
         resp = await client.aio.models.generate_content(
-            model="gemini-2.5-flash-preview-05-20",
+            model=_GEMINI_VISION_MODEL,
             contents=[{
                 "role": "user",
                 "parts": [

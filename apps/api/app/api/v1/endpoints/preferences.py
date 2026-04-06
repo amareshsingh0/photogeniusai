@@ -322,6 +322,7 @@ async def extract_prompt_dna(
 
     # ── Gemini extraction ──────────────────────────────────────────────────────
     gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_AI_API_KEY", "")
+    gemini_model = os.getenv("GEMINI_ANALYSIS_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
     keywords: list = []
     patterns: list = []
 
@@ -341,7 +342,7 @@ async def extract_prompt_dna(
             )
             client = genai.Client(api_key=gemini_key)
             resp = await client.aio.models.generate_content(
-                model="gemini-2.5-flash-preview-05-20",
+                model=gemini_model,
                 contents=[{"role": "user", "parts": [{"text": source[:500]}]}],
                 config=gtypes.GenerateContentConfig(
                     system_instruction=system,
