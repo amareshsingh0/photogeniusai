@@ -1,6 +1,7 @@
 from app.services.smart.design_agent_chain import (
     _agent_reconcile_outputs,
     _build_design_room,
+    _build_typography_direction,
     _extract_explicit_texts,
     _request_strategy,
 )
@@ -175,3 +176,27 @@ def test_reconcile_outputs_prefers_design_room_consensus() -> None:
     assert "right side" in result["image"]["background_prompt"]
     assert result["poster_design"]["font_style"] == "elegant_serif"
     assert "taste_winner:sculptural_studio" in result["notes"]
+
+
+def test_build_typography_direction_for_event_prefers_display_treatment() -> None:
+    direction = _build_typography_direction(
+        {
+            "industry": "general",
+            "goal": "event",
+            "original_prompt": "music festival poster with text 'BEAT FEST 2026' and 'March 15'",
+        },
+        {"font_style": "bold_tech", "tone": "energetic"},
+        {"mood": "energetic"},
+        {
+            "headline": "BEAT FEST 2026",
+            "subheadline": "March 15",
+            "body": "Feel the pulse of the city.",
+            "cta": "CLAIM YOUR RUSH",
+        },
+        {"copy_space": "top", "font_style": "bold_tech", "body_copy_policy": "supporting"},
+    )
+
+    assert direction["headline_font"] == "anton"
+    assert direction["headline_effect"] == "glow"
+    assert direction["cta_font"] == "anton"
+    assert "\n" in direction["headline_wrap_hint"] or len(direction["headline_wrap_hint"]) <= 12

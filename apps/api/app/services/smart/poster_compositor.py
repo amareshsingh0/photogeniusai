@@ -177,6 +177,127 @@ def _rounded_rect(draw: ImageDraw.ImageDraw, xy: Tuple, radius: int, fill: Tuple
     draw.rounded_rectangle([x0,y0,x1,y1], radius=radius, fill=fill)
 
 
+def _bounds_to_box(bounds: Dict, canvas_w: int, canvas_h: int) -> Tuple[int, int, int, int]:
+    x = float(bounds.get("x", 0.0) or 0.0)
+    y = float(bounds.get("y", 0.0) or 0.0)
+    w = float(bounds.get("w", 1.0) or 1.0)
+    h = float(bounds.get("h", 0.1) or 0.1)
+    left = int(canvas_w * x)
+    top = int(canvas_h * y)
+    width = max(8, int(canvas_w * w))
+    height = max(8, int(canvas_h * h))
+    return left, top, left + width, top + height
+
+
+def _overlay_linear(canvas: Image.Image, box: Tuple[int, int, int, int], start_alpha: int, end_alpha: int,
+                    color: Tuple[int, int, int], horizontal: bool = False) -> None:
+    x0, y0, x1, y1 = box
+    w = max(1, x1 - x0)
+    h = max(1, y1 - y0)
+    strip = Image.new("RGBA", (1 if not horizontal else w, h if not horizontal else 1))
+    length = h if not horizontal else w
+    for i in range(length):
+        alpha = int(start_alpha + (end_alpha - start_alpha) * i / max(length - 1, 1))
+        if horizontal:
+            strip.putpixel((i, 0), color + (alpha,))
+        else:
+            strip.putpixel((0, i), color + (alpha,))
+    overlay = strip.resize((w, h), Image.Resampling.BILINEAR)
+    canvas.alpha_composite(overlay, (x0, y0))
+
+
+def _apply_copy_space_overlay(canvas: Image.Image, copy_space: str, bg_color: Tuple[int, int, int]) -> None:
+    w, h = canvas.size
+    _overlay_linear(canvas, (0, 0, w, int(h * 0.16)), 175, 0, (0, 0, 0))
+    copy_space = (copy_space or "bottom").lower()
+    if copy_space == "top":
+        _overlay_linear(canvas, (0, 0, w, int(h * 0.42)), 220, 0, bg_color)
+    elif copy_space == "left":
+        _overlay_linear(canvas, (0, 0, int(w * 0.48), h), 210, 0, bg_color, horizontal=True)
+    elif copy_space == "right":
+        _overlay_linear(canvas, (int(w * 0.52), 0, w, h), 0, 210, bg_color, horizontal=True)
+    elif copy_space == "center":
+        center = Image.new("RGBA", (int(w * 0.56), int(h * 0.34)), bg_color + (135,))
+        center = center.filter(ImageFilter.GaussianBlur(48))
+        canvas.alpha_composite(center, ((w - center.width) // 2, int(h * 0.18)))
+    else:
+        _overlay_linear(canvas, (0, int(h * 0.38), w, h), 0, 225, bg_color)
+
+
+def _line_height(draw: ImageDraw.ImageDraw, font) -> int:
+    return max(1, _text_size(draw, "Ag", font)[1])
+
+
+def _wrap_to_box(draw: ImageDraw.ImageDraw, text: str, font, max_w: int, max_lines: int) -> str:
+    wrapped = _wrap(draw, text, font, max_w)
+    lines = [line for line in wrapped.split("\n") if line]
+    if len(lines) <= max_lines:
+        return "\n".join(lines)
+    head = lines[: max_lines - 1]
+    tail = " ".join(lines[max_lines - 1 :])
+    head.append(tail)
+    return "\n".join(head)
+
+
+def _fit_text_to_box(draw: ImageDraw.ImageDraw, text: str, font_key: str, start_size: int,
+                     max_w: int, max_h: int, max_lines: int, min_size: int) -> Tuple[ImageFont.ImageFont, str]:
+    size = max(start_size, min_size)
+    while size >= min_size:
+        font = _font(font_key, size)
+        wrapped = _wrap_to_box(draw, text, font, max_w, max_lines)
+        lines = [line for line in wrapped.split("\n") if line]
+        widths = [_text_size(draw, line, font)[0] for line in lines] or [0]
+        total_h = _line_height(draw, font) * max(1, len(lines))
+        if max(widths) <= max_w and total_h <= max_h:
+            return font, wrapped
+        size -= max(2, start_size // 12)
+    font = _font(font_key, min_size)
+    return font, _wrap_to_box(draw, text, font, max_w, max_lines)
+
+
+def _draw_text_in_box(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font,
+    box: Tuple[int, int, int, int],
+    fill: Tuple[int, int, int, int],
+    align: str = "center",
+    effect: str = "soft_shadow",
+    accent: Tuple[int, int, int] = (255, 255, 255),
+) -> None:
+    if not text:
+        return
+    x0, y0, x1, y1 = box
+    lines = [line for line in text.split("\n") if line]
+    if not lines:
+        return
+    line_h = _line_height(draw, font)
+    total_h = line_h * len(lines)
+    cursor_y = y0 + max(0, (y1 - y0 - total_h) // 2)
+
+    for line in lines:
+        line_w, _ = _text_size(draw, line, font)
+        if align == "left":
+            x = x0
+        elif align == "right":
+            x = x1 - line_w
+        else:
+            x = x0 + max(0, (x1 - x0 - line_w) // 2)
+
+        if effect == "glow":
+            glow = accent + (85,)
+            for off in ((-3, 0), (3, 0), (0, -3), (0, 3)):
+                draw.text((x + off[0], cursor_y + off[1]), line, font=font, fill=glow)
+            draw.text((x + 2, cursor_y + 2), line, font=font, fill=(0, 0, 0, 180))
+        elif effect == "shadow_cutout":
+            draw.text((x + 4, cursor_y + 4), line, font=font, fill=(0, 0, 0, 220))
+        elif effect == "soft_shadow":
+            draw.text((x + 2, cursor_y + 2), line, font=font, fill=(0, 0, 0, 170))
+
+        draw.text((x, cursor_y), line, font=font, fill=fill)
+        cursor_y += line_h
+
+
 # ── Gradient fade helper (vectorized, not per-pixel loop) ─────────────────────
 
 def _make_gradient_fade(
@@ -223,6 +344,7 @@ class PosterCompositor:
         hero_b64: str,
         ad_copy: Dict,
         poster_design: Optional[Dict],
+        elements: Optional[List[Dict]] = None,
         target_width: int = 1024,
         target_height: int = 1536,
     ) -> str:
@@ -333,6 +455,128 @@ class PosterCompositor:
         fn_cta      = _font(f_headline, sz_cta)
         fn_url      = _font(f_body,     sz_url)
         fn_tagline  = _font(f_body,     sz_tagline)
+
+        if elements:
+            canvas_h = min(target_height, MAX_CANVAS_H)
+            canvas = Image.new("RGBA", (W, canvas_h), (0, 0, 0, 255))
+            hero_resized = ImageOps.fit(
+                hero_img, (W, canvas_h),
+                method=Image.Resampling.LANCZOS,
+                centering=(0.5, 0.40),
+            )
+            canvas.paste(hero_resized.convert("RGBA"), (0, 0))
+            _apply_copy_space_overlay(canvas, str(pd.get("copy_space") or "bottom"), bg_color)
+            draw = ImageDraw.Draw(canvas)
+
+            size_map = {
+                "brand": sz_brand,
+                "headline": sz_headline,
+                "subheadline": sz_sub,
+                "body": sz_body,
+                "cta": sz_cta,
+                "tagline": sz_tagline,
+            }
+            default_font_for_role = {
+                "brand": str(pd.get("headline_font") or f_headline),
+                "headline": str(pd.get("headline_font") or f_headline),
+                "subheadline": str(pd.get("subheadline_font") or f_body),
+                "body": str(pd.get("body_font") or f_body),
+                "cta": str(pd.get("cta_font") or f_headline),
+                "tagline": str(pd.get("body_font") or f_body),
+            }
+
+            def _default_effect(element_id: str, size_role: str) -> str:
+                if size_role == "headline":
+                    return str(pd.get("headline_effect") or "shadow_cutout")
+                if size_role == "subheadline":
+                    return str(pd.get("subheadline_effect") or "soft_shadow")
+                if size_role == "body":
+                    return str(pd.get("body_effect") or "soft_shadow")
+                if size_role == "cta":
+                    return str(pd.get("cta_treatment") or "pill")
+                return "soft_shadow"
+
+            ordered_elements = sorted(
+                [el for el in elements if isinstance(el, dict)],
+                key=lambda el: (
+                    float((el.get("bounds") or {}).get("y", 0.0) or 0.0),
+                    0 if el.get("type") == "shape" else 1,
+                ),
+            )
+
+            for element in ordered_elements:
+                element_id = str(element.get("id") or "")
+                if element_id == "hero_bg":
+                    continue
+                bounds = element.get("bounds") or {}
+                box = _bounds_to_box(bounds, W, canvas_h)
+                style = dict(element.get("style") or {})
+                element_type = str(element.get("type") or "")
+
+                if element_type == "shape":
+                    fill_rgb = _parse_hex(style.get("fill"), accent)
+                    opacity = max(0.0, min(1.0, float(style.get("opacity", 1.0) or 1.0)))
+                    fill_rgba = fill_rgb + (int(255 * opacity),)
+                    radius = int(style.get("radius") or (btn_radius if element_id == "cta_button" else 0))
+                    if radius > 0:
+                        _rounded_rect(draw, box, radius, fill_rgba)
+                    else:
+                        draw.rectangle(box, fill=fill_rgba)
+                    continue
+
+                if element_type != "text":
+                    continue
+
+                text = str(element.get("content") or "").strip()
+                if not text:
+                    continue
+                size_role = str(style.get("size_role") or "body")
+                font_key = str(style.get("font") or default_font_for_role.get(size_role, f_body))
+                align = str(style.get("align") or pd.get("copy_alignment") or "center")
+                effect = str(style.get("effect") or _default_effect(element_id, size_role))
+                fill_rgb = _parse_hex(
+                    style.get("color"),
+                    txt_pri if size_role in ("headline", "cta", "brand") else txt_sec,
+                )
+                max_lines = 3 if size_role == "headline" else 4 if size_role == "body" else 2
+                max_w = max(12, box[2] - box[0])
+                max_h = max(12, box[3] - box[1])
+                start_size = int(size_map.get(size_role, sz_body))
+                min_size = max(14, int(start_size * 0.58))
+                font, wrapped = _fit_text_to_box(
+                    draw, text, font_key, start_size, max_w, max_h, max_lines, min_size
+                )
+                _draw_text_in_box(
+                    draw,
+                    wrapped,
+                    font,
+                    box,
+                    fill_rgb + (255,),
+                    align=align,
+                    effect=effect,
+                    accent=accent,
+                )
+
+                if element_id == "headline" and bool(pd.get("show_accent_rule")):
+                    line_y = min(canvas_h - 4, box[3] + max(6, sz_headline // 18))
+                    line_w = min(int(W * 0.42), max_w)
+                    if align == "left":
+                        x0 = box[0]
+                    elif align == "right":
+                        x0 = box[2] - line_w
+                    else:
+                        x0 = box[0] + max(0, (max_w - line_w) // 2)
+                    draw.rectangle([x0, line_y, x0 + line_w, line_y + max(3, sz_headline // 22)], fill=accent + (255,))
+
+            final = canvas.crop((0, 0, W, canvas_h))
+            bg_flat = Image.new("RGB", final.size, bg_color)
+            bg_flat.paste(final.convert("RGBA"), mask=final.convert("RGBA").split()[3])
+
+            buf = io.BytesIO()
+            bg_flat.save(buf, format="JPEG", quality=95, optimize=True)
+            result_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            logger.info("[compositor] built element-driven poster w=%d h=%d elements=%d", W, canvas_h, len(ordered_elements))
+            return result_b64
 
         GAP = int(W * 0.035)
         SECTION_PAD = int(W * 0.05)

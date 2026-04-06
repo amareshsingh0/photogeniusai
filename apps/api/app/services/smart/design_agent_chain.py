@@ -859,6 +859,159 @@ def _format_design_room_context(design_room: Optional[Dict]) -> str:
         lines.append(f"Taste ranking: {ranking}")
     return "\n".join(line for line in lines if line.strip())
 
+
+def _designer_wrap_hint(text: str, max_chars_per_line: int, max_lines: int = 3) -> str:
+    words = [word for word in str(text or "").split() if word]
+    if not words or max_chars_per_line <= 0:
+        return str(text or "").strip()
+
+    lines: List[str] = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = f"{current} {word}"
+        if len(candidate) <= max_chars_per_line or len(lines) >= max_lines - 1:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+    if len(lines) > max_lines:
+        head = lines[: max_lines - 1]
+        tail = " ".join(lines[max_lines - 1 :])
+        lines = head + [tail]
+    return "\n".join(line.strip() for line in lines if line.strip())
+
+
+def _build_typography_direction(
+    triage: Dict,
+    brand: Dict,
+    creative: Dict,
+    copy: Dict,
+    design_room: Dict,
+) -> Dict:
+    prompt_lower = str(triage.get("original_prompt") or "").lower()
+    industry = str(triage.get("industry") or "general").lower()
+    goal = str(triage.get("goal") or "brand_awareness").lower()
+    copy_space = str(design_room.get("copy_space") or "bottom").lower()
+    font_style = str(design_room.get("font_style") or brand.get("font_style") or "bold_tech")
+
+    is_event = goal == "event" or any(
+        token in prompt_lower for token in ("festival", "concert", "gig", "party", "live", "dj", "music")
+    )
+    is_luxury = font_style in ("elegant_serif", "luxury_display")
+    is_food = industry == "food"
+
+    align = "center"
+    if copy_space == "left":
+        align = "left"
+    elif copy_space == "right":
+        align = "right"
+
+    direction = {
+        "copy_alignment": align,
+        "brand_position": "top_left" if copy_space in ("top", "left") else "top_center",
+        "headline_font": "bebas_neue",
+        "subheadline_font": "montserrat_bold",
+        "body_font": "montserrat_bold",
+        "cta_font": "bebas_neue",
+        "tagline_font": "montserrat_bold",
+        "headline_effect": "shadow_cutout",
+        "subheadline_effect": "soft_shadow",
+        "body_effect": "soft_shadow",
+        "cta_treatment": "pill",
+        "copy_space": copy_space,
+        "headline_max_chars_per_line": 14,
+        "headline_max_lines": 2,
+        "subheadline_max_chars_per_line": 18,
+        "subheadline_max_lines": 2,
+        "body_max_chars_per_line": 28,
+        "body_max_lines": 3,
+        "cta_max_chars_per_line": 16,
+        "show_body": True,
+        "show_accent_rule": False,
+        "headline_wrap_hint": _designer_wrap_hint(copy.get("headline", ""), 14, 2),
+        "subheadline_wrap_hint": _designer_wrap_hint(copy.get("subheadline", ""), 18, 2),
+        "body_wrap_hint": _designer_wrap_hint(copy.get("body", ""), 28, 3),
+        "cta_wrap_hint": _designer_wrap_hint(copy.get("cta", ""), 16, 2),
+    }
+
+    if is_luxury:
+        direction.update({
+            "headline_font": "playfair",
+            "subheadline_font": "raleway_bold",
+            "body_font": "raleway_bold",
+            "cta_font": "inter_bold",
+            "tagline_font": "raleway_bold",
+            "headline_effect": "soft_shadow",
+            "subheadline_effect": "minimal",
+            "body_effect": "minimal",
+            "cta_treatment": "ghost",
+            "headline_max_chars_per_line": 12,
+            "headline_max_lines": 3,
+            "subheadline_max_chars_per_line": 16,
+            "body_max_chars_per_line": 26,
+            "show_body": str(design_room.get("body_copy_policy") or "") != "minimal",
+            "show_accent_rule": False,
+        })
+    elif is_food:
+        direction.update({
+            "headline_font": "montserrat_black",
+            "subheadline_font": "montserrat_bold",
+            "body_font": "montserrat_bold",
+            "cta_font": "montserrat_black",
+            "headline_effect": "soft_shadow",
+            "subheadline_effect": "soft_shadow",
+            "body_effect": "minimal",
+            "cta_treatment": "pill",
+            "headline_max_chars_per_line": 16,
+            "subheadline_max_chars_per_line": 20,
+            "body_max_chars_per_line": 24,
+            "show_accent_rule": False,
+        })
+    elif is_event:
+        direction.update({
+            "headline_font": "anton",
+            "subheadline_font": "montserrat_black",
+            "body_font": "montserrat_bold",
+            "cta_font": "anton",
+            "tagline_font": "montserrat_bold",
+            "headline_effect": "glow",
+            "subheadline_effect": "shadow_cutout",
+            "body_effect": "soft_shadow",
+            "cta_treatment": "pill",
+            "headline_max_chars_per_line": 12,
+            "headline_max_lines": 2,
+            "subheadline_max_chars_per_line": 14,
+            "body_max_chars_per_line": 26,
+            "show_accent_rule": False,
+        })
+
+    if goal in ("sale_promotion", "lead_gen") and not is_luxury:
+        direction["show_body"] = True
+        direction["cta_treatment"] = "pill"
+
+    direction["headline_wrap_hint"] = _designer_wrap_hint(
+        copy.get("headline", ""),
+        int(direction["headline_max_chars_per_line"]),
+        int(direction["headline_max_lines"]),
+    )
+    direction["subheadline_wrap_hint"] = _designer_wrap_hint(
+        copy.get("subheadline", ""),
+        int(direction["subheadline_max_chars_per_line"]),
+        int(direction["subheadline_max_lines"]),
+    )
+    direction["body_wrap_hint"] = _designer_wrap_hint(
+        copy.get("body", ""),
+        int(direction["body_max_chars_per_line"]),
+        int(direction["body_max_lines"]),
+    )
+    direction["cta_wrap_hint"] = _designer_wrap_hint(
+        copy.get("cta", ""),
+        int(direction["cta_max_chars_per_line"]),
+        2,
+    )
+    return direction
+
 # ── Image Prompt Engineer Knowledge Base ─────────────────────────────────────
 # Injected into _agent_image_prompter so Gemini has per-model prompt strategies.
 # Distilled from full model-profiles.md — keeps token cost low but covers all models.
@@ -1668,6 +1821,7 @@ async def _agent_layout_planner(
 
     has_brand    = bool(str(copy.get("brand_name") or "").strip())
     has_sub      = bool(str(copy.get("subheadline") or "").strip())
+    has_body     = bool(str(copy.get("body") or "").strip())
     has_cta      = bool(str(copy.get("cta") or "").strip())
     has_tagline  = bool(str(copy.get("tagline") or "").strip())
     headline_len = len(str(copy.get("headline") or ""))
@@ -1688,13 +1842,14 @@ async def _agent_layout_planner(
         "1. Brand bar: top strip y=0.0–0.07 (only if brand exists)\n"
         "2. Headline: large, centered, y=0.52–0.65 (adjust for content length)\n"
         "3. Subheadline: directly below headline, smaller font\n"
-        "4. CTA button: pinned near bottom, y=0.80–0.86\n"
-        "5. Tagline: very bottom, y=0.91–0.95\n"
-        "6. NOTHING exceeds y=0.97\n"
-        "7. Landscape (16:9): text left-aligned x=0.05–0.50, hero fills right\n"
-        "8. Story (9:16): generous vertical spacing, bigger fonts\n"
-        "9. Font choice: prefer bebas_neue/anton for headlines, montserrat_bold for body\n"
-        "10. If a preferred copy-safe zone is provided, honor it unless readability becomes impossible\n"
+        "4. Body copy: optional, below subheadline, keep it short and readable\n"
+        "5. CTA button: pinned near bottom, y=0.80–0.86\n"
+        "6. Tagline: very bottom, y=0.91–0.95\n"
+        "7. NOTHING exceeds y=0.97\n"
+        "8. Landscape (16:9): text left-aligned x=0.05–0.50, hero fills right\n"
+        "9. Story (9:16): generous vertical spacing, bigger fonts\n"
+        "10. Font choice: prefer bebas_neue/anton for headlines, montserrat_bold for body\n"
+        "11. If a preferred copy-safe zone is provided, honor it unless readability becomes impossible\n"
         "\n"
         "Return ONLY a raw JSON array (no object wrapper, no prose, no markdown). Start with `[` and end with `]`.\n"
         "Each element:\n"
@@ -1716,11 +1871,12 @@ async def _agent_layout_planner(
         f"Brand: {copy.get('brand_name','')}\n"
         f"Headline ({headline_len} chars): {copy.get('headline','')}\n"
         f"Subheadline: {copy.get('subheadline','')}\n"
+        f"Body: {copy.get('body','')}\n"
         f"CTA: {copy.get('cta','')}\n"
         f"Tagline: {copy.get('tagline','')}\n"
         f"Mood: {creative.get('mood','')}\n"
         f"Accent color: {pri}\n"
-        f"Has brand: {has_brand}, Has sub: {has_sub}, Has CTA: {has_cta}, Has tagline: {has_tagline}\n"
+        f"Has brand: {has_brand}, Has sub: {has_sub}, Has body: {has_body}, Has CTA: {has_cta}, Has tagline: {has_tagline}\n"
         f"Preferred copy space: {preferred_copy_space or 'unspecified'}\n"
         f"Preferred font vibe: {preferred_font_style or 'unspecified'}\n"
         f"Chosen backdrop: {chosen_backdrop or 'unspecified'}\n"
@@ -1778,6 +1934,7 @@ def _layout_fallback(copy: Dict, creative: Dict, aspect_ratio: float, copy_space
     headline_w = 0.90
     headline_y = 0.52
     sub_y = 0.67
+    body_y = 0.74
     cta_x = 0.10
     cta_w = 0.80
     text_align = "center"
@@ -1785,11 +1942,13 @@ def _layout_fallback(copy: Dict, creative: Dict, aspect_ratio: float, copy_space
     if copy_space == "top":
         headline_y = 0.12
         sub_y = 0.26
+        body_y = 0.34
     elif copy_space == "left":
         headline_x = 0.06
         headline_w = 0.42
         headline_y = 0.30
         sub_y = 0.47
+        body_y = 0.56
         cta_x = 0.06
         cta_w = 0.36
         text_align = "left"
@@ -1798,6 +1957,7 @@ def _layout_fallback(copy: Dict, creative: Dict, aspect_ratio: float, copy_space
         headline_w = 0.42
         headline_y = 0.30
         sub_y = 0.47
+        body_y = 0.56
         cta_x = 0.58
         cta_w = 0.30
         text_align = "right"
@@ -1833,6 +1993,13 @@ def _layout_fallback(copy: Dict, creative: Dict, aspect_ratio: float, copy_space
             "bounds": {"x": headline_x, "y": sub_y, "w": headline_w, "h": 0.06},
             "style": {"font": "montserrat_bold", "size_role": "subheadline", "color": sec, "align": text_align},
             "content": sub, "locked": False})
+
+    body = str(copy.get("body") or "")
+    if body:
+        elements.append({"id": "body_text", "type": "text",
+            "bounds": {"x": headline_x, "y": body_y, "w": headline_w, "h": 0.10},
+            "style": {"font": "montserrat_bold", "size_role": "body", "color": sec, "align": text_align},
+            "content": body, "locked": False})
 
     # CTA at 80%
     cta = str(copy.get("cta") or "")
@@ -1919,6 +2086,7 @@ def _sync_layout_elements(copy: Dict, creative: Dict, elements: List[Dict], aspe
         "brand_name": str(copy.get("brand_name") or "").strip().upper(),
         "headline": str(copy.get("headline") or "").strip(),
         "subheadline": str(copy.get("subheadline") or "").strip(),
+        "body_text": str(copy.get("body") or "").strip(),
         "cta_text": str(copy.get("cta") or "").strip(),
         "tagline": str(copy.get("tagline") or "").strip(),
     }
@@ -1943,6 +2111,54 @@ def _sync_layout_elements(copy: Dict, creative: Dict, elements: List[Dict], aspe
     return base
 
 
+def _apply_typography_direction_to_elements(
+    elements: List[Dict],
+    typography_direction: Optional[Dict],
+    copy: Dict,
+) -> List[Dict]:
+    direction = typography_direction or {}
+    align = str(direction.get("copy_alignment") or "center")
+    content_overrides = {
+        "headline": str(direction.get("headline_wrap_hint") or copy.get("headline") or "").strip(),
+        "subheadline": str(direction.get("subheadline_wrap_hint") or copy.get("subheadline") or "").strip(),
+        "body_text": str(direction.get("body_wrap_hint") or copy.get("body") or "").strip(),
+        "cta_text": str(direction.get("cta_wrap_hint") or copy.get("cta") or "").strip(),
+    }
+    font_overrides = {
+        "brand_name": str(direction.get("headline_font") or "bebas_neue"),
+        "headline": str(direction.get("headline_font") or "bebas_neue"),
+        "subheadline": str(direction.get("subheadline_font") or "montserrat_bold"),
+        "body_text": str(direction.get("body_font") or "montserrat_bold"),
+        "cta_text": str(direction.get("cta_font") or "bebas_neue"),
+        "tagline": str(direction.get("tagline_font") or direction.get("body_font") or "montserrat_bold"),
+    }
+    effect_overrides = {
+        "headline": str(direction.get("headline_effect") or "shadow_cutout"),
+        "subheadline": str(direction.get("subheadline_effect") or "soft_shadow"),
+        "body_text": str(direction.get("body_effect") or "soft_shadow"),
+        "cta_text": str(direction.get("cta_treatment") or "pill"),
+    }
+
+    result: List[Dict] = []
+    for element in elements:
+        if not isinstance(element, dict):
+            continue
+        updated = dict(element)
+        style = dict(updated.get("style") or {})
+        element_id = str(updated.get("id") or "")
+        if element_id in font_overrides:
+            style["font"] = font_overrides[element_id]
+        if updated.get("type") == "text":
+            style["align"] = "center" if element_id == "brand_name" else align
+        if element_id in effect_overrides:
+            style["effect"] = effect_overrides[element_id]
+        updated["style"] = style
+        if element_id in content_overrides and content_overrides[element_id]:
+            updated["content"] = content_overrides[element_id]
+        result.append(updated)
+    return result
+
+
 def _agent_reconcile_outputs(
     triage: Dict,
     creative: Dict,
@@ -1951,6 +2167,7 @@ def _agent_reconcile_outputs(
     elements: List[Dict],
     aspect_ratio: float,
     design_room: Optional[Dict] = None,
+    typography_direction: Optional[Dict] = None,
 ) -> Dict:
     strategy = _request_strategy(triage, triage.get("original_prompt", ""), {"tone": creative.get("mood", "")})
     copy_final = dict(copy)
@@ -2020,12 +2237,24 @@ def _agent_reconcile_outputs(
         img_final["draft_variant"] = draft_variant
 
     synced_elements = _sync_layout_elements(copy_final, creative, elements, aspect_ratio)
+    synced_elements = _apply_typography_direction_to_elements(synced_elements, typography_direction, copy_final)
 
     design_updates = {
         "has_feature_grid": bool(copy_final.get("features")),
         "has_cta_button": bool(str(copy_final.get("cta") or "").strip()),
         "copy_space": copy_space,
         "font_style": str((design_room or {}).get("font_style") or strategy["font_style"]),
+        "headline_font": str((typography_direction or {}).get("headline_font") or ""),
+        "subheadline_font": str((typography_direction or {}).get("subheadline_font") or ""),
+        "body_font": str((typography_direction or {}).get("body_font") or ""),
+        "cta_font": str((typography_direction or {}).get("cta_font") or ""),
+        "copy_alignment": str((typography_direction or {}).get("copy_alignment") or "center"),
+        "headline_effect": str((typography_direction or {}).get("headline_effect") or ""),
+        "subheadline_effect": str((typography_direction or {}).get("subheadline_effect") or ""),
+        "body_effect": str((typography_direction or {}).get("body_effect") or ""),
+        "cta_treatment": str((typography_direction or {}).get("cta_treatment") or ""),
+        "brand_position": str((typography_direction or {}).get("brand_position") or ""),
+        "show_accent_rule": bool((typography_direction or {}).get("show_accent_rule")),
     }
     if explicit_headline or explicit_subheadline or explicit_cta:
         notes.append("explicit_copy_locked")
@@ -2269,13 +2498,18 @@ class DesignAgentChain:
 
         try:
             logger.info("[design_chain] start — prompt=%r width=%d height=%d", safe_prompt[:80], width, height)
-            aspect_ratio = width / max(height, 1)
+            resolved_width = width
+            resolved_height = height
 
             # ── Stage 1: Triage (serial — everything depends on it) ──────────
             t = time.time()
             triage = await _agent_triage(safe_prompt)
             triage["original_prompt"] = safe_prompt  # pass through for image_prompter context
             agent_times["triage"] = round(time.time() - t, 2)
+            if width == 1024 and height == 1024:
+                resolved_width = int(triage.get("recommended_width") or width)
+                resolved_height = int(triage.get("recommended_height") or height)
+            aspect_ratio = resolved_width / max(resolved_height, 1)
 
             # ── Stage 2: Brand Intel first, then Creative Director with real brand ─
             # Sequential (not parallel) — saves 1 Gemini call vs old double-CD pattern,
@@ -2287,7 +2521,7 @@ class DesignAgentChain:
             t = time.time()
             creative = await _agent_creative_director(triage, brand, safe_prompt)
             agent_times["creative_director"] = round(time.time() - t, 2)
-            creative["aspect_ratio"] = _aspect_ratio_label(width, height)
+            creative["aspect_ratio"] = _aspect_ratio_label(resolved_width, resolved_height)
 
             palette = creative.get("palette", {})
 
@@ -2331,6 +2565,10 @@ class DesignAgentChain:
             design_room = _build_design_room(triage, brand, creative, copy)
             agent_times["design_room"] = round(time.time() - t, 3)
 
+            t = time.time()
+            typography_direction = _build_typography_direction(triage, brand, creative, copy, design_room)
+            agent_times["typography_director"] = round(time.time() - t, 3)
+
             # ── Stage 4: Image Prompter + Layout Planner (PARALLEL) ────────
             t = time.time()
             img, elements = await asyncio.gather(
@@ -2342,7 +2580,9 @@ class DesignAgentChain:
             # ── Assemble final brief ─────────────────────────────────────────
             t = time.time()
             reconcile = _agent_reconcile_outputs(
-                triage, creative, copy, img, elements, aspect_ratio, design_room=design_room
+                triage, creative, copy, img, elements, aspect_ratio,
+                design_room=design_room,
+                typography_direction=typography_direction,
             )
             copy = reconcile["copy"]
             img = reconcile["image"]
@@ -2353,6 +2593,7 @@ class DesignAgentChain:
                 "notes": reconcile.get("notes", []),
             }
             brief["_design_room"] = design_room
+            brief["_typography_direction"] = typography_direction
             brief["scores"]["backdrop"] = {
                 "winner_id": ((design_room.get("winner") or {}).get("id") or ""),
                 "winner_score": ((design_room.get("winner") or {}).get("score_total") or 0),
@@ -2407,6 +2648,8 @@ class DesignAgentChain:
             brief["goal"]                 = triage.get("goal", "brand_awareness")
             brief["recommended_width"]    = triage.get("recommended_width", 1080)
             brief["recommended_height"]   = triage.get("recommended_height", 1350)
+            brief["resolved_width"]       = resolved_width
+            brief["resolved_height"]      = resolved_height
 
             brief["_elapsed"]      = round(time.time() - t0, 2)
             brief["_agent_times"]  = agent_times

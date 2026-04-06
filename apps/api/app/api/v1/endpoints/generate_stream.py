@@ -278,6 +278,11 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         brief.setdefault("_source", "gemini")
         brief.setdefault("ad_copy", None)
         brief.setdefault("poster_design", None)
+        effective_width = req.width
+        effective_height = req.height
+        if req.width == 1024 and req.height == 1024:
+            effective_width = int(brief.get("resolved_width") or brief.get("recommended_width") or req.width)
+            effective_height = int(brief.get("resolved_height") or brief.get("recommended_height") or req.height)
 
         yield _sse("brief_ready", {
             "visual_concept": brief.get("visual_concept", ""),
@@ -354,7 +359,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             prompt=enhanced_prompt,
             negative_prompt=negative_prompt,
             num_images=num_images,
-            image_size=_pick_image_size(req.width, req.height),
+            image_size=_pick_image_size(effective_width, effective_height),
             num_inference_steps=inference_steps,
             guidance_scale=guidance_scale,
             reference_image_url=req.reference_image_url,
@@ -432,8 +437,9 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                     hero_b64=img_b64,
                     ad_copy=ad_copy,
                     poster_design=poster_design,
-                    target_width=req.width,
-                    target_height=min(int(req.height * 1.5), 3072),
+                    elements=brief.get("elements", []),
+                    target_width=effective_width,
+                    target_height=min(int(effective_height * 1.5), 3072),
                 )
                 final_image_url = f"data:image/jpeg;base64,{composed_b64}"
                 composite_status = "success"
@@ -487,7 +493,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                         prompt=mutation_prompt,
                         negative_prompt=negative_prompt,
                         num_images=1,
-                        image_size=_pick_image_size(req.width, req.height),
+                        image_size=_pick_image_size(effective_width, effective_height),
                         num_inference_steps=inference_steps,
                         guidance_scale=guidance_scale,
                         reference_image_url=req.reference_image_url,
@@ -510,8 +516,9 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                                     hero_b64=img_b64_retry,
                                     ad_copy=ad_copy,
                                     poster_design=poster_design,
-                                    target_width=req.width,
-                                    target_height=min(int(req.height * 1.5), 3072),
+                                    elements=brief.get("elements", []),
+                                    target_width=effective_width,
+                                    target_height=min(int(effective_height * 1.5), 3072),
                                 )
                                 final_image_url = f"data:image/jpeg;base64,{composed_b64_retry}"
                             except Exception as _retry_comp_err:
