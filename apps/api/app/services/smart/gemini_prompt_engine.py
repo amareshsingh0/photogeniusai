@@ -916,6 +916,9 @@ def _extract_json(text: str) -> Dict:
         return {}
     # Strip markdown fences
     text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
+    # Fix Gemini double-quoted key bug: ""key": → "key":
+    # Happens when previous value is empty string "" and Gemini concatenates closing " with opening "
+    text = re.sub(r'""([a-zA-Z_][a-zA-Z0-9_]*)"\s*:', r'"\1":', text)
     # Try direct parse (model returned clean JSON)
     try:
         parsed = json.loads(text)
@@ -926,8 +929,10 @@ def _extract_json(text: str) -> Dict:
     # Regex: find outermost {...} — handles prose wrapper like "Here is the JSON: {...}"
     match = re.search(r"\{[\s\S]*\}", text)
     if match:
+        candidate = match.group()
+        candidate = re.sub(r'""([a-zA-Z_][a-zA-Z0-9_]*)"\s*:', r'"\1":', candidate)
         try:
-            parsed = json.loads(match.group())
+            parsed = json.loads(candidate)
             if isinstance(parsed, dict):
                 return parsed
         except json.JSONDecodeError:

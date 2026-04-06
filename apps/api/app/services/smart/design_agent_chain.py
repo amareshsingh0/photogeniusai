@@ -215,6 +215,9 @@ def _extract_json(text: str) -> Dict:
     text = text.strip()
     # Strip markdown code fences
     text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
+    # Fix Gemini double-quoted key bug: ""key": → "key":
+    # Happens when previous value is empty string "" and Gemini concatenates closing " with opening "
+    text = re.sub(r'""([a-zA-Z_][a-zA-Z0-9_]*)"\s*:', r'"\1":', text)
     # Try full parse first (model returned clean JSON)
     try:
         return json.loads(text)
@@ -223,11 +226,13 @@ def _extract_json(text: str) -> Dict:
     # Regex: find outermost {...} (handles surrounding prose)
     match = re.search(r"\{[\s\S]*\}", text)
     if match:
+        candidate = match.group()
+        # Apply same double-quote key fix on the candidate
+        candidate = re.sub(r'""([a-zA-Z_][a-zA-Z0-9_]*)"\s*:', r'"\1":', candidate)
         try:
-            return json.loads(match.group())
+            return json.loads(candidate)
         except json.JSONDecodeError:
             # Try to repair truncated JSON: close open strings/objects/arrays
-            candidate = match.group()
             try:
                 repaired = _repair_truncated_json(candidate)
                 return json.loads(repaired)
@@ -893,7 +898,8 @@ async def _agent_layout_planner(
         "8. Story (9:16): generous vertical spacing, bigger fonts\n"
         "9. Font choice: prefer bebas_neue/anton for headlines, montserrat_bold for body\n"
         "\n"
-        "Return ONLY valid JSON array of elements. Each element:\n"
+        "Return ONLY a raw JSON array (no object wrapper, no prose, no markdown). Start with `[` and end with `]`.\n"
+        "Each element:\n"
         '{"id":"<id>","type":"text|shape|image","bounds":{"x":0.0,"y":0.0,"w":1.0,"h":0.1},'
         '"style":{"font":"bebas_neue|anton|montserrat_bold|playfair","size_role":"headline|subheadline|body|cta|tagline|brand","color":"#FFFFFF","align":"center|left|right"},'
         '"content":"<text content>","locked":false}\n'
@@ -924,13 +930,33 @@ async def _agent_layout_planner(
     # Parse — expect JSON array
     raw = raw.strip()
     raw = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`").strip()
-    try:
-        elements = json.loads(raw)
-        if isinstance(elements, list) and elements:
-            logger.info("[layout_planner] Gemini placed %d elements", len(elements))
+
+    def _try_parse_elements(s: str) -> Optional[List]:
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list) and parsed:
+                return parsed
+            # Gemini sometimes wraps: {"elements": [...]} or {"layout": [...]}
+            if isinstance(parsed, dict):
+                for v in parsed.values():
+                    if isinstance(v, list) and v:
+                        return v
+        except Exception:
+            pass
+        return None
+
+    elements = _try_parse_elements(raw)
+    if elements:
+        logger.info("[layout_planner] Gemini placed %d elements", len(elements))
+        return elements
+
+    # Try extracting [...] from prose wrapper
+    arr_match = re.search(r"\[[\s\S]*\]", raw)
+    if arr_match:
+        elements = _try_parse_elements(arr_match.group())
+        if elements:
+            logger.info("[layout_planner] Gemini placed %d elements (extracted)", len(elements))
             return elements
-    except Exception:
-        pass
 
     # Fallback: deterministic full-bleed layout
     logger.warning("[layout_planner] Gemini failed, using deterministic full-bleed layout")

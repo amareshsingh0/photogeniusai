@@ -53,7 +53,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Bebas Neue, Impact, sans-serif",
         "google_query":"Bebas+Neue",
-        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/bebasnue/BebasNeue-Regular.ttf",
+        "google_url":  "https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneu/BebasNeue-Regular.ttf",
     },
     "anton": {
         "file":        "Anton-Regular.ttf",
@@ -62,7 +62,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Anton, Impact, sans-serif",
         "google_query":"Anton",
-        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/anton/Anton-Regular.ttf",
+        "google_url":  "https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf",
     },
     "montserrat_black": {
         "file":        "Montserrat-Black.ttf",
@@ -71,7 +71,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Montserrat, sans-serif",
         "google_query":"Montserrat:wght@900",
-        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/montserrat/static/Montserrat-Black.ttf",
+        "google_url":  "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/static/Montserrat-Black.ttf",
     },
     "montserrat_bold": {
         "file":        "Montserrat-Bold.ttf",
@@ -80,7 +80,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "body",
         "css_family":  "Montserrat, sans-serif",
         "google_query":"Montserrat:wght@700",
-        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/montserrat/static/Montserrat-Bold.ttf",
+        "google_url":  "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/static/Montserrat-Bold.ttf",
     },
     # ── Downloaded-on-demand fonts (google_url = TTF, NOT woff2) ─────────────
     "oswald": {
@@ -90,8 +90,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Oswald, sans-serif",
         "google_query":"Oswald:wght@700",
-        # TTF static URL (Google Fonts v2 direct download)
-        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/oswald/static/Oswald-Bold.ttf",
+        "google_url":  "https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/static/Oswald-Bold.ttf",
     },
     "playfair": {
         "file":        "PlayfairDisplay-Bold.ttf",
@@ -100,7 +99,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Playfair Display, Georgia, serif",
         "google_query":"Playfair+Display:wght@700",
-        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/playfairdisplay/static/PlayfairDisplay-Bold.ttf",
+        "google_url":  "https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/static/PlayfairDisplay-Bold.ttf",
     },
     "inter_bold": {
         "file":        "Inter-Bold.ttf",
@@ -109,7 +108,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "body",
         "css_family":  "Inter, system-ui, sans-serif",
         "google_query":"Inter:wght@700",
-        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/inter/static/Inter-Bold.ttf",
+        "google_url":  "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/static/Inter-Bold.ttf",
     },
     "raleway_bold": {
         "file":        "Raleway-Bold.ttf",
@@ -118,7 +117,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "body",
         "css_family":  "Raleway, sans-serif",
         "google_query":"Raleway:wght@700",
-        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/raleway/static/Raleway-Bold.ttf",
+        "google_url":  "https://raw.githubusercontent.com/google/fonts/main/ofl/raleway/static/Raleway-Bold.ttf",
     },
     "poppins_bold": {
         "file":        "Poppins-Bold.ttf",
@@ -127,7 +126,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "body",
         "css_family":  "Poppins, sans-serif",
         "google_query":"Poppins:wght@700",
-        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/poppins/Poppins-Bold.ttf",
+        "google_url":  "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf",
     },
 }
 
@@ -288,7 +287,7 @@ def font_path(font_key: str) -> Optional[Path]:
 
         try:
             import httpx
-            headers = {"User-Agent": "Mozilla/5.0"}  # force TTF delivery from some CDNs
+            headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
             r = httpx.get(url, timeout=15, follow_redirects=True, headers=headers)
             if r.status_code != 200 or len(r.content) < 10_000:
                 logger.warning(
@@ -589,7 +588,7 @@ async def preload_all_fonts() -> None:
         return
 
     async with httpx.AsyncClient(timeout=20, follow_redirects=True,
-                                  headers={"User-Agent": "Mozilla/5.0"}) as client:
+                                  headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}) as client:
         for key in missing_keys:
             info = _FONT_CATALOGUE_RAW[key]
             url  = info["google_url"]
