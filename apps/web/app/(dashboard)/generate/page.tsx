@@ -114,6 +114,9 @@ interface GenerationResult {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   design_brief?: any         // full DesignBrief from agent chain — for canvas editor
   image_url_experimental?: string  // Phase 6: dual variant experimental image
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  motion_hints?: any         // Motion Designer hints for stories/reels
+  learning_logged?: boolean  // Learning Engine logged this generation
 }
 
 // SSE-driven stage labels — updated by real backend events
@@ -630,7 +633,10 @@ export default function GeneratePage() {
               capability_bucket: data.capability_bucket,
               design_brief: data.design_brief,
               image_url_experimental: data.image_url_experimental ?? undefined,
+              motion_hints: data.design_brief?.motion_hints,
+              learning_logged: true, // Learning Engine logs all generations
             })
+
 
           } else if (event === "error") {
             throw new Error(data.message || "Generation failed")

@@ -59,6 +59,14 @@ except ImportError as e:
     logger.warning("[design_chain] cultural_intelligence not available: %s", e)
     _CULTURAL_INTELLIGENCE_AVAILABLE = False
 
+# Import Motion Designer Agent
+try:
+    from app.services.smart.motion_designer import generate_static_motion_hints
+    _MOTION_DESIGNER_AVAILABLE = True
+except ImportError as e:
+    logger.warning("[design_chain] motion_designer not available: %s", e)
+    _MOTION_DESIGNER_AVAILABLE = False
+
 # ── Hex color validator ──────────────────────────────────────────────────────
 _HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _QUOTED_TEXT_RE = re.compile(r"""['"]([^'"]{1,200})['"]""")
@@ -3334,6 +3342,25 @@ class DesignAgentChain:
 
             brief["_elapsed"]      = round(time.time() - t0, 2)
             brief["_agent_times"]  = agent_times
+
+            # Motion Designer: Add motion hints for video/story platforms
+            if _MOTION_DESIGNER_AVAILABLE:
+                platform = triage.get("platform", "")
+                if platform in ["instagram_story", "tiktok_story", "instagram_reel", "tiktok"]:
+                    try:
+                        t_motion = time.time()
+                        motion_hints = await generate_static_motion_hints(
+                            triage=triage,
+                            creative_bible=creative.get("creative_bible", {}),
+                            layout={"elements": elements}
+                        )
+                        brief["motion_hints"] = motion_hints
+                        agent_times["motion_designer"] = round(time.time() - t_motion, 2)
+                        logger.info("[design_chain] motion hints added for %s (%.2fs)", platform, agent_times["motion_designer"])
+                    except Exception as e:
+                        logger.warning("[design_chain] motion_designer failed: %s", e)
+                        brief["motion_hints"] = None
+
             logger.info("[design_chain] done %.2fs headline=%r", brief["_elapsed"], copy["headline"])
 
         except Exception as e:

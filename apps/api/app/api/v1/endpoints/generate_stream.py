@@ -706,6 +706,30 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             "trace_id": trace_id,
         })
 
+        # ── Learning Engine: Log generation for continuous improvement ────────
+        try:
+            from app.services.smart.learning_engine import LearningEngine
+
+            learning = LearningEngine()
+            await learning.log_generation(
+                generation_id=trace_id,
+                user_id=getattr(req, "user_id", "anonymous"),  # Will be set from Next.js after auth
+                prompt=req.prompt,
+                model_selected=gen.get("model_key", fal_model_key),
+                creative_bible=brief.get("creative_bible"),
+                layout_variant=brief.get("_layout_variants", {}).get("winner"),
+                quality_score=quality_gate_result.get("total") if quality_gate_result else None,
+                user_feedback=None,  # Will be updated via separate API when user gives thumbs up/down
+                aesthetic=bucket,
+                tier=quality,
+                platform=intent.get("platform", {}).get("name", "unknown"),
+                generation_time=gen.get("generation_time", generation_time),
+                total_time=total_time,
+            )
+            logger.info("[stream][%s] generation logged to learning engine", trace_id)
+        except Exception as _le_err:
+            logger.warning("[stream][%s] learning engine logging failed (non-fatal): %s", trace_id, _le_err)
+
     except asyncio.CancelledError:
         logger.info("[stream][%s] client disconnected, aborting pipeline", trace_id)
         raise
