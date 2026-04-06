@@ -1206,7 +1206,7 @@ async def _agent_image_prompter(
     return {
         "background_prompt": bg_prompt or _smart_fallback,
         "negative_prompt":   base_negative,
-        "model_preference":  model_preference or "flux_pro",
+        "model_preference":  model_preference or "flux_2_pro",
         "parameters":        params,           # steps, guidance, aspect_ratio from schema
         "draft_variant":     draft,            # flux_schnell version for fast iteration
         "translation_notes": r.get("translation_notes", ""),

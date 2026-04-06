@@ -137,11 +137,23 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
     ],
 }
 
+_MODEL_KEY_ALIASES = {
+    "flux_pro": "flux_2_pro",
+    "flux_dev": "flux_2_dev",
+    "flux_schnell_fal": "flux_schnell",
+    "flux_schnell_pixazo": "flux_schnell",
+}
+
 # Models that need special payload handling
 _SCHNELL_IDS  = {"fal-ai/flux/schnell", "accounts/fireworks/models/flux-1-schnell-fp8"}
 _IDEOGRAM_IDS = {"fal-ai/ideogram/v3"}
 _RECRAFT_IDS  = {"fal-ai/recraft/v4/text-to-image", "fal-ai/recraft/v4/text-to-vector"}
 _KONTEXT_IDS  = {"fal-ai/flux-pro/kontext", "fal-ai/flux-pro/kontext/max"}
+
+
+def _normalize_model_key(model_key: str) -> str:
+    normalized = (model_key or "").strip().lower().replace(" ", "_").replace(".", "_").replace("-", "_")
+    return _MODEL_KEY_ALIASES.get(normalized, normalized)
 
 
 class MultiProviderClient:
@@ -216,9 +228,11 @@ class MultiProviderClient:
         Generate image with automatic cheapest provider + failover.
         model_key = key from MODEL_PROVIDER_CHAIN (e.g. "flux_schnell", "flux_2_pro")
         """
+        requested_model_key = model_key
+        model_key = _normalize_model_key(model_key)
         chain = MODEL_PROVIDER_CHAIN.get(model_key)
         if not chain:
-            return self._error(model_key, f"Unknown model_key: {model_key}", 0.0)
+            return self._error(requested_model_key, f"Unknown model_key: {requested_model_key}", 0.0)
 
         last_error = "No providers available"
         for provider, model_id, cost_usd in chain:
@@ -249,6 +263,8 @@ class MultiProviderClient:
                 result["provider"] = provider
                 result["cost_usd"] = cost_usd
                 result["cost_inr"] = round(cost_usd * 84, 2)
+                result["model_key"] = model_key
+                result["requested_model_key"] = requested_model_key
                 logger.info("[multi] OK provider=%s model=%s cost=$%.4f",
                             provider, model_id, cost_usd)
                 return result
@@ -735,6 +751,7 @@ class MultiProviderClient:
 
     def get_cheapest_cost(self, model_key: str) -> Optional[float]:
         """Returns cheapest available cost in USD for a model_key (based on available keys)."""
+        model_key = _normalize_model_key(model_key)
         chain = MODEL_PROVIDER_CHAIN.get(model_key, [])
         for provider, _, cost in chain:
             if self._keys.get(provider):

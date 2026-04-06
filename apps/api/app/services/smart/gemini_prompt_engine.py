@@ -955,6 +955,8 @@ _MODEL_KEY_ALIASES: Dict[str, str] = {
     "flux_pro":     "flux_2_pro",
     "flux_dev":     "flux_2_dev",
     "flux_schnell": "flux_schnell",
+    "flux_schnell_fal": "flux_schnell",
+    "flux_schnell_pixazo": "flux_schnell",
     "flux_kontext": "flux_kontext",
     "flux_kontext_max": "flux_kontext_max",
     "ideogram_quality": "ideogram_quality",
@@ -963,6 +965,13 @@ _MODEL_KEY_ALIASES: Dict[str, str] = {
     "recraft_v4_svg":   "recraft_v4_svg",
     "hunyuan_image":    "hunyuan_image",
 }
+
+
+def _normalize_model_key(model_key: str, default: str = "flux_2_pro") -> str:
+    normalized = (model_key or "").strip().lower().replace(" ", "_").replace(".", "_").replace("-", "_")
+    if not normalized:
+        return default
+    return _MODEL_KEY_ALIASES.get(normalized, normalized)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1052,16 +1061,18 @@ Return ONLY valid JSON matching this exact schema:
 
 # CDI model key → our internal fal_model_key mapping
 _CDI_MODEL_MAP: Dict[str, str] = {
-    "flux_pro":         "flux_pro",
-    "flux_dev":         "flux_dev",
+    "flux_pro":         "flux_2_pro",
+    "flux_dev":         "flux_2_dev",
     "flux_schnell":     "flux_schnell",
     "ideogram_quality": "ideogram_quality",
     "ideogram_turbo":   "ideogram_turbo",
     "hunyuan_image":    "hunyuan_image",
     "flux_kontext":     "flux_kontext",
+    "flux_kontext_max": "flux_kontext_max",
     # legacy aliases
-    "flux_2_pro":       "flux_pro",
-    "flux_2_dev":       "flux_dev",
+    "flux_2_pro":       "flux_2_pro",
+    "flux_2_dev":       "flux_2_dev",
+    "flux_schnell_fal": "flux_schnell",
     "flux_schnell_pixazo": "flux_schnell",
 }
 
@@ -1391,7 +1402,7 @@ class GeminiPromptEngine:
     async def build_params(
         self,
         brief: Dict,
-        model_name: str = "flux_pro",
+        model_name: str = "flux_2_pro",
         capability_bucket: str = "photorealism",
         critic_notes: Optional[str] = None,
     ) -> Dict:
@@ -1400,10 +1411,14 @@ class GeminiPromptEngine:
             img_prompt = str(brief.get("background_prompt") or "").strip()
             img_params = brief.get("_img_parameters") or {}
             if img_prompt and isinstance(img_params, dict):
+                recommended_model = _normalize_model_key(
+                    str(brief.get("_model_preference") or model_name),
+                    default=_normalize_model_key(model_name),
+                )
                 result: Dict = {
                     "prompt": img_prompt,
                     "negative_prompt": str(brief.get("negative_prompt") or "").strip(),
-                    "recommended_model": str(brief.get("_model_preference") or model_name).strip() or model_name,
+                    "recommended_model": recommended_model,
                     "parameters": {
                         "steps": int(img_params.get("steps", 30)),
                         "guidance": float(img_params.get("guidance", 3.5)),
@@ -1471,11 +1486,11 @@ class GeminiPromptEngine:
 
             # Resolve model key: CDI recommendation overrides router, mapped to our fal keys
             cdi_model_raw = (cdi.get("recommended_model") or model_name).strip().lower()
-            recommended_model = _CDI_MODEL_MAP.get(cdi_model_raw, model_name)
+            recommended_model = _CDI_MODEL_MAP.get(cdi_model_raw, _normalize_model_key(model_name))
 
             # For poster mode: override to use background-only model (not ideogram)
             if _has_ad_copy and recommended_model in ("ideogram_quality", "ideogram_turbo"):
-                recommended_model = "flux_pro"
+                recommended_model = "flux_2_pro"
 
             result: Dict = {
                 "prompt":            prompt,
@@ -1574,7 +1589,7 @@ class GeminiPromptEngine:
     async def enhance(
         self,
         raw_prompt: str,
-        model_name: str = "flux_pro",
+        model_name: str = "flux_2_pro",
         capability_bucket: str = "photorealism",
         creative_type: str = "photo",
         style: str = "photo",
@@ -1697,7 +1712,7 @@ class GeminiPromptEngine:
         guidance = float(img_params.get("guidance", 3.5))
 
         # Use image_prompter's model recommendation if available
-        img_model = str(brief.get("_model_preference") or "").strip()
+        img_model = _normalize_model_key(str(brief.get("_model_preference") or "").strip(), default="")
 
         result: Dict = {
             "prompt": ", ".join(p for p in parts if p),

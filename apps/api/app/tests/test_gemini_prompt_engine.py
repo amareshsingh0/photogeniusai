@@ -20,7 +20,7 @@ def test_build_params_uses_design_chain_output_for_typography() -> None:
 
     assert result["prompt"] == brief["background_prompt"]
     assert result["negative_prompt"] == brief["negative_prompt"]
-    assert result["recommended_model"] == "flux_pro"
+    assert result["recommended_model"] == "flux_2_pro"
     assert result["parameters"] == {"steps": 24, "guidance": 3.2}
     assert result["draft_variant"] == brief["_img_draft_variant"]
     assert result["_source"] == "design_chain"

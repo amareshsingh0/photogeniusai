@@ -819,4 +819,4 @@ def get_model_config(capability_bucket: str, tier: str) -> Dict:
     # Sub-buckets (e.g. photorealism_portrait) use the photorealism model map
     base_bucket = capability_bucket.split("_")[0] if capability_bucket.startswith("photorealism_") else capability_bucket
     bucket_map = BUCKET_MODEL_MAP.get(base_bucket, BUCKET_MODEL_MAP["photorealism"])
-    return bucket_map.get(resolved_tier, bucket_map.get("standard", {"model": "flux_pro", "backend": "fal"}))
+    return bucket_map.get(resolved_tier, bucket_map.get("standard", {"model": "flux_2_pro", "provider": "multi"}))

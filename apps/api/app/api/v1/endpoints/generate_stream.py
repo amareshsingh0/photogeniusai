@@ -40,9 +40,13 @@ def _get_http_client() -> httpx.AsyncClient:
 
 
 _MODEL_LABELS = {
-    "flux_pro":          "Flux Pro",
+    "flux_2_pro":        "Flux 2 Pro",
+    "flux_2_dev":        "Flux 2 Dev",
+    "flux_2_turbo":      "Flux 2 Turbo",
+    "flux_2_max":        "Flux 2 Max",
+    "flux_pro":          "Flux 2 Pro",
     "flux_schnell":      "Flux Schnell",
-    "flux_dev":          "Flux Dev",
+    "flux_dev":          "Flux 2 Dev",
     "flux_redux":        "Flux Redux",
     "flux_fill":         "Flux Fill",
     "ideogram_turbo":    "Ideogram v3 Turbo",
@@ -52,6 +56,13 @@ _MODEL_LABELS = {
     "hunyuan_image":     "Hunyuan Image",
     "flux_kontext":      "Flux Kontext",
     "flux_kontext_max":  "Flux Kontext Max",
+}
+
+_MODEL_ALIASES = {
+    "flux_pro": "flux_2_pro",
+    "flux_dev": "flux_2_dev",
+    "flux_schnell_fal": "flux_schnell",
+    "flux_schnell_pixazo": "flux_schnell",
 }
 
 _QUALITY_SECONDS = {
@@ -138,6 +149,13 @@ def _pick_image_size(width: int, height: int) -> str:
     return "portrait_4_3"
 
 
+def _canonical_model_key(model_key: Optional[str], default: str = "flux_2_pro") -> str:
+    normalized = (model_key or "").strip().lower().replace(" ", "_").replace(".", "_").replace("-", "_")
+    if not normalized:
+        return default
+    return _MODEL_ALIASES.get(normalized, normalized)
+
+
 def _build_design_brief(
     brief: dict,
     ad_copy: dict,
@@ -198,16 +216,16 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         bucket = detect_capability_bucket(req.prompt)
         model_cfg = get_model_config(bucket, quality)
 
-        fal_model_key = model_cfg.get("model") or "flux_pro"
-        if not fal_model_key:
-            fal_model_key = "flux_pro"
-            logger.warning("[stream][%s] model_cfg missing 'model' key for bucket=%s quality=%s, falling back to flux_pro", trace_id, bucket, quality)
+        fal_model_key = _canonical_model_key(model_cfg.get("model"), default="flux_2_pro")
+        if not model_cfg.get("model"):
+            fal_model_key = "flux_2_pro"
+            logger.warning("[stream][%s] model_cfg missing 'model' key for bucket=%s quality=%s, falling back to flux_2_pro", trace_id, bucket, quality)
 
         # Ideogram fallback
         use_ideogram = _parse_bool_env("USE_IDEOGRAM", default=True)
         if not use_ideogram and fal_model_key in ("ideogram_turbo", "ideogram_quality"):
-            fal_model_key = "flux_pro"
-            logger.info("[stream][%s] Ideogram disabled (USE_IDEOGRAM=false), using flux_pro", trace_id)
+            fal_model_key = "flux_2_pro"
+            logger.info("[stream][%s] Ideogram disabled (USE_IDEOGRAM=false), using flux_2_pro", trace_id)
 
         model_label = _MODEL_LABELS.get(fal_model_key, fal_model_key)
         num_images = model_cfg.get("num_images", 1)
@@ -282,7 +300,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             negative_prompt = f"{req.negative_prompt}, {negative_prompt}" if negative_prompt else req.negative_prompt
 
         # CDI model override — AI picks better model than router when context warrants it
-        _cdi_recommended = params.get("recommended_model", "")
+        _cdi_recommended = _canonical_model_key(params.get("recommended_model"), default="")
         if _cdi_recommended and _cdi_recommended in _MODEL_LABELS:
             if _cdi_recommended != fal_model_key:
                 logger.info(
@@ -513,7 +531,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             "all_urls":          all_urls,
             "enhanced_prompt":   enhanced_prompt,
             "original_prompt":   req.prompt,
-            "model_used":        _MODEL_LABELS.get(gen.get("model", fal_model_key), gen.get("model", fal_model_key)),
+            "model_used":        _MODEL_LABELS.get(gen.get("model_key", fal_model_key), gen.get("model_key", fal_model_key)),
             "backend":           gen.get("backend", "fal.ai"),
             "capability_bucket": bucket,
             "prompt_engine":     brief.get("_source", "heuristic"),
@@ -545,7 +563,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                 },
                 "generation": {
                     "backend":           gen.get("backend", "fal.ai"),
-                    "model":             gen.get("model", fal_model_key),
+                    "model":             gen.get("model_key", fal_model_key),
                     "capability_bucket": bucket,
                     "prompt_engine":     brief.get("_source", "heuristic"),
                     "generation_time":   gen.get("generation_time", generation_time),
