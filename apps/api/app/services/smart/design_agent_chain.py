@@ -86,6 +86,73 @@ def _aspect_ratio_label(width: int, height: int) -> str:
     return "4:5"
 
 
+def _request_strategy(triage: Dict, prompt: str, brand: Optional[Dict] = None) -> Dict[str, str]:
+    prompt_lower = (prompt or "").lower()
+    industry = str(triage.get("industry") or "general").lower()
+    goal = str(triage.get("goal") or "brand_awareness").lower()
+    tone = str((brand or {}).get("tone") or "").lower()
+
+    is_fashion = industry == "fashion" or any(
+        token in prompt_lower for token in ("fashion", "couture", "runway", "collection", "model", "editorial", "vogue")
+    )
+    is_luxury = tone in ("luxury", "elegant") or any(
+        token in prompt_lower for token in ("luxury", "premium", "elegant", "opulent", "high-end", "exclusive")
+    )
+
+    if is_fashion or is_luxury:
+        return {
+            "font_style": "elegant_serif" if is_luxury else "luxury_display",
+            "tone": "luxury" if is_luxury else "elegant",
+            "layout_archetype": "hero_dominant",
+            "hero_occupies": "center_50",
+            "visual_style": "editorial",
+            "detail_budget": "Use 90-120 words, one hero subject, and no more than two environmental motifs.",
+            "creative_guardrails": (
+                "Commercial fashion taste only. Keep the hero subject dominant and desirable. "
+                "If the user did not request a specific location, choose a proven editorial backdrop such as a refined runway set, "
+                "premium architectural courtyard, sculptural studio backdrop, or luxury boutique facade. "
+                "Do not let scenery overpower the garment."
+            ),
+            "image_guardrails": (
+                "Hero fashion model must occupy roughly 45-60% of frame height with a crisp garment silhouette. "
+                "Background must remain secondary, elegant, and uncluttered. Seasonal cues should be subtle and premium, "
+                "not theme-park literal."
+            ),
+            "copy_guardrails": (
+                "Prefer restrained editorial copy. If headline and subheadline already communicate the idea, body copy can be empty. "
+                "CTA, if used, should feel premium rather than salesy."
+            ),
+            "negative_guardrails": "tiny subject, distant model, overpowering architecture, busy background, cluttered set, costume fantasy",
+        }
+
+    if industry == "food":
+        return {
+            "font_style": "clean_sans",
+            "tone": "energetic" if goal == "sale_promotion" else "professional",
+            "layout_archetype": "hero_dominant",
+            "hero_occupies": "center_50",
+            "visual_style": "photorealistic",
+            "detail_budget": "Use 70-100 words, appetizing close-up detail, and one or two supporting props max.",
+            "creative_guardrails": "Make the food itself the obvious hero. Avoid over-designed fantasy scenes unless the user explicitly asked for them.",
+            "image_guardrails": "Food should dominate the frame. Plate, steam, garnish, and lighting should increase appetite immediately.",
+            "copy_guardrails": "Headline should be punchy and appetizing. Keep supporting copy short.",
+            "negative_guardrails": "tiny dish, messy table, cluttered props, confusing background",
+        }
+
+    return {
+        "font_style": "bold_tech",
+        "tone": "professional",
+        "layout_archetype": "full_bleed",
+        "hero_occupies": "top_60",
+        "visual_style": "photorealistic",
+        "detail_budget": "Use only as much detail as strengthens the hero visual and readability.",
+        "creative_guardrails": "Choose commercially strong, non-generic visuals that support the message first.",
+        "image_guardrails": "Keep one clear hero subject and preserve clean copy space.",
+        "copy_guardrails": "Let the strongest message lead. Avoid filler copy.",
+        "negative_guardrails": "",
+    }
+
+
 # ── Gemini client pool (round-robin across multiple API keys) ─────────────────
 # Set GEMINI_API_KEY_2 (and _3, _4 ...) in .env to double/triple the RPM quota.
 # Falls back to single key if only GEMINI_API_KEY is set.
@@ -158,6 +225,639 @@ _TEXT_NEGATIVE_TERMS = [
     "labels",
     "watermark",
 ]
+
+
+def _infer_body_copy_policy(triage: Dict, strategy: Dict, copy: Dict) -> str:
+    goal = str(triage.get("goal") or "brand_awareness").lower()
+    headline = str(copy.get("headline") or "").strip()
+    subheadline = str(copy.get("subheadline") or "").strip()
+    if (
+        strategy.get("font_style") in ("elegant_serif", "luxury_display")
+        and headline
+        and subheadline
+        and goal != "sale_promotion"
+    ):
+        return "minimal"
+    if goal in ("sale_promotion", "lead_gen", "event"):
+        return "supporting"
+    return "balanced"
+
+
+def _backdrop_candidates_for_request(
+    triage: Dict,
+    brand: Dict,
+    creative: Dict,
+    strategy: Dict,
+) -> List[Dict]:
+    industry = str(triage.get("industry") or "general").lower()
+    prompt_lower = str(triage.get("original_prompt") or "").lower()
+    tone = str(brand.get("tone") or strategy.get("tone") or "").lower()
+
+    is_fashion = industry == "fashion" or any(
+        token in prompt_lower for token in ("fashion", "couture", "runway", "collection", "model", "editorial")
+    )
+    is_luxury = tone in ("luxury", "elegant") or any(
+        token in prompt_lower for token in ("luxury", "premium", "opulent", "exclusive", "high-end")
+    )
+    is_food = industry == "food" or any(
+        token in prompt_lower for token in ("restaurant", "dessert", "food", "cafe", "menu", "dish", "chef")
+    )
+    is_beauty = industry in ("healthcare", "general") and any(
+        token in prompt_lower for token in ("beauty", "skincare", "serum", "perfume", "cosmetic", "makeup")
+    )
+    is_fitness = industry == "fitness" or any(
+        token in prompt_lower for token in ("gym", "fitness", "workout", "athlete", "training", "sport")
+    )
+    is_tech = industry in ("tech", "saas", "finance", "education") or any(
+        token in prompt_lower for token in ("app", "software", "dashboard", "device", "tech", "startup", "platform")
+    )
+
+    if is_fashion or is_luxury:
+        return [
+            {
+                "id": "sculptural_studio",
+                "label": "Sculptural studio set",
+                "direction": (
+                    "Use a refined editorial studio with sculptural shadow planes, premium materials, and one controlled "
+                    "seasonal accent so the garment stays dominant and aspirational."
+                ),
+                "copy_space": "top",
+                "hero_placement": "centered and large",
+                "subject_priority": 10,
+                "readability": 10,
+                "brand_fit": 10,
+                "novelty": 8,
+                "supports_sale": 7,
+                "supports_editorial": 10,
+                "environment_dominance": 3,
+                "vertical_friendly": 10,
+                "font_style": "elegant_serif" if is_luxury else "luxury_display",
+            },
+            {
+                "id": "controlled_runway",
+                "label": "Controlled runway reveal",
+                "direction": (
+                    "Stage the hero in a polished runway-like reveal with disciplined lighting, shallow audience hints, "
+                    "and a clean upper band reserved for headline impact."
+                ),
+                "copy_space": "top",
+                "hero_placement": "centered with forward motion",
+                "subject_priority": 9,
+                "readability": 9,
+                "brand_fit": 9,
+                "novelty": 8,
+                "supports_sale": 7,
+                "supports_editorial": 9,
+                "environment_dominance": 4,
+                "vertical_friendly": 9,
+                "font_style": "luxury_display",
+            },
+            {
+                "id": "courtyard_editorial",
+                "label": "Architectural courtyard editorial",
+                "direction": (
+                    "Place the hero in a premium courtyard or heritage architectural frame, but keep the set softened and "
+                    "secondary so the subject silhouette still reads first."
+                ),
+                "copy_space": "top",
+                "hero_placement": "center-lower with clean vertical axis",
+                "subject_priority": 7,
+                "readability": 8,
+                "brand_fit": 8,
+                "novelty": 9,
+                "supports_sale": 5,
+                "supports_editorial": 8,
+                "environment_dominance": 6,
+                "vertical_friendly": 8,
+                "font_style": "elegant_serif",
+            },
+            {
+                "id": "boutique_facade",
+                "label": "Luxury boutique facade",
+                "direction": (
+                    "Use a premium storefront or boutique facade with one strong window glow and negative space on the side, "
+                    "so the message feels commercial and upscale without turning into a literal catalog shot."
+                ),
+                "copy_space": "right",
+                "hero_placement": "left-third anchor",
+                "subject_priority": 8,
+                "readability": 9,
+                "brand_fit": 8,
+                "novelty": 7,
+                "supports_sale": 8,
+                "supports_editorial": 7,
+                "environment_dominance": 5,
+                "vertical_friendly": 8,
+                "font_style": "elegant_serif",
+            },
+        ]
+
+    if is_food:
+        return [
+            {
+                "id": "hero_counter_closeup",
+                "label": "Hero counter close-up",
+                "direction": (
+                    "Push into an appetizing close-up on the signature dish or dessert with glossy textures, steam or chill, "
+                    "and only one or two premium supporting props."
+                ),
+                "copy_space": "top",
+                "hero_placement": "large foreground hero",
+                "subject_priority": 10,
+                "readability": 9,
+                "brand_fit": 10,
+                "novelty": 7,
+                "supports_sale": 9,
+                "supports_editorial": 7,
+                "environment_dominance": 2,
+                "vertical_friendly": 9,
+                "font_style": "clean_sans",
+            },
+            {
+                "id": "chef_pass",
+                "label": "Chef's pass moment",
+                "direction": (
+                    "Set the dish at the kitchen pass with controlled warmth, sharp plating detail, and a slight sense of service "
+                    "motion to create appetite plus credibility."
+                ),
+                "copy_space": "top",
+                "hero_placement": "mid-frame with shallow depth",
+                "subject_priority": 9,
+                "readability": 8,
+                "brand_fit": 9,
+                "novelty": 8,
+                "supports_sale": 8,
+                "supports_editorial": 7,
+                "environment_dominance": 4,
+                "vertical_friendly": 8,
+                "font_style": "clean_sans",
+            },
+            {
+                "id": "signature_tabletop",
+                "label": "Signature tabletop still life",
+                "direction": (
+                    "Build a premium tabletop set with one hero dish, restrained garnish, tactile surfaces, and negative space "
+                    "that makes pricing or promo copy easy to read."
+                ),
+                "copy_space": "right",
+                "hero_placement": "left-third hero plate",
+                "subject_priority": 9,
+                "readability": 10,
+                "brand_fit": 8,
+                "novelty": 6,
+                "supports_sale": 10,
+                "supports_editorial": 6,
+                "environment_dominance": 3,
+                "vertical_friendly": 8,
+                "font_style": "clean_sans",
+            },
+            {
+                "id": "storefront_launch",
+                "label": "Storefront launch reveal",
+                "direction": (
+                    "For openings or events, show a clean restaurant frontage or interior reveal with one hero food cue, keeping "
+                    "the promo feel energetic but still design-led."
+                ),
+                "copy_space": "bottom",
+                "hero_placement": "upper-center focal area",
+                "subject_priority": 7,
+                "readability": 8,
+                "brand_fit": 8,
+                "novelty": 7,
+                "supports_sale": 9,
+                "supports_editorial": 5,
+                "environment_dominance": 5,
+                "vertical_friendly": 8,
+                "font_style": "clean_sans",
+            },
+        ]
+
+    if is_beauty:
+        return [
+            {
+                "id": "mirror_vanity",
+                "label": "Mirror vanity glow",
+                "direction": (
+                    "Use a polished vanity or mirrored pedestal with controlled reflections, one beauty hero, and luxurious light "
+                    "falloff that keeps the composition clean."
+                ),
+                "copy_space": "top",
+                "hero_placement": "center-lower pedestal",
+                "subject_priority": 9,
+                "readability": 9,
+                "brand_fit": 9,
+                "novelty": 8,
+                "supports_sale": 7,
+                "supports_editorial": 9,
+                "environment_dominance": 3,
+                "vertical_friendly": 9,
+                "font_style": "elegant_serif",
+            },
+            {
+                "id": "clinical_luxe_lab",
+                "label": "Clinical luxe lab",
+                "direction": (
+                    "Blend clean laboratory precision with luxury materials so the product feels credible, elevated, and visually sharp "
+                    "without losing warmth."
+                ),
+                "copy_space": "right",
+                "hero_placement": "left-third anchor",
+                "subject_priority": 9,
+                "readability": 10,
+                "brand_fit": 8,
+                "novelty": 7,
+                "supports_sale": 8,
+                "supports_editorial": 8,
+                "environment_dominance": 3,
+                "vertical_friendly": 8,
+                "font_style": "elegant_serif",
+            },
+            {
+                "id": "liquid_pedestal",
+                "label": "Liquid pedestal set",
+                "direction": (
+                    "Anchor the product on a sculpted pedestal with fluid reflections or luminous liquid accents that feel premium "
+                    "rather than fantasy-heavy."
+                ),
+                "copy_space": "top",
+                "hero_placement": "center hero object",
+                "subject_priority": 10,
+                "readability": 8,
+                "brand_fit": 9,
+                "novelty": 8,
+                "supports_sale": 7,
+                "supports_editorial": 8,
+                "environment_dominance": 4,
+                "vertical_friendly": 9,
+                "font_style": "elegant_serif",
+            },
+            {
+                "id": "spa_stone_scene",
+                "label": "Spa stone restraint",
+                "direction": (
+                    "Use a spa-inspired stone or mineral set with restrained organic cues so the product feels calm, premium, and "
+                    "instantly legible."
+                ),
+                "copy_space": "left",
+                "hero_placement": "right-third pedestal",
+                "subject_priority": 8,
+                "readability": 9,
+                "brand_fit": 8,
+                "novelty": 6,
+                "supports_sale": 7,
+                "supports_editorial": 7,
+                "environment_dominance": 4,
+                "vertical_friendly": 8,
+                "font_style": "elegant_serif",
+            },
+        ]
+
+    if is_fitness:
+        return [
+            {
+                "id": "hero_training_bay",
+                "label": "Hero training bay",
+                "direction": (
+                    "Keep the athlete or product dominant inside a disciplined training bay with directional light, subtle motion cues, "
+                    "and plenty of readable negative space."
+                ),
+                "copy_space": "top",
+                "hero_placement": "center hero with active stance",
+                "subject_priority": 10,
+                "readability": 9,
+                "brand_fit": 9,
+                "novelty": 7,
+                "supports_sale": 8,
+                "supports_editorial": 6,
+                "environment_dominance": 3,
+                "vertical_friendly": 9,
+                "font_style": "bold_tech",
+            },
+            {
+                "id": "graphic_gym_floor",
+                "label": "Graphic gym floor",
+                "direction": (
+                    "Use a bold gym floor or training lane graphic as the base plane so the visual feels energetic, branded, and "
+                    "easy to layer copy onto."
+                ),
+                "copy_space": "bottom",
+                "hero_placement": "upper hero lane",
+                "subject_priority": 8,
+                "readability": 10,
+                "brand_fit": 8,
+                "novelty": 7,
+                "supports_sale": 9,
+                "supports_editorial": 5,
+                "environment_dominance": 4,
+                "vertical_friendly": 8,
+                "font_style": "bold_tech",
+            },
+            {
+                "id": "stadium_tunnel",
+                "label": "Stadium tunnel release",
+                "direction": (
+                    "Frame the hero in a tunnel or dramatic entry corridor that amplifies anticipation while keeping the subject "
+                    "front and center."
+                ),
+                "copy_space": "top",
+                "hero_placement": "center with depth",
+                "subject_priority": 9,
+                "readability": 8,
+                "brand_fit": 8,
+                "novelty": 8,
+                "supports_sale": 7,
+                "supports_editorial": 6,
+                "environment_dominance": 5,
+                "vertical_friendly": 9,
+                "font_style": "bold_tech",
+            },
+            {
+                "id": "performance_studio",
+                "label": "Performance studio",
+                "direction": (
+                    "Use a controlled performance studio with fog, rim light, and a single training prop to keep the message "
+                    "clean and high-energy."
+                ),
+                "copy_space": "right",
+                "hero_placement": "left-third anchor",
+                "subject_priority": 9,
+                "readability": 9,
+                "brand_fit": 7,
+                "novelty": 7,
+                "supports_sale": 8,
+                "supports_editorial": 6,
+                "environment_dominance": 3,
+                "vertical_friendly": 8,
+                "font_style": "bold_tech",
+            },
+        ]
+
+    if is_tech:
+        return [
+            {
+                "id": "device_light_stage",
+                "label": "Device light stage",
+                "direction": (
+                    "Present the product or interface on a disciplined light stage with crisp edge lighting, minimal environment, "
+                    "and copy-safe space built into the composition."
+                ),
+                "copy_space": "right",
+                "hero_placement": "left-third object focus",
+                "subject_priority": 10,
+                "readability": 10,
+                "brand_fit": 9,
+                "novelty": 7,
+                "supports_sale": 8,
+                "supports_editorial": 6,
+                "environment_dominance": 2,
+                "vertical_friendly": 8,
+                "font_style": "bold_tech",
+            },
+            {
+                "id": "abstract_signal_plane",
+                "label": "Abstract signal plane",
+                "direction": (
+                    "Use a controlled abstract signal or data-light environment behind the hero so the image feels modern without "
+                    "turning into generic neon wallpaper."
+                ),
+                "copy_space": "left",
+                "hero_placement": "right-third anchor",
+                "subject_priority": 8,
+                "readability": 9,
+                "brand_fit": 8,
+                "novelty": 8,
+                "supports_sale": 7,
+                "supports_editorial": 6,
+                "environment_dominance": 4,
+                "vertical_friendly": 8,
+                "font_style": "bold_tech",
+            },
+            {
+                "id": "premium_workspace",
+                "label": "Premium workspace hero",
+                "direction": (
+                    "Show the hero in a premium workspace or executive desk environment with restraint, useful depth, and one strong "
+                    "brand color accent."
+                ),
+                "copy_space": "top",
+                "hero_placement": "center-lower focal plane",
+                "subject_priority": 8,
+                "readability": 9,
+                "brand_fit": 8,
+                "novelty": 6,
+                "supports_sale": 8,
+                "supports_editorial": 5,
+                "environment_dominance": 4,
+                "vertical_friendly": 8,
+                "font_style": "bold_tech",
+            },
+            {
+                "id": "architectural_minimal",
+                "label": "Architectural minimal set",
+                "direction": (
+                    "Use a minimal architectural set with sharp light geometry and quiet premium materials so the product reads as "
+                    "high-value and modern."
+                ),
+                "copy_space": "top",
+                "hero_placement": "center hero object",
+                "subject_priority": 9,
+                "readability": 9,
+                "brand_fit": 8,
+                "novelty": 7,
+                "supports_sale": 7,
+                "supports_editorial": 6,
+                "environment_dominance": 3,
+                "vertical_friendly": 9,
+                "font_style": "bold_tech",
+            },
+        ]
+
+    return [
+        {
+            "id": "studio_gradient",
+            "label": "Studio gradient stage",
+            "direction": (
+                "Keep the hero on a clean studio gradient or shadowed stage so the message stays readable and the subject remains "
+                "the first thing people notice."
+            ),
+            "copy_space": "top",
+            "hero_placement": "center-lower focal area",
+            "subject_priority": 9,
+            "readability": 10,
+            "brand_fit": 8,
+            "novelty": 6,
+            "supports_sale": 8,
+            "supports_editorial": 5,
+            "environment_dominance": 2,
+            "vertical_friendly": 9,
+            "font_style": strategy.get("font_style", "bold_tech"),
+        },
+        {
+            "id": "graphic_shadow_set",
+            "label": "Graphic shadow set",
+            "direction": (
+                "Use graphic shadows, one strong surface, and a controlled accent color to create depth without clutter or stock-photo energy."
+            ),
+            "copy_space": "right",
+            "hero_placement": "left-third anchor",
+            "subject_priority": 8,
+            "readability": 10,
+            "brand_fit": 8,
+            "novelty": 8,
+            "supports_sale": 8,
+            "supports_editorial": 6,
+            "environment_dominance": 3,
+            "vertical_friendly": 8,
+            "font_style": strategy.get("font_style", "bold_tech"),
+        },
+        {
+            "id": "architectural_frame",
+            "label": "Architectural frame",
+            "direction": (
+                "Frame the hero with restrained architecture or premium built form, but keep the structure quiet so the focal subject still wins."
+            ),
+            "copy_space": "top",
+            "hero_placement": "center focal axis",
+            "subject_priority": 7,
+            "readability": 8,
+            "brand_fit": 7,
+            "novelty": 7,
+            "supports_sale": 6,
+            "supports_editorial": 6,
+            "environment_dominance": 5,
+            "vertical_friendly": 8,
+            "font_style": strategy.get("font_style", "bold_tech"),
+        },
+        {
+            "id": "lifestyle_context",
+            "label": "Lifestyle context scene",
+            "direction": (
+                "Use a believable lifestyle context with one decisive focal subject and enough negative space that the copy can still lead."
+            ),
+            "copy_space": "bottom",
+            "hero_placement": "upper-center hero",
+            "subject_priority": 8,
+            "readability": 8,
+            "brand_fit": 7,
+            "novelty": 6,
+            "supports_sale": 7,
+            "supports_editorial": 5,
+            "environment_dominance": 4,
+            "vertical_friendly": 8,
+            "font_style": strategy.get("font_style", "bold_tech"),
+        },
+    ]
+
+
+def _score_backdrop_direction(candidate: Dict, triage: Dict, strategy: Dict, copy: Dict) -> Dict:
+    goal = str(triage.get("goal") or "brand_awareness").lower()
+    platform = str(triage.get("platform") or "instagram_portrait").lower()
+    text_load = len(str(copy.get("headline") or "")) + len(str(copy.get("subheadline") or ""))
+    readability_pressure = 2 if text_load >= 24 else 0
+    sale_bonus = candidate.get("supports_sale", 0) if goal in ("sale_promotion", "lead_gen", "event") else 0
+    editorial_bonus = candidate.get("supports_editorial", 0) if strategy.get("visual_style") == "editorial" else 0
+    vertical_bonus = candidate.get("vertical_friendly", 0) if "portrait" in platform or "story" in platform else 0
+    clutter_penalty = max(int(candidate.get("environment_dominance", 5)) - int(candidate.get("subject_priority", 5)), 0)
+    center_copy_penalty = readability_pressure if str(candidate.get("copy_space") or "") == "center" else 0
+
+    score_breakdown = {
+        "subject_priority": int(candidate.get("subject_priority", 0)) * 2,
+        "readability": int(candidate.get("readability", 0)) * 2 + readability_pressure,
+        "brand_fit": int(candidate.get("brand_fit", 0)) * 2,
+        "novelty": int(candidate.get("novelty", 0)),
+        "sale_bonus": int(sale_bonus),
+        "editorial_bonus": int(editorial_bonus),
+        "vertical_bonus": int(vertical_bonus // 2),
+        "clutter_penalty": -int(clutter_penalty),
+        "center_copy_penalty": -int(center_copy_penalty),
+    }
+    score_total = sum(score_breakdown.values())
+    ranked = dict(candidate)
+    ranked["score_breakdown"] = score_breakdown
+    ranked["score_total"] = score_total
+    return ranked
+
+
+def _build_design_room(triage: Dict, brand: Dict, creative: Dict, copy: Dict) -> Dict:
+    strategy = _request_strategy(triage, triage.get("original_prompt", ""), brand)
+    candidates = _backdrop_candidates_for_request(triage, brand, creative, strategy)
+    ranked_candidates = sorted(
+        (_score_backdrop_direction(candidate, triage, strategy, copy) for candidate in candidates),
+        key=lambda item: item.get("score_total", 0),
+        reverse=True,
+    )
+    winner = ranked_candidates[0] if ranked_candidates else {}
+    copy_space = str(winner.get("copy_space") or "bottom")
+    body_copy_policy = _infer_body_copy_policy(triage, strategy, copy)
+    headline = str(copy.get("headline") or "").strip()
+    subheadline = str(copy.get("subheadline") or "").strip()
+    discussion = [
+        {
+            "speaker": "creative_director",
+            "message": (
+                f"Use the {winner.get('label', 'selected backdrop').lower()}. "
+                f"{winner.get('direction', '')} Keep the hero {winner.get('hero_placement', 'clear and dominant')}."
+            ).strip(),
+        },
+        {
+            "speaker": "copy_writer",
+            "message": (
+                f"Keep the {copy_space} copy-safe zone clean for "
+                f"{('headline ' + repr(headline)) if headline else 'the main message'}"
+                f"{(' and subheadline ' + repr(subheadline)) if subheadline else ''}. "
+                f"Body copy policy: {body_copy_policy}."
+            ),
+        },
+        {
+            "speaker": "layout_planner",
+            "message": (
+                f"Reserve the {copy_space} third for typography, avoid placing text over the hero focal plane, "
+                f"and use a {winner.get('font_style', strategy.get('font_style', 'bold_tech'))} feel."
+            ),
+        },
+    ]
+    summary = (
+        f"Winner: {winner.get('label', 'fallback backdrop')} with score {winner.get('score_total', 0)}. "
+        f"Prioritize {winner.get('hero_placement', 'hero clarity')}, preserve {copy_space} copy space, "
+        f"and keep the composition commercially strong before decorative detail."
+    )
+    return {
+        "strategy": strategy,
+        "copy_space": copy_space,
+        "font_style": winner.get("font_style", strategy.get("font_style", "bold_tech")),
+        "body_copy_policy": body_copy_policy,
+        "winner": winner,
+        "candidates": ranked_candidates,
+        "discussion": discussion,
+        "summary": summary,
+    }
+
+
+def _format_design_room_context(design_room: Optional[Dict]) -> str:
+    if not design_room:
+        return ""
+    winner = design_room.get("winner") or {}
+    lines = [
+        f"Design room consensus: {design_room.get('summary', '')}",
+        f"Chosen backdrop: {winner.get('label', '')}",
+        f"Backdrop direction: {winner.get('direction', '')}",
+        f"Preferred copy space: {design_room.get('copy_space', 'bottom')}",
+        f"Typography vibe: {design_room.get('font_style', 'bold_tech')}",
+        f"Body copy policy: {design_room.get('body_copy_policy', 'balanced')}",
+    ]
+    for note in design_room.get("discussion", [])[:3]:
+        speaker = str(note.get("speaker") or "").strip()
+        message = str(note.get("message") or "").strip()
+        if speaker and message:
+            lines.append(f"{speaker}: {message}")
+    top_candidates = design_room.get("candidates") or []
+    if top_candidates:
+        ranking = "; ".join(
+            f"{candidate.get('label', '')} ({candidate.get('score_total', 0)})"
+            for candidate in top_candidates[:3]
+        )
+        lines.append(f"Taste ranking: {ranking}")
+    return "\n".join(line for line in lines if line.strip())
 
 # ── Image Prompt Engineer Knowledge Base ─────────────────────────────────────
 # Injected into _agent_image_prompter so Gemini has per-model prompt strategies.
@@ -569,6 +1269,7 @@ async def _agent_brand_intel(
     prompt: str,
 ) -> Dict:
     """Always run LLM to fill gaps; brand_kit values override LLM output."""
+    defaults = _request_strategy(triage, prompt)
     system = (
         "You are a brand analyst AI. Extract or infer brand identity.\n"
         'Return ONLY valid JSON: {"brand_name":"name","primary_color":"#RRGGBB",'
@@ -594,11 +1295,15 @@ async def _agent_brand_intel(
         "brand_name":      r.get("brand_name", ""),
         "primary_color":   _safe_hex(r.get("primary_color"), "#6C63FF"),
         "secondary_color": _safe_hex(r.get("secondary_color"), "#4FACFE"),
-        "font_style":      r.get("font_style", "bold_tech"),
-        "tone":            r.get("tone", "professional"),
+        "font_style":      r.get("font_style", defaults["font_style"]),
+        "tone":            r.get("tone", defaults["tone"]),
         "tagline":         r.get("tagline", ""),
         "logo_url":        "",
     }
+    if result["font_style"] == "bold_tech" and defaults["font_style"] != "bold_tech":
+        result["font_style"] = defaults["font_style"]
+    if result["tone"] == "professional" and defaults["tone"] != "professional":
+        result["tone"] = defaults["tone"]
     # Apply brand_kit overrides (non-empty values only)
     for k in ("brand_name", "primary_color", "secondary_color", "font_style", "tone", "tagline", "logo_url"):
         bk_val = bk.get(k)
@@ -662,6 +1367,7 @@ Headline formulas: Question / Provocation / Bold claim / Contrast / Urgency / Sp
 async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Dict:
     from app.services.smart.color_intelligence import derive_palette, suggest_harmony
 
+    strategy = _request_strategy(triage, prompt, brand)
     harmony = suggest_harmony(brand.get("tone", ""), triage.get("industry", ""))
     palette = derive_palette(
         primary_hex=brand.get("primary_color", "#6C63FF"),
@@ -690,6 +1396,8 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
         f"- Platform: {platform} → what format rules apply?\n"
         f"- Industry: {industry} → what visual language is expected vs subverted?\n"
         f"- Goal: {goal} → what emotion drives action?\n"
+        f"- Commercial taste guardrails: {strategy['creative_guardrails']}\n"
+        f"- Detail budget: {strategy['detail_budget']}\n"
         "- Choose ONE composition archetype from knowledge base and execute hard\n"
         "- Visual metaphors must be concrete nouns (not abstract concepts)\n"
         "- Forbidden elements must be specific (not 'no clichés')\n"
@@ -713,7 +1421,8 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
         f"Brand: {brand.get('brand_name','')} | Tone: {brand.get('tone','')} | Industry: {industry}\n"
         f"Platform: {platform} | Goal: {goal} | Audience: {triage.get('audience','general')}\n"
         f"Primary color: {palette.get('primary','#6C63FF')} | "
-        f"Secondary: {palette.get('secondary','#4FACFE')}"
+        f"Secondary: {palette.get('secondary','#4FACFE')}\n"
+        f"Creative guardrails: {strategy['creative_guardrails']}"
     )
     raw = await _acall_gemini(system, context, temperature=0.82, agent_name="creative_director")
     r = _extract_json(raw)
@@ -727,17 +1436,33 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
         "dominant_color_story": str(raw_bible.get("dominant_color_story") or ""),
         "composition_archetype": str(raw_bible.get("composition_archetype") or ""),
     }
+    for forbidden in [s.strip() for s in strategy["negative_guardrails"].split(",") if s.strip()]:
+        if forbidden not in creative_bible["forbidden_elements"]:
+            creative_bible["forbidden_elements"].append(forbidden)
+
+    layout_archetype = str(r.get("layout_archetype") or strategy["layout_archetype"])
+    hero_occupies = str(r.get("hero_occupies") or strategy["hero_occupies"])
+    visual_style = str(r.get("visual_style") or strategy["visual_style"])
+    if strategy["font_style"] in ("elegant_serif", "luxury_display"):
+        if layout_archetype not in ("hero_dominant", "frame_within_frame", "asymmetric_grid", "full_bleed"):
+            layout_archetype = strategy["layout_archetype"]
+        if hero_occupies not in ("center_50", "top_50", "full_bleed"):
+            hero_occupies = strategy["hero_occupies"]
+        if visual_style == "photorealistic":
+            visual_style = strategy["visual_style"]
 
     return {
         "theme":            r.get("theme", "bold"),
         "mood":             r.get("mood", "energetic"),
-        "visual_style":     r.get("visual_style", "photorealistic"),
-        "layout_archetype": r.get("layout_archetype", "hero_top_features_bottom"),
-        "hero_occupies":    r.get("hero_occupies", "top_60"),
+        "visual_style":     visual_style,
+        "layout_archetype": layout_archetype,
+        "hero_occupies":    hero_occupies,
         "atmosphere":       r.get("atmosphere", ""),
         "avoid":            r.get("avoid") if isinstance(r.get("avoid"), list) else [],
         "palette":          palette,
         "creative_bible":   creative_bible,
+        "detail_budget":    strategy["detail_budget"],
+        "image_guardrails": strategy["image_guardrails"],
     }
 
 
@@ -747,6 +1472,7 @@ async def _agent_copy_writer(
     creative: Dict,
     prompt: str,
 ) -> Dict:
+    strategy = _request_strategy(triage, prompt, brand)
     platform = triage.get("platform", "instagram")
     hl_max = {"instagram": 30, "instagram_story": 20, "linkedin": 50, "default": 40}.get(platform, 40)
 
@@ -780,6 +1506,7 @@ async def _agent_copy_writer(
         f"Platform: {platform}. Tone: {brand.get('tone','bold')}. "
         f"Goal: {triage.get('goal','brand_awareness')}. Industry: {triage.get('industry','general')}.\n"
         f"Think deeply about what this business needs. Write copy that converts.\n"
+        f"Commercial copy guardrails: {strategy['copy_guardrails']}\n"
         f"HEADLINE max {hl_max} chars ALL CAPS.{festival_hint}{explicit_hint}{bible_hint}\n"
         f"For features: generate 4 REAL, SPECIFIC benefits relevant to this industry — not generic placeholders.\n"
         'Return ONLY valid JSON: {"brand_name":"","headline":"ALL CAPS",'
@@ -927,6 +1654,7 @@ async def _agent_layout_planner(
     creative: Dict,
     copy: Dict,
     aspect_ratio: float = 0.667,
+    design_room: Optional[Dict] = None,
 ) -> List[Dict]:
     """
     Gemini-powered layout agent — thinks about optimal element placement
@@ -943,6 +1671,10 @@ async def _agent_layout_planner(
     has_cta      = bool(str(copy.get("cta") or "").strip())
     has_tagline  = bool(str(copy.get("tagline") or "").strip())
     headline_len = len(str(copy.get("headline") or ""))
+    design_room_context = _format_design_room_context(design_room)
+    preferred_copy_space = str((design_room or {}).get("copy_space") or "").strip()
+    preferred_font_style = str((design_room or {}).get("font_style") or "").strip()
+    chosen_backdrop = str(((design_room or {}).get("winner") or {}).get("label") or "").strip()
 
     system = (
         "You are a UI Layout Planner for full-bleed ad posters.\n"
@@ -962,6 +1694,7 @@ async def _agent_layout_planner(
         "7. Landscape (16:9): text left-aligned x=0.05–0.50, hero fills right\n"
         "8. Story (9:16): generous vertical spacing, bigger fonts\n"
         "9. Font choice: prefer bebas_neue/anton for headlines, montserrat_bold for body\n"
+        "10. If a preferred copy-safe zone is provided, honor it unless readability becomes impossible\n"
         "\n"
         "Return ONLY a raw JSON array (no object wrapper, no prose, no markdown). Start with `[` and end with `]`.\n"
         "Each element:\n"
@@ -987,7 +1720,11 @@ async def _agent_layout_planner(
         f"Tagline: {copy.get('tagline','')}\n"
         f"Mood: {creative.get('mood','')}\n"
         f"Accent color: {pri}\n"
-        f"Has brand: {has_brand}, Has sub: {has_sub}, Has CTA: {has_cta}, Has tagline: {has_tagline}"
+        f"Has brand: {has_brand}, Has sub: {has_sub}, Has CTA: {has_cta}, Has tagline: {has_tagline}\n"
+        f"Preferred copy space: {preferred_copy_space or 'unspecified'}\n"
+        f"Preferred font vibe: {preferred_font_style or 'unspecified'}\n"
+        f"Chosen backdrop: {chosen_backdrop or 'unspecified'}\n"
+        f"{design_room_context}"
     )
 
     raw = await _acall_gemini(system, context, temperature=0.3, agent_name="layout_planner")
@@ -1025,10 +1762,10 @@ async def _agent_layout_planner(
 
     # Fallback: deterministic full-bleed layout
     logger.warning("[layout_planner] Gemini failed, using deterministic full-bleed layout")
-    return _layout_fallback(copy, creative, aspect_ratio)
+    return _layout_fallback(copy, creative, aspect_ratio, copy_space=preferred_copy_space or "bottom")
 
 
-def _layout_fallback(copy: Dict, creative: Dict, aspect_ratio: float) -> List[Dict]:
+def _layout_fallback(copy: Dict, creative: Dict, aspect_ratio: float, copy_space: str = "bottom") -> List[Dict]:
     """Deterministic full-bleed layout — all elements on image, nothing below."""
     palette = creative.get("palette", {})
     pri = _safe_hex(palette.get("primary"), "#6C63FF")
@@ -1036,6 +1773,34 @@ def _layout_fallback(copy: Dict, creative: Dict, aspect_ratio: float) -> List[Di
     sec = _safe_hex(palette.get("text_secondary"), "#CCCCDD")
 
     elements: List[Dict] = []
+    copy_space = str(copy_space or "bottom").lower()
+    headline_x = 0.05
+    headline_w = 0.90
+    headline_y = 0.52
+    sub_y = 0.67
+    cta_x = 0.10
+    cta_w = 0.80
+    text_align = "center"
+
+    if copy_space == "top":
+        headline_y = 0.12
+        sub_y = 0.26
+    elif copy_space == "left":
+        headline_x = 0.06
+        headline_w = 0.42
+        headline_y = 0.30
+        sub_y = 0.47
+        cta_x = 0.06
+        cta_w = 0.36
+        text_align = "left"
+    elif copy_space == "right":
+        headline_x = 0.52
+        headline_w = 0.42
+        headline_y = 0.30
+        sub_y = 0.47
+        cta_x = 0.58
+        cta_w = 0.30
+        text_align = "right"
 
     # Hero fills full canvas
     elements.append({"id": "hero_bg", "type": "image",
@@ -1057,27 +1822,27 @@ def _layout_fallback(copy: Dict, creative: Dict, aspect_ratio: float) -> List[Di
     headline = str(copy.get("headline") or "")
     if headline:
         elements.append({"id": "headline", "type": "text",
-            "bounds": {"x": 0.05, "y": 0.52, "w": 0.90, "h": 0.14},
-            "style": {"font": "bebas_neue", "size_role": "headline", "color": txt, "align": "center"},
+            "bounds": {"x": headline_x, "y": headline_y, "w": headline_w, "h": 0.14},
+            "style": {"font": "bebas_neue", "size_role": "headline", "color": txt, "align": text_align},
             "content": headline, "locked": False})
 
     # Subheadline at 67%
     sub = str(copy.get("subheadline") or "")
     if sub:
         elements.append({"id": "subheadline", "type": "text",
-            "bounds": {"x": 0.05, "y": 0.67, "w": 0.90, "h": 0.06},
-            "style": {"font": "montserrat_bold", "size_role": "subheadline", "color": sec, "align": "center"},
+            "bounds": {"x": headline_x, "y": sub_y, "w": headline_w, "h": 0.06},
+            "style": {"font": "montserrat_bold", "size_role": "subheadline", "color": sec, "align": text_align},
             "content": sub, "locked": False})
 
     # CTA at 80%
     cta = str(copy.get("cta") or "")
     if cta:
         elements.append({"id": "cta_button", "type": "shape",
-            "bounds": {"x": 0.10, "y": 0.80, "w": 0.80, "h": 0.08},
+            "bounds": {"x": cta_x, "y": 0.80, "w": cta_w, "h": 0.08},
             "style": {"fill": pri, "radius": 40, "opacity": 1.0}, "content": "", "locked": False})
         elements.append({"id": "cta_text", "type": "text",
-            "bounds": {"x": 0.10, "y": 0.80, "w": 0.80, "h": 0.08},
-            "style": {"font": "bebas_neue", "size_role": "cta", "color": txt, "align": "center"},
+            "bounds": {"x": cta_x, "y": 0.80, "w": cta_w, "h": 0.08},
+            "style": {"font": "bebas_neue", "size_role": "cta", "color": txt, "align": text_align},
             "content": cta, "locked": False})
 
     # Tagline at 91%
@@ -1185,7 +1950,9 @@ def _agent_reconcile_outputs(
     img: Dict,
     elements: List[Dict],
     aspect_ratio: float,
+    design_room: Optional[Dict] = None,
 ) -> Dict:
+    strategy = _request_strategy(triage, triage.get("original_prompt", ""), {"tone": creative.get("mood", "")})
     copy_final = dict(copy)
     explicit_headline = str(triage.get("explicit_headline") or "").strip()
     explicit_subheadline = str(triage.get("explicit_subheadline") or "").strip()
@@ -1197,21 +1964,43 @@ def _agent_reconcile_outputs(
         copy_final["subheadline"] = explicit_subheadline
     if explicit_cta:
         copy_final["cta"] = explicit_cta.upper()
-
+    body_copy_policy = str((design_room or {}).get("body_copy_policy") or "").strip().lower()
+    if (
+        strategy["font_style"] in ("elegant_serif", "luxury_display")
+        and explicit_headline
+        and explicit_subheadline
+        and str(triage.get("goal") or "brand_awareness") != "sale_promotion"
+    ):
+        copy_final["body"] = ""
+        notes = ["editorial_body_suppressed"]
+    else:
+        notes: List[str] = []
+    if body_copy_policy == "minimal" and str(copy_final.get("body") or "").strip():
+        copy_final["body"] = ""
+        notes.append("body_trimmed_for_design")
     img_final = dict(img)
-    copy_space = _infer_copy_space(elements)
-    notes: List[str] = []
+    preferred_copy_space = str((design_room or {}).get("copy_space") or "").strip()
+    copy_space = preferred_copy_space or _infer_copy_space(elements)
 
     bg_prompt = _remove_copy_text_from_prompt(
         str(img_final.get("background_prompt") or ""),
         [copy_final.get("headline"), copy_final.get("subheadline"), copy_final.get("cta")],
     )
+    chosen_direction = str(((design_room or {}).get("winner") or {}).get("direction") or "").strip()
+    if chosen_direction and chosen_direction.lower() not in bg_prompt.lower():
+        bg_prompt = f"{chosen_direction}. {bg_prompt}".strip(". ")
     copy_space_hint = _COPY_SPACE_PROMPT_HINTS.get(copy_space, "")
     if copy_space_hint and copy_space_hint.lower() not in bg_prompt.lower():
         bg_prompt = f"{bg_prompt}. {copy_space_hint}".strip(". ")
         notes.append(f"copy_space:{copy_space}")
+    if strategy["image_guardrails"].lower() not in bg_prompt.lower():
+        bg_prompt = f"{bg_prompt}. {strategy['image_guardrails']}".strip(". ")
     img_final["background_prompt"] = bg_prompt
     img_final["negative_prompt"] = _ensure_text_negatives(str(img_final.get("negative_prompt") or ""))
+    if strategy["negative_guardrails"]:
+        img_final["negative_prompt"] = _ensure_text_negatives(
+            f"{img_final['negative_prompt']}, {strategy['negative_guardrails']}"
+        )
 
     params = dict(img_final.get("parameters") or {})
     params.setdefault(
@@ -1236,9 +2025,13 @@ def _agent_reconcile_outputs(
         "has_feature_grid": bool(copy_final.get("features")),
         "has_cta_button": bool(str(copy_final.get("cta") or "").strip()),
         "copy_space": copy_space,
+        "font_style": str((design_room or {}).get("font_style") or strategy["font_style"]),
     }
     if explicit_headline or explicit_subheadline or explicit_cta:
         notes.append("explicit_copy_locked")
+    winner_id = str(((design_room or {}).get("winner") or {}).get("id") or "").strip()
+    if winner_id:
+        notes.append(f"taste_winner:{winner_id}")
 
     return {
         "copy": copy_final,
@@ -1254,8 +2047,10 @@ async def _agent_image_prompter(
     triage: Dict,
     creative: Dict,
     copy: Dict,
+    design_room: Optional[Dict] = None,
     prompt_dna: Optional[Dict] = None,
 ) -> Dict:
+    strategy = _request_strategy(triage, triage.get("original_prompt", ""), {"tone": creative.get("mood", "")})
     # Full-bleed: image fills 100% canvas, text overlaid. Bottom 50% must be dark.
     festival_hint = ""
     if triage.get("is_festival") and triage.get("festival_name"):
@@ -1283,6 +2078,8 @@ async def _agent_image_prompter(
         bible_context += f"\nColor story: {bible['dominant_color_story']}"
     if bible.get("composition_archetype"):
         bible_context += f"\nComposition archetype: {bible['composition_archetype']}"
+    design_room_context = _format_design_room_context(design_room)
+    chosen_backdrop = str(((design_room or {}).get("winner") or {}).get("direction") or "").strip()
 
     # ── Output schema the agent must produce ─────────────────────────────────
     _OUTPUT_SCHEMA = '''{
@@ -1336,6 +2133,9 @@ async def _agent_image_prompter(
         "5. ENGINEER prompt using the model's template from knowledge base\n"
         "6. VALIDATE: prompt starts with subject, bottom 50% is naturally dark, zero text\n"
         "7. PRODUCE draft_variant as a ≤60 word flux_schnell version for fast iteration\n"
+        "8. If a design-room consensus is provided, treat the chosen backdrop direction as locked unless it contradicts the user brief\n"
+        f"Commercial taste guardrails: {strategy['image_guardrails']}\n"
+        f"Detail budget: {strategy['detail_budget']}\n"
         f"{festival_hint}{dna_hint}\n"
         "\n"
         "VALIDATION BEFORE RETURNING:\n"
@@ -1356,7 +2156,10 @@ async def _agent_image_prompter(
         f"Atmosphere: {creative.get('atmosphere','')}"
         f"{bible_context}\n"
         f"Platform: {creative.get('aspect_ratio','4:5')}\n"
-        f"Avoid: {', '.join((creative.get('avoid') or []) + ([forbidden_additions] if forbidden_additions else []))}"
+        f"Avoid: {', '.join((creative.get('avoid') or []) + ([forbidden_additions] if forbidden_additions else []))}\n"
+        f"Commercial taste guardrails: {strategy['image_guardrails']}\n"
+        f"Chosen backdrop direction: {chosen_backdrop or 'not specified'}\n"
+        f"{design_room_context}"
     )
 
     raw = await _acall_gemini(system, context, temperature=0.72, agent_name="image_prompter")
@@ -1385,6 +2188,7 @@ async def _agent_image_prompter(
         fallback_user = (
             f"User's brief: \"{triage.get('original_prompt', '')}\"\n"
             f"Mood: {creative.get('mood','energetic')} | Style: {creative.get('visual_style','photorealistic')}\n"
+            f"Chosen backdrop direction: {chosen_backdrop or 'not specified'}\n"
             "Describe the background scene."
         )
         bg_prompt = await _acall_gemini(fallback_system, fallback_user,
@@ -1423,6 +2227,8 @@ async def _agent_image_prompter(
     mood_val = creative.get("mood", "energetic")
     style_val = creative.get("visual_style", "photorealistic")
     _smart_fallback = (
+        f"{chosen_backdrop}. " if chosen_backdrop else ""
+    ) + (
         f"cinematic {industry} scene, {mood_val} atmosphere, {style_val} style, "
         f"dramatic lighting, deep shadows in bottom half, no text, clean background"
     )
@@ -1504,7 +2310,7 @@ class DesignAgentChain:
                 "hero_occupies":        creative.get("hero_occupies", "top_60"),
             })
 
-            # ── Stage 3: Copy Writer + Image Prompter (PARALLEL) ────────────
+            # ── Stage 3: Copy Writer ────────────────────────────────────────
             # Extract bucket-specific DNA (active when run_count >= 5)
             bucket_key = triage.get("industry", "general")
             bucket_dna: Dict = {}
@@ -1512,26 +2318,32 @@ class DesignAgentChain:
                 bucket_dna = prompt_dna.get(bucket_key, prompt_dna.get("typography", {})) or {}
 
             t = time.time()
-            copy, img = await asyncio.gather(
-                _agent_copy_writer(triage, brand, creative, safe_prompt),
-                _agent_image_prompter(triage, creative, {"brand_name": brand.get("brand_name", "")},
-                                      prompt_dna=bucket_dna),
-            )
-            agent_times["copy_image_parallel"] = round(time.time() - t, 2)
+            copy = await _agent_copy_writer(triage, brand, creative, safe_prompt)
+            agent_times["copy_writer"] = round(time.time() - t, 2)
 
             # ── Stage 3b: Character limit guard (fires only when over limit) ─
             t = time.time()
             copy = await _enforce_char_limits(copy, triage.get("platform", "instagram"))
             agent_times["char_guard"] = round(time.time() - t, 3)
 
-            # ── Stage 4: Layout Planner (Gemini-powered, full-bleed positions) ──
+            # ── Stage 3c: Structured design room + backdrop taste scorer ───
             t = time.time()
-            elements = await _agent_layout_planner(triage, creative, copy, aspect_ratio=aspect_ratio)
-            agent_times["layout_planner"] = round(time.time() - t, 3)
+            design_room = _build_design_room(triage, brand, creative, copy)
+            agent_times["design_room"] = round(time.time() - t, 3)
+
+            # ── Stage 4: Image Prompter + Layout Planner (PARALLEL) ────────
+            t = time.time()
+            img, elements = await asyncio.gather(
+                _agent_image_prompter(triage, creative, copy, design_room=design_room, prompt_dna=bucket_dna),
+                _agent_layout_planner(triage, creative, copy, aspect_ratio=aspect_ratio, design_room=design_room),
+            )
+            agent_times["image_layout_parallel"] = round(time.time() - t, 3)
 
             # ── Assemble final brief ─────────────────────────────────────────
             t = time.time()
-            reconcile = _agent_reconcile_outputs(triage, creative, copy, img, elements, aspect_ratio)
+            reconcile = _agent_reconcile_outputs(
+                triage, creative, copy, img, elements, aspect_ratio, design_room=design_room
+            )
             copy = reconcile["copy"]
             img = reconcile["image"]
             elements = reconcile["elements"]
@@ -1539,6 +2351,19 @@ class DesignAgentChain:
             brief["_reconcile"] = {
                 "copy_space": reconcile.get("copy_space", "bottom"),
                 "notes": reconcile.get("notes", []),
+            }
+            brief["_design_room"] = design_room
+            brief["scores"]["backdrop"] = {
+                "winner_id": ((design_room.get("winner") or {}).get("id") or ""),
+                "winner_score": ((design_room.get("winner") or {}).get("score_total") or 0),
+                "candidates": [
+                    {
+                        "id": candidate.get("id", ""),
+                        "label": candidate.get("label", ""),
+                        "score_total": candidate.get("score_total", 0),
+                    }
+                    for candidate in (design_room.get("candidates") or [])[:4]
+                ],
             }
             agent_times["reconcile"] = round(time.time() - t, 3)
 
