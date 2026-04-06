@@ -1098,15 +1098,15 @@ async def _agent_image_prompter(
     )
 
     context = (
-        f"User's brief: \"{triage.get('original_prompt', '')}\"\n"
-        f"Brand / Product: {str(copy.get('brand_name','') or triage.get('brand_hint','') or 'unbranded')}\n"
-        f"Poster headline (DO NOT put in image): \"{copy.get('headline','')}\"\n"
-        f"Mood: {creative.get('mood','energetic')} | "
-        f"Visual style: {creative.get('visual_style','photorealistic')} | "
+        f"User's brief: {triage.get('original_prompt', '')}\n"
+        f"Brand/Product: {str(copy.get('brand_name','') or triage.get('brand_hint','') or 'unbranded')}\n"
+        f"Poster headline (NEVER render in image): {copy.get('headline','')}\n"
+        f"Mood: {creative.get('mood','energetic')}\n"
+        f"Visual style: {creative.get('visual_style','photorealistic')}\n"
         f"Atmosphere: {creative.get('atmosphere','')}"
         f"{bible_context}\n"
-        f"Platform/aspect: {creative.get('aspect_ratio','4:5')}\n"
-        f"Avoid in scene: {', '.join((creative.get('avoid') or []) + ([forbidden_additions] if forbidden_additions else []))}"
+        f"Platform: {creative.get('aspect_ratio','4:5')}\n"
+        f"Avoid: {', '.join((creative.get('avoid') or []) + ([forbidden_additions] if forbidden_additions else []))}"
     )
 
     raw = await _acall_gemini(system, context, temperature=0.72, agent_name="image_prompter")

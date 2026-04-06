@@ -53,7 +53,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Bebas Neue, Impact, sans-serif",
         "google_query":"Bebas+Neue",
-        "google_url":  "https://github.com/google/fonts/raw/main/ofl/bebasnue/BebasNeue-Regular.ttf",
+        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/bebasnue/BebasNeue-Regular.ttf",
     },
     "anton": {
         "file":        "Anton-Regular.ttf",
@@ -62,7 +62,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Anton, Impact, sans-serif",
         "google_query":"Anton",
-        "google_url":  "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
+        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/anton/Anton-Regular.ttf",
     },
     "montserrat_black": {
         "file":        "Montserrat-Black.ttf",
@@ -71,7 +71,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Montserrat, sans-serif",
         "google_query":"Montserrat:wght@900",
-        "google_url":  "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Black.ttf",
+        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/montserrat/static/Montserrat-Black.ttf",
     },
     "montserrat_bold": {
         "file":        "Montserrat-Bold.ttf",
@@ -80,7 +80,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "body",
         "css_family":  "Montserrat, sans-serif",
         "google_query":"Montserrat:wght@700",
-        "google_url":  "https://github.com/google/fonts/raw/main/ofl/montserrat/static/Montserrat-Bold.ttf",
+        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/montserrat/static/Montserrat-Bold.ttf",
     },
     # ── Downloaded-on-demand fonts (google_url = TTF, NOT woff2) ─────────────
     "oswald": {
@@ -91,7 +91,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "css_family":  "Oswald, sans-serif",
         "google_query":"Oswald:wght@700",
         # TTF static URL (Google Fonts v2 direct download)
-        "google_url":  "https://fonts.gstatic.com/s/oswald/v53/TK3_WkUHHAIjg75cFRf3bXL8LICs1xFvsUtiZTEeA.ttf",
+        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/oswald/static/Oswald-Bold.ttf",
     },
     "playfair": {
         "file":        "PlayfairDisplay-Bold.ttf",
@@ -100,7 +100,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "headline",
         "css_family":  "Playfair Display, Georgia, serif",
         "google_query":"Playfair+Display:wght@700",
-        "google_url":  "https://fonts.gstatic.com/s/playfairdisplay/v37/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKdTvXDXbtXb.ttf",
+        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/playfairdisplay/static/PlayfairDisplay-Bold.ttf",
     },
     "inter_bold": {
         "file":        "Inter-Bold.ttf",
@@ -109,7 +109,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "body",
         "css_family":  "Inter, system-ui, sans-serif",
         "google_query":"Inter:wght@700",
-        "google_url":  "https://fonts.gstatic.com/s/inter/v19/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYAZJhiJ-Ek-_EeA.ttf",
+        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/inter/static/Inter-Bold.ttf",
     },
     "raleway_bold": {
         "file":        "Raleway-Bold.ttf",
@@ -118,7 +118,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "body",
         "css_family":  "Raleway, sans-serif",
         "google_query":"Raleway:wght@700",
-        "google_url":  "https://fonts.gstatic.com/s/raleway/v34/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrEVIT9d0c-.ttf",
+        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/raleway/static/Raleway-Bold.ttf",
     },
     "poppins_bold": {
         "file":        "Poppins-Bold.ttf",
@@ -127,7 +127,7 @@ _FONT_CATALOGUE_RAW: Dict[str, Dict] = {
         "role":        "body",
         "css_family":  "Poppins, sans-serif",
         "google_query":"Poppins:wght@700",
-        "google_url":  "https://fonts.gstatic.com/s/poppins/v23/pxiByp8kv8JHgFVrLCz7Z1xlFd2JQEk.ttf",
+        "google_url":  "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/poppins/Poppins-Bold.ttf",
     },
 }
 
