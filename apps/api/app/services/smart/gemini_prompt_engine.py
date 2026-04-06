@@ -1222,7 +1222,7 @@ def _build_contextual_hints(
 # Per-stage token limits (tuned to actual output sizes)
 _STAGE_MAX_TOKENS = {
     "brief":  1500,
-    "params":  600,
+    "params": 2000,  # CDI schema: primary_output.prompt (80-120w) + negatives + draft_variant = ~1400-1800 tokens
     "critic":  400,
 }
 
@@ -1396,6 +1396,28 @@ class GeminiPromptEngine:
         critic_notes: Optional[str] = None,
     ) -> Dict:
         """Stage B: Creative Brief → CDI schema (multi-variant, model-aware, emotion-translated)."""
+        if capability_bucket == "typography":
+            img_prompt = str(brief.get("background_prompt") or "").strip()
+            img_params = brief.get("_img_parameters") or {}
+            if img_prompt and isinstance(img_params, dict):
+                result: Dict = {
+                    "prompt": img_prompt,
+                    "negative_prompt": str(brief.get("negative_prompt") or "").strip(),
+                    "recommended_model": str(brief.get("_model_preference") or model_name).strip() or model_name,
+                    "parameters": {
+                        "steps": int(img_params.get("steps", 30)),
+                        "guidance": float(img_params.get("guidance", 3.5)),
+                    },
+                    "translation_notes": str(brief.get("_img_translation_notes") or ""),
+                    "recommendation_reason": str(brief.get("_img_recommendation") or ""),
+                    "style_notes": str(brief.get("mood") or ""),
+                    "_source": "design_chain",
+                }
+                if brief.get("_img_draft_variant"):
+                    result["draft_variant"] = brief["_img_draft_variant"]
+                logger.info("[gemini-engine] using DesignAgentChain image prompt for typography")
+                return result
+
         if not self.enabled or brief.get("_source") == "heuristic":
             return self._heuristic_params(brief, capability_bucket)
 

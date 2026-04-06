@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from types import MappingProxyType
 
 logger = logging.getLogger(__name__)
+_BUNDLED_FONTS_DIR = Path(__file__).resolve().parent / "fonts"
 
 # ── Fonts directory (writable, env-configurable) ──────────────────────────────
 _DEFAULT_FONTS_DIR = Path(os.environ.get("FONTS_CACHE_DIR", "/tmp/photogenius_fonts"))
@@ -221,12 +222,75 @@ _STYLE_SCALE: Dict[str, float] = {
 _font_locks: Dict[str, threading.Lock] = defaultdict(threading.Lock)
 # In-memory resolution cache (populated after first successful resolve)
 _resolved_cache: Dict[str, Optional[Path]] = {}
+_invalid_font_warnings: set[str] = set()
 
 # Required fonts that must always be bundled
 _REQUIRED_FONTS = ["bebas_neue", "anton", "montserrat_black", "montserrat_bold"]
+_FONT_FALLBACK_KEYS: Dict[str, Tuple[str, ...]] = {
+    "bebas_neue": ("anton", "montserrat_black", "montserrat_bold"),
+    "anton": ("montserrat_black", "montserrat_bold"),
+    "montserrat_black": ("montserrat_bold",),
+    "montserrat_bold": (),
+    "oswald": ("anton", "montserrat_black", "montserrat_bold"),
+    "playfair": ("montserrat_black", "montserrat_bold"),
+    "inter_bold": ("montserrat_bold",),
+    "raleway_bold": ("montserrat_bold",),
+    "poppins_bold": ("montserrat_bold",),
+}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _font_candidate_paths(info: Dict[str, Any]) -> List[Tuple[str, Path]]:
+    file_name = info.get("file")
+    if not file_name:
+        return []
+
+    candidates = [
+        ("bundled", _BUNDLED_FONTS_DIR / file_name),
+        ("cache", FONTS_DIR / file_name),
+    ]
+    unique: List[Tuple[str, Path]] = []
+    seen: set[Path] = set()
+    for source, path in candidates:
+        if path in seen:
+            continue
+        seen.add(path)
+        unique.append((source, path))
+    return unique
+
+
+def _log_invalid_font_once(font_key: str, source: str, path: Path, exc: Exception) -> None:
+    warning_key = f"{font_key}:{source}:{path}"
+    if warning_key in _invalid_font_warnings:
+        return
+    _invalid_font_warnings.add(warning_key)
+    logger.warning("[typography] Invalid %s font: %s (%s): %s", source, font_key, path.name, exc)
+
+
+def _is_valid_font_file(font_key: str, source: str, path: Path) -> bool:
+    if not path.exists() or not path.is_file():
+        return False
+    try:
+        if path.stat().st_size < 1_024:
+            raise OSError("file too small")
+        from PIL import ImageFont
+        ImageFont.truetype(str(path), 24)
+        return True
+    except Exception as exc:
+        _log_invalid_font_once(font_key, source, path, exc)
+        return False
+
+
+def _find_existing_font(font_key: str) -> Optional[Path]:
+    info = _FONT_CATALOGUE_RAW.get(font_key)
+    if not info:
+        return None
+    for source, path in _font_candidate_paths(info):
+        if _is_valid_font_file(font_key, source, path):
+            return path
+    return None
+
 
 def validate_required_fonts() -> List[str]:
     """
@@ -237,8 +301,8 @@ def validate_required_fonts() -> List[str]:
     missing = []
     for key in _REQUIRED_FONTS:
         info = _FONT_CATALOGUE_RAW.get(key, {})
-        path = FONTS_DIR / info.get("file", "")
-        if not path.exists():
+        path = _find_existing_font(key)
+        if path is None:
             logger.error("[typography] Missing required font: %s (%s)", key, info.get("file"))
             missing.append(key)
     return missing
@@ -267,9 +331,10 @@ def font_path(font_key: str) -> Optional[Path]:
         if font_key in _resolved_cache:
             return _resolved_cache[font_key]
 
-        if path.exists() and path.stat().st_size > 10_000:
-            _resolved_cache[font_key] = path
-            return path
+        existing = _find_existing_font(font_key)
+        if existing:
+            _resolved_cache[font_key] = existing
+            return existing
 
         url = info.get("google_url")
         if not url:
@@ -330,6 +395,13 @@ def resolve_font_path(font_key: str) -> Optional[str]:
     p = font_path(font_key)
     if p:
         return str(p)
+    for fallback_key in _FONT_FALLBACK_KEYS.get(font_key, ()):
+        if fallback_key == font_key:
+            continue
+        fb = font_path(fallback_key)
+        if fb:
+            logger.debug("[typography] font '%s' unavailable; falling back to %s", font_key, fallback_key)
+            return str(fb)
     # Fallback to guaranteed font
     if font_key != "montserrat_bold":
         fb = font_path("montserrat_bold")
@@ -572,7 +644,7 @@ async def preload_all_fonts() -> None:
 
     missing_keys = [
         key for key, info in _FONT_CATALOGUE_RAW.items()
-        if info.get("google_url") and not (FONTS_DIR / info["file"]).exists()
+        if info.get("google_url") and _find_existing_font(key) is None
     ]
     if not missing_keys:
         logger.info("[typography] All fonts already cached — preload skipped")
