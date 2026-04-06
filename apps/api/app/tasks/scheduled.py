@@ -9,6 +9,7 @@ Features:
 """
 
 import logging
+import os
 from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -17,6 +18,7 @@ from app.core.database import get_db
 from app.services.gallery import GalleryCleanupService
 
 logger = logging.getLogger(__name__)
+_publish_scheduler_warning_emitted = False
 
 # Initialize cleanup service
 cleanup_service = GalleryCleanupService(delete_after_days=15)
@@ -86,9 +88,15 @@ async def run_publish_due_tasks():
     Every 60s: publish BatchTasks where scheduledFor <= now and status='ready'.
     Delegates to instagram_publisher / linkedin_publisher.
     """
+    global _publish_scheduler_warning_emitted
+
     try:
         from app.services.publishers.scheduler import _publish_due_tasks
         await _publish_due_tasks()
+    except ImportError as e:
+        if not _publish_scheduler_warning_emitted:
+            _publish_scheduler_warning_emitted = True
+            logger.warning("Publish scheduler disabled: %s", e)
     except Exception as e:
         logger.error("Publish scheduler error: %s", e)
 
@@ -103,17 +111,22 @@ def start_scheduler():
     - Publish due tasks every 60s
     """
 
-    # Publish due BatchTasks every 60 seconds
-    scheduler.add_job(
-        run_publish_due_tasks,
-        "interval",
-        seconds=60,
-        id="publish_due_tasks",
-        name="Publish Scheduled Posts",
-        replace_existing=True,
-        max_instances=1,
+    enable_publish_scheduler = os.getenv("ENABLE_PUBLISH_SCHEDULER", "").strip().lower() in (
+        "1", "true", "yes", "on"
     )
-    logger.info("Scheduled: Publish due tasks every 60s")
+    if enable_publish_scheduler:
+        scheduler.add_job(
+            run_publish_due_tasks,
+            "interval",
+            seconds=60,
+            id="publish_due_tasks",
+            name="Publish Scheduled Posts",
+            replace_existing=True,
+            max_instances=1,
+        )
+        logger.info("Scheduled: Publish due tasks every 60s")
+    else:
+        logger.info("Scheduled publish job disabled (set ENABLE_PUBLISH_SCHEDULER=true to enable)")
 
     # Daily cleanup at 3 AM
     scheduler.add_job(
