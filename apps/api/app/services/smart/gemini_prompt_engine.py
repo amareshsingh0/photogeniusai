@@ -1642,7 +1642,9 @@ class GeminiPromptEngine:
 
         suffix_map = {
             "photorealism":          "photorealistic, 8K UHD, sharp focus, professional photography, hyperdetailed",
-            "typography":            "crisp sharp text, graphic design, high contrast, readable typography",
+            # NEVER add text/typography keywords to background image prompt —
+            # text is overlaid by the compositor, not rendered by the image model
+            "typography":            "cinematic scene, dramatic lighting, professional photography, no text, clean",
             "artistic":              "artistic masterpiece, painterly, expressive, vibrant colors",
             "character_consistency": "consistent character, detailed face, sharp focus, professional portrait",
             "vector":                "clean vector art, flat design, scalable illustration",
@@ -1662,12 +1664,26 @@ class GeminiPromptEngine:
         if avoid:
             neg = ", ".join(avoid) + ", " + neg
 
-        return {
+        # Use image_prompter's validated parameters if available in brief
+        img_params = brief.get("_img_parameters") or {}
+        steps = int(img_params.get("steps", 30))
+        guidance = float(img_params.get("guidance", 3.5))
+
+        # Use image_prompter's model recommendation if available
+        img_model = str(brief.get("_model_preference") or "").strip()
+
+        result: Dict = {
             "prompt": ", ".join(p for p in parts if p),
             "negative_prompt": neg,
+            "parameters": {"steps": steps, "guidance": guidance},
             "style_notes": f"bucket={capability_bucket}",
             "_source": "heuristic",
         }
+        if img_model:
+            result["recommended_model"] = img_model
+        if brief.get("_img_draft_variant"):
+            result["draft_variant"] = brief["_img_draft_variant"]
+        return result
 
 
 # Singleton

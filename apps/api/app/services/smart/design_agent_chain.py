@@ -92,11 +92,78 @@ _GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-preview-05-20")
 _AGENT_MAX_TOKENS = {
     "triage":           800,
     "brand_intel":      800,
-    "creative_director":1500,  # bible JSON needs room
+    "creative_director":1500,
     "copy_writer":      1800,
-    "image_prompter":   1200,
+    "image_prompter":   1400,
+    "layout_planner":   1000,
     "char_guard":       600,
 }
+
+# ── Image Prompt Engineer Knowledge Base ─────────────────────────────────────
+# Injected into _agent_image_prompter so Gemini has per-model prompt strategies.
+# Distilled from full model-profiles.md — keeps token cost low but covers all models.
+_IMAGE_PROMPT_ENGINEER_KB = """
+## MODEL SELECTION
+- flux_schnell   → drafts, simple scenes. Under 80 words, ONE lead subject, skip complex lighting. Steps=4, guidance=3.5
+- flux_dev       → quality/speed balance, portraits, fashion, landscapes. 2-part prose: scene + style. Steps=24, guidance=3.5
+- flux_pro       → premium commercial, luxury products, real humans, editorial. 3-part prose below. Steps=30, guidance=3.5
+- flux_max       → print/editorial, max fidelity, exhaustive detail. Full prose paragraphs. Steps=35, guidance=3.5
+- hunyuan_image  → East Asian aesthetic, soft fashion, beauty. Add "professional studio photography, Western editorial style" to counter default Eastern lean. Steps=25, guidance=5.0
+- ideogram_quality → ONLY for bold graphic/abstract scenes or when text must appear in the image. Put text in quotes in prompt. Steps=auto
+- recraft_v4     → design assets, illustration, icons. Use DESIGN language not photography language. Specify hex colors.
+
+## PER-MODEL PROMPT TEMPLATES
+
+### flux_schnell
+[Subject], [key visual detail], [style tag], [one mood adjective], [one lighting cue]
+Example: "Fashion model, gold sequin dress, photorealistic, confident, studio backlight"
+
+### flux_dev
+[Detailed subject + context]. [Setting and atmosphere]. [Style reference, lighting, color mood].
+Example: "A luxury skincare bottle resting on black marble. Soft studio bokeh, water droplets on surface. Editorial product photography, cool-white lighting from upper right, Vogue aesthetic."
+
+### flux_pro (3-PART STRUCTURE — always use this for premium output)
+Part 1 — Scene: What's in frame, arrangement, subject position
+Part 2 — Technical: Camera body (Hasselblad X2D / Sony A7R V), lens (85mm f/1.4), lighting (key light 45° upper left, fill 1:3 ratio, hair light)
+Part 3 — Style: Color grading (Kodak Portra 400 / Fujifilm sim), aesthetic reference, finish
+Example: "High-fashion model in ivory silk gown, mid-stride on rain-slicked runway, dramatic side shadows below waist. Shot on Hasselblad X2D, 85mm f/1.4, key light from upper left, deep shadow fill, hair light from behind. Vogue Italia color grading, desaturated blues, warm skin tones, editorial magazine quality."
+
+### flux_max
+Full prose paragraph with exhaustive detail: fabric texture, surface grain, ambient light physics, foreground/background layers, camera settings, post-processing intent.
+
+### hunyuan_image
+[Subject], professional studio photography, [explicit lighting], natural skin tone, Western editorial style, [environment], [color grading], high resolution
+
+### ideogram_quality
+[Simple background description]. Text reading "[EXACT TEXT]" in [font style] at [position], [text color]. [Design style: minimalist/bold/elegant].
+
+## UNIVERSAL RULES (apply to ALL models)
+1. SUBJECT FIRST — lead with the primary visual subject, never the mood
+   ✅ "A luxury watch resting on dark slate, single spotlight from above"
+   ❌ "A dramatic luxurious scene featuring a watch"
+2. SPECIFICITY > ADJECTIVES
+   ✅ "worn leather jacket, brass buttons, rain-soaked collar"  ❌ "detailed jacket"
+3. LIGHTING AS LANGUAGE — source, direction, temperature
+   ✅ "rim light from left, warm tungsten key at 45°, deep shadow fill"  ❌ "dramatic lighting"
+4. STYLE ANCHOR with specificity
+   ✅ "cinematography of Roger Deakins, anamorphic lens"  ❌ "cinematic style"
+5. BOTTOM DARK — critical for text overlay
+   Engineer lower 50% to be naturally dark: deep floor shadow / dark surface / vignette / fade to black
+
+## CD OUTPUT → IMAGE PROMPT TRANSLATION
+emotional_territory  → mood tone, color temperature, contrast level
+visual_metaphors     → compositional treatment, background elements (NOT scene replacement)
+dominant_color_story → "dominant palette: X, accent: Y, shadows: Z"
+composition_archetype → camera angle, framing, visual weight
+RULE: Subject from user brief stays in frame. Never replace with abstract landscape.
+RULE: Headline/copy text NEVER goes into image prompt.
+
+## NEGATIVE PROMPTS — precision only, no generic negatives
+Always: "text, words, letters, signs, watermark, typography, UI overlay, captions"
+flux models add: "blurry, overexposed, plastic skin, bad anatomy, deformed"
+ideogram add: "photorealistic, lens blur, noise, photography"
+hunyuan add: "harsh lighting, overexposed skin, cartoon, anime"
+"""
 
 
 # ── Empty brief (defaults when agents fail) ───────────────────────────────────
@@ -296,37 +363,108 @@ async def _acall_gemini(
     return "{}"
 
 
+# ── Platform format knowledge — dimensions, ratios, font recommendations ──────
+_PLATFORM_FORMATS_KB = """
+PLATFORM → DIMENSIONS → ASPECT RATIO (choose the best match from user's request):
+instagram_portrait  → 1080×1350  → 4:5   (max real estate, recommended for ads/posters)
+instagram_square    → 1080×1080  → 1:1   (universal, safe for all feeds)
+instagram_story     → 1080×1920  → 9:16  (full screen, keep content in center 1080×1420 safe zone)
+facebook_landscape  → 1200×628   → 1.91:1 (classic ad)
+twitter             → 1200×675   → 16:9  (in-stream card)
+linkedin            → 1200×627   → 1.91:1 (professional)
+youtube_thumbnail   → 1280×720   → 16:9  (min 60px font, test at 120×90px)
+pinterest           → 1000×1500  → 2:3   (standard pin)
+tiktok_story        → 1080×1920  → 9:16  (full screen)
+print_a4            → 2480×3508  → A4    (300dpi)
+print_flyer         → 2550×3300  → letter (300dpi)
+banner_leaderboard  → 728×90     → wide  (desktop header)
+banner_rectangle    → 300×250    → box   (sidebar)
+banner_half_page    → 300×600    → tall  (high-impact sidebar)
+
+INFERENCE RULES:
+- "poster", "ad", "sale", "promo", "fashion", "product" → instagram_portrait (4:5) DEFAULT
+- "story", "reel", "TikTok", "vertical video" → instagram_story (9:16)
+- "square", "feed", "social" (no size hint) → instagram_square (1:1)
+- "thumbnail", "YouTube" → youtube_thumbnail (16:9)
+- "LinkedIn", "B2B", "professional" → linkedin (1.91:1)
+- "Twitter", "tweet" → twitter (16:9)
+- "print", "flyer", "event", "A4" → print_flyer
+- "banner", "leaderboard" → banner_leaderboard
+- "Pinterest", "pin" → pinterest (2:3)
+
+TYPOGRAPHY — web-safe Google Fonts for bold headlines (prefer these):
+Display/Impact: Bebas Neue, Anton, Oswald (condensed punchy), Archivo Black
+Editorial/Premium: Playfair Display, DM Serif Display, Fraunces
+Modern/Clean: Montserrat, Raleway, Space Grotesk
+Rule: Max 2 typefaces, max 3 weights. Never Inter/Roboto/Arial for headlines.
+"""
+
+# ── Platform → (width, height) lookup used after triage ──────────────────────
+_PLATFORM_DIMS: Dict[str, tuple] = {
+    "instagram_portrait":  (1080, 1350),
+    "instagram_square":    (1080, 1080),
+    "instagram_story":     (1080, 1920),
+    "instagram":           (1080, 1350),  # default to portrait
+    "facebook_landscape":  (1200, 628),
+    "twitter":             (1200, 675),
+    "linkedin":            (1200, 627),
+    "youtube_thumbnail":   (1280, 720),
+    "pinterest":           (1000, 1500),
+    "tiktok_story":        (1080, 1920),
+    "print_a4":            (2480, 3508),
+    "print_flyer":         (2550, 3300),
+    "banner_leaderboard":  (728, 90),
+    "banner_rectangle":    (300, 250),
+    "banner_half_page":    (300, 600),
+    "default":             (1080, 1350),
+}
+
+
 # ── Individual agents (all async) ─────────────────────────────────────────────
 
 async def _agent_triage(prompt: str) -> Dict:
     system = (
-        "You are a senior marketing strategist. Read the design request carefully and use your judgment.\n"
-        "Infer the industry from context clues — 'gym' means fitness, 'cafe' means food, "
-        "'app launch' means saas, etc. Think like a human creative director.\n"
-        "If the user quoted specific text (e.g. 'TRANSFORM'), that is their intended headline — note it.\n"
-        'Return ONLY valid JSON:\n'
+        "You are a senior marketing strategist AND platform expert.\n"
+        "Read the design request carefully and use your judgment.\n"
+        "Infer industry from context: 'gym'→fitness, 'cafe'→food, 'app launch'→saas, etc.\n"
+        "If user quoted specific text (e.g. 'text: TRANSFORM'), that is their intended headline.\n"
+        "\n"
+        "== PLATFORM FORMAT KNOWLEDGE ==\n"
+        f"{_PLATFORM_FORMATS_KB}\n"
+        "== END KNOWLEDGE ==\n"
+        "\n"
+        "Use the INFERENCE RULES above to pick the correct platform.\n"
+        "Return ONLY valid JSON:\n"
         '{"creative_type":"ad|poster|social_post|banner|story|thumbnail",\n'
-        '"platform":"instagram|instagram_story|linkedin|twitter|print|default",\n'
+        '"platform":"instagram_portrait|instagram_square|instagram_story|facebook_landscape|'
+        'twitter|linkedin|youtube_thumbnail|pinterest|tiktok_story|print_flyer|print_a4|'
+        'banner_leaderboard|banner_rectangle|banner_half_page|default",\n'
         '"goal":"product_launch|brand_awareness|sale_promotion|event|app_download|lead_gen",\n'
         '"audience":"b2b|b2c|youth|professional|general",\n'
         '"brand_hint":"brand or product name if mentioned, else empty",\n'
         '"industry":"saas|food|fashion|fitness|real_estate|healthcare|finance|education|tech|general",\n'
-        '"explicit_headline":"exact text user quoted as headline, or empty",\n'
-        '"explicit_cta":"exact text user quoted as CTA/button, or empty",\n'
+        '"explicit_headline":"exact text user quoted as headline, or empty string",\n'
+        '"explicit_cta":"exact text user quoted as CTA/button, or empty string",\n'
+        '"explicit_subheadline":"second quoted text if user specified subheadline/subtitle, else empty",\n'
         '"is_festival":false,"festival_name":""}'
     )
     raw = await _acall_gemini(system, "Design request: " + prompt, temperature=0.3, agent_name="triage")
     r = _extract_json(raw)
     defaults = {
-        "creative_type": "poster", "platform": "instagram",
+        "creative_type": "poster", "platform": "instagram_portrait",
         "goal": "brand_awareness", "audience": "general",
         "brand_hint": "", "industry": "general",
-        "explicit_headline": "", "explicit_cta": "",
+        "explicit_headline": "", "explicit_cta": "", "explicit_subheadline": "",
         "is_festival": False, "festival_name": "",
     }
     for k, v in r.items():
         if v is not None and not k.startswith("_"):
             defaults[k] = v
+
+    # Resolve platform → recommended dimensions
+    dims = _PLATFORM_DIMS.get(defaults["platform"], _PLATFORM_DIMS["default"])
+    defaults["recommended_width"]  = dims[0]
+    defaults["recommended_height"] = dims[1]
     return defaults
 
 
@@ -377,6 +515,55 @@ async def _agent_brand_intel(
     return result
 
 
+_CREATIVE_DIRECTOR_KB = """
+## CREATIVE BRIEF — answer these before deciding anything:
+- AUDIENCE: Who? Age, mindset, platform context?
+- HOOK: ONE thing this visual communicates in 1.5 seconds
+- EMOTION: What should the viewer FEEL? (Urgency / Desire / Curiosity / Trust / FOMO)
+- DIFFERENTIATOR: What makes this NOT look like every other ad in this space?
+
+## FORMAT RULES:
+Posters: One dominant visual, 3-level typographic hierarchy MAX, 60-30-10 color rule
+Image ads: 3-second rule, CTA unmissable (color + size + position), whitespace = premium
+Thumbnails: 6 words max, rule of halves, bold keyline on text, emotional face beats product
+
+## COLOR STRATEGY:
+Red/Orange → Urgency, energy | Blue → Trust, technology | Yellow/Gold → Premium, warmth
+Purple → Luxury, mystery | Green → Growth, health | Black/White → Editorial, sophistication
+Always 60% dominant + 30% secondary + 10% accent. Never more than 3 colors + neutrals.
+
+## COMPOSITION ARCHETYPES — pick ONE, execute hard:
+1. Hero-Dominant: Massive image, minimal text overlay → for product/fashion/lifestyle
+2. Split 60/40: Visual | Text split → clean, editorial
+3. Typographic-Led: Bold type IS the hero visual → for sales/urgency/announcements
+4. Frame-Within-Frame: Border creates depth and focus → for premium/luxury
+5. Dynamic Diagonal: Energy, movement, tension → for fitness/tech/sports
+6. Asymmetric Grid: Intentional imbalance, visual tension → for fashion/editorial
+7. Full-Bleed: Image fills everything, text floats over gradient → for cinematic/emotional
+
+## VISUAL METAPHORS — must be CONCRETE nouns, not abstract concepts:
+✅ "rain-slicked runway", "morning light on silk", "shattered crystal"
+❌ "modernity", "aspiration", "innovation"
+
+## FORBIDDEN ELEMENTS — be specific about what kills the design:
+✅ "no stock photo handshakes", "no rainbow gradients", "no clip-art icons"
+❌ "no clichés" (too vague)
+
+## COPY PRINCIPLES:
+Headline formulas: Question / Provocation / Bold claim / Contrast / Urgency / Specificity
+✅ "Save 3 hours/week" > "Save time" (specificity beats vagueness)
+✅ Under 8 words for ads/thumbnails
+❌ Passive voice, jargon, more than 8 words
+
+## ANTI-PATTERNS (NEVER produce these):
+- Rainbow of colors → max 3 + neutrals
+- All text same size → 3-level hierarchy minimum
+- Centered everything → asymmetry, rule of thirds
+- Stock photo feel → bold type, abstract shapes, custom treatment
+- Drop shadow on everything → only where it solves legibility
+- Trying to say everything → ONE hook, ONE message, ONE job
+"""
+
 async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Dict:
     from app.services.smart.color_intelligence import derive_palette, suggest_harmony
 
@@ -388,28 +575,52 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
         harmony=harmony,
     )
 
+    platform = triage.get("platform", "instagram")
+    industry = triage.get("industry", "general")
+    goal     = triage.get("goal", "brand_awareness")
+
     system = (
-        "You are a senior Creative Director (Wieden+Kennedy level).\n"
-        "In addition to visual direction, produce a Creative Bible — a locked creative contract\n"
-        "that all downstream agents must obey.\n"
-        'Return ONLY valid JSON: {"theme":"word","mood":"word",'
+        "You are a Senior Creative Director with 15+ years at Wieden+Kennedy, Ogilvy, BBDO.\n"
+        "You make opinionated, distinctly non-generic creative decisions.\n"
+        "\n"
+        "== YOUR CREATIVE KNOWLEDGE BASE ==\n"
+        f"{_CREATIVE_DIRECTOR_KB}\n"
+        "== END KNOWLEDGE BASE ==\n"
+        "\n"
+        "TASK: Given the brief below, produce:\n"
+        "1. Visual direction (theme, mood, style, composition archetype, atmosphere)\n"
+        "2. Creative Bible — a locked creative contract all downstream agents must obey\n"
+        "\n"
+        "THINKING PROCESS (internal, before outputting):\n"
+        f"- Platform: {platform} → what format rules apply?\n"
+        f"- Industry: {industry} → what visual language is expected vs subverted?\n"
+        f"- Goal: {goal} → what emotion drives action?\n"
+        "- Choose ONE composition archetype from knowledge base and execute hard\n"
+        "- Visual metaphors must be concrete nouns (not abstract concepts)\n"
+        "- Forbidden elements must be specific (not 'no clichés')\n"
+        "\n"
+        "Return ONLY valid JSON:\n"
+        '{"theme":"<one evocative word>","mood":"<one precise emotion word>",'
         '"visual_style":"photorealistic|illustration|3d_render|graphic_flat|editorial",'
-        '"layout_archetype":"hero_top_features_bottom|split_left_right|full_bleed|minimal_centered|grid",'
+        '"layout_archetype":"hero_dominant|split_60_40|typographic_led|frame_within_frame|dynamic_diagonal|asymmetric_grid|full_bleed",'
         '"hero_occupies":"top_60|top_50|full_bleed|center_50",'
-        '"atmosphere":"brief description","avoid":["elements"],'
+        '"atmosphere":"<one sentence, specific and evocative, not generic>",'
+        '"avoid":["<specific element 1>","<specific element 2>","<specific element 3>"],'
         '"creative_bible":{'
-        '"emotional_territory":"ONE precise phrase capturing the exact feeling this design must evoke",'
-        '"visual_metaphors":["concrete noun 1","concrete noun 2","concrete noun 3"],'
-        '"forbidden_elements":["no generic element","no cliché element","no off-brand element"],'
-        '"dominant_color_story":"one sentence describing how colors work together in natural language",'
-        '"composition_archetype":"describe the diagonal/tension/balance as a sentence"}}'
+        '"emotional_territory":"<ONE precise phrase: the exact feeling this design must evoke>",'
+        '"visual_metaphors":["<concrete noun 1>","<concrete noun 2>","<concrete noun 3>"],'
+        '"forbidden_elements":["<specific visual no-go 1>","<specific no-go 2>","<specific no-go 3>"],'
+        '"dominant_color_story":"<one sentence: how the 60-30-10 colors work together>",'
+        '"composition_archetype":"<one sentence: describe the diagonal/tension/balance specifically>"}}'
     )
     context = (
-        f"Prompt: {prompt}\nBrand: {brand.get('brand_name','')} Tone: {brand.get('tone','')}\n"
-        f"Industry: {triage.get('industry','')} Platform: {triage.get('platform','')}\n"
-        f"Primary color: {palette.get('primary','#6C63FF')}"
+        f"Brief: {prompt}\n"
+        f"Brand: {brand.get('brand_name','')} | Tone: {brand.get('tone','')} | Industry: {industry}\n"
+        f"Platform: {platform} | Goal: {goal} | Audience: {triage.get('audience','general')}\n"
+        f"Primary color: {palette.get('primary','#6C63FF')} | "
+        f"Secondary: {palette.get('secondary','#4FACFE')}"
     )
-    raw = await _acall_gemini(system, context, temperature=0.8, agent_name="creative_director")
+    raw = await _acall_gemini(system, context, temperature=0.82, agent_name="creative_director")
     r = _extract_json(raw)
 
     # Extract and validate creative_bible
@@ -445,11 +656,14 @@ async def _agent_copy_writer(
     hl_max = {"instagram": 30, "instagram_story": 20, "linkedin": 50, "default": 40}.get(platform, 40)
 
     # Tell the AI what the user explicitly typed — it should use these verbatim
-    explicit_headline = triage.get("explicit_headline", "").strip()
-    explicit_cta      = triage.get("explicit_cta", "").strip()
+    explicit_headline    = triage.get("explicit_headline", "").strip()
+    explicit_cta         = triage.get("explicit_cta", "").strip()
+    explicit_subheadline = triage.get("explicit_subheadline", "").strip()
     explicit_hint = ""
     if explicit_headline:
         explicit_hint += f'\nUSER EXPLICITLY WANTS headline: "{explicit_headline}" — use this EXACTLY, do not change it.'
+    if explicit_subheadline:
+        explicit_hint += f'\nUSER EXPLICITLY WANTS subheadline: "{explicit_subheadline}" — use this EXACTLY.'
     if explicit_cta:
         explicit_hint += f'\nUSER EXPLICITLY WANTS cta: "{explicit_cta}" — use this EXACTLY.'
 
@@ -527,13 +741,19 @@ async def _agent_copy_writer(
         features.append({"icon": "⭐", "title": f"Feature {len(features)+1}", "desc": "Coming soon"})
 
     # Explicit user text ALWAYS wins — even if Gemini failed entirely
-    # Check this FIRST before falling back to AI output or "MAKE IT HAPPEN"
     if explicit_headline:
         headline = explicit_headline.upper()
     else:
         headline = str(r.get("headline") or "").strip().upper() or "MAKE IT HAPPEN"
         if len(headline) > hl_max:
             headline = headline[:hl_max].rsplit(" ", 1)[0]
+
+    # explicit_subheadline from triage (e.g. user said "Spring 2026" as subtitle)
+    if explicit_subheadline:
+        subheadline = explicit_subheadline
+    else:
+        subheadline = str(r.get("subheadline") or "").strip()
+
     cta = str(r.get("cta") or "GET STARTED").upper()
     if explicit_cta:
         cta = explicit_cta.upper()
@@ -541,7 +761,7 @@ async def _agent_copy_writer(
     return {
         "brand_name":  str(r.get("brand_name") or brand.get("brand_name", "") or ""),
         "headline":    headline,
-        "subheadline": str(r.get("subheadline") or "The fastest way to get results"),
+        "subheadline": subheadline,
         "body":        str(r.get("body") or ""),
         "cta":         cta,
         "cta_url":     str(r.get("cta_url") or ""),
@@ -607,89 +827,150 @@ async def _enforce_char_limits(copy_blocks: Dict, platform: str) -> Dict:
     return result
 
 
-def _agent_layout_planner(
+async def _agent_layout_planner(
+    triage: Dict,
     creative: Dict,
     copy: Dict,
-    aspect_ratio: float = 0.667,   # width/height — default 1024/1536
+    aspect_ratio: float = 0.667,
 ) -> List[Dict]:
-    """Pure Python — no LLM call. Returns Fabric.js element list."""
-    hero_map = {"top_60": 0.60, "top_50": 0.50, "full_bleed": 0.80, "center_50": 0.50}
-    hero_pct = hero_map.get(creative.get("hero_occupies", "top_60"), 0.60)
-
-    # For landscape (16:9), reduce hero to leave room for text
-    if aspect_ratio >= 1.5:
-        hero_pct = min(hero_pct, 0.40)
-
+    """
+    Gemini-powered layout agent — thinks about optimal element placement
+    for a full-bleed poster (hero image fills 100% canvas, text overlaid).
+    Returns normalized Fabric.js element list (x/y/w/h in 0.0–1.0 range).
+    """
     palette = creative.get("palette", {})
     pri = _safe_hex(palette.get("primary"), "#6C63FF")
-    bg  = _safe_hex(palette.get("bg"), "#0A0A1A")
+    txt = _safe_hex(palette.get("text_primary"), "#FFFFFF")
+    sec = _safe_hex(palette.get("text_secondary"), "#CCCCDD")
+
+    has_brand    = bool(str(copy.get("brand_name") or "").strip())
+    has_sub      = bool(str(copy.get("subheadline") or "").strip())
+    has_cta      = bool(str(copy.get("cta") or "").strip())
+    has_tagline  = bool(str(copy.get("tagline") or "").strip())
+    headline_len = len(str(copy.get("headline") or ""))
+
+    system = (
+        "You are a UI Layout Planner for full-bleed ad posters.\n"
+        "The hero image fills the ENTIRE canvas (0,0 → 1,1). All text is OVERLAID on the image.\n"
+        "Canvas is normalized: x/y/w/h all in 0.0–1.0 range.\n"
+        "\n"
+        "PLATFORM KNOWLEDGE:\n"
+        f"{_PLATFORM_FORMATS_KB}\n"
+        "\n"
+        "LAYOUT RULES:\n"
+        "1. Brand bar: top strip y=0.0–0.07 (only if brand exists)\n"
+        "2. Headline: large, centered, y=0.52–0.65 (adjust for content length)\n"
+        "3. Subheadline: directly below headline, smaller font\n"
+        "4. CTA button: pinned near bottom, y=0.80–0.86\n"
+        "5. Tagline: very bottom, y=0.91–0.95\n"
+        "6. NOTHING exceeds y=0.97\n"
+        "7. Landscape (16:9): text left-aligned x=0.05–0.50, hero fills right\n"
+        "8. Story (9:16): generous vertical spacing, bigger fonts\n"
+        "9. Font choice: prefer bebas_neue/anton for headlines, montserrat_bold for body\n"
+        "\n"
+        "Return ONLY valid JSON array of elements. Each element:\n"
+        '{"id":"<id>","type":"text|shape|image","bounds":{"x":0.0,"y":0.0,"w":1.0,"h":0.1},'
+        '"style":{"font":"bebas_neue|anton|montserrat_bold|playfair","size_role":"headline|subheadline|body|cta|tagline|brand","color":"#FFFFFF","align":"center|left|right"},'
+        '"content":"<text content>","locked":false}\n'
+        "Include only elements that have content. No empty elements."
+    )
+
+    ar_label = (
+        "portrait 4:5 (instagram)" if 0.75 <= aspect_ratio <= 0.82
+        else "story 9:16 (vertical)" if aspect_ratio < 0.65
+        else "square 1:1" if 0.95 <= aspect_ratio <= 1.05
+        else "landscape 16:9" if aspect_ratio >= 1.5
+        else f"custom {aspect_ratio:.2f}"
+    )
+    context = (
+        f"Poster: {ar_label}\n"
+        f"Brand: {copy.get('brand_name','')}\n"
+        f"Headline ({headline_len} chars): {copy.get('headline','')}\n"
+        f"Subheadline: {copy.get('subheadline','')}\n"
+        f"CTA: {copy.get('cta','')}\n"
+        f"Tagline: {copy.get('tagline','')}\n"
+        f"Mood: {creative.get('mood','')}\n"
+        f"Accent color: {pri}\n"
+        f"Has brand: {has_brand}, Has sub: {has_sub}, Has CTA: {has_cta}, Has tagline: {has_tagline}"
+    )
+
+    raw = await _acall_gemini(system, context, temperature=0.3, agent_name="layout_planner")
+
+    # Parse — expect JSON array
+    raw = raw.strip()
+    raw = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`").strip()
+    try:
+        elements = json.loads(raw)
+        if isinstance(elements, list) and elements:
+            logger.info("[layout_planner] Gemini placed %d elements", len(elements))
+            return elements
+    except Exception:
+        pass
+
+    # Fallback: deterministic full-bleed layout
+    logger.warning("[layout_planner] Gemini failed, using deterministic full-bleed layout")
+    return _layout_fallback(copy, creative, aspect_ratio)
+
+
+def _layout_fallback(copy: Dict, creative: Dict, aspect_ratio: float) -> List[Dict]:
+    """Deterministic full-bleed layout — all elements on image, nothing below."""
+    palette = creative.get("palette", {})
+    pri = _safe_hex(palette.get("primary"), "#6C63FF")
     txt = _safe_hex(palette.get("text_primary"), "#FFFFFF")
     sec = _safe_hex(palette.get("text_secondary"), "#CCCCDD")
 
     elements: List[Dict] = []
-    y = 0.0
 
+    # Hero fills full canvas
+    elements.append({"id": "hero_bg", "type": "image",
+        "bounds": {"x": 0, "y": 0, "w": 1.0, "h": 1.0},
+        "style": {"opacity": 1.0}, "content": "__hero_url__", "locked": True})
+
+    # Brand bar (top)
     brand_name = str(copy.get("brand_name") or "")
     if brand_name:
         elements.append({"id": "brand_bar", "type": "shape",
             "bounds": {"x": 0, "y": 0, "w": 1.0, "h": 0.07},
-            "style": {"fill": pri, "opacity": 1.0}, "content": "", "locked": False})
+            "style": {"fill": "#00000066", "opacity": 0.7}, "content": "", "locked": True})
         elements.append({"id": "brand_name", "type": "text",
             "bounds": {"x": 0.05, "y": 0.01, "w": 0.90, "h": 0.05},
-            "style": {"font": "bebas_neue", "size_role": "brand", "color": txt,
-                      "weight": "bold", "align": "center"},
+            "style": {"font": "bebas_neue", "size_role": "brand", "color": txt, "align": "center"},
             "content": brand_name.upper(), "locked": False})
-        y = 0.07
 
-    elements.append({"id": "hero_bg", "type": "image",
-        "bounds": {"x": 0, "y": y, "w": 1.0, "h": hero_pct},
-        "style": {"opacity": 1.0}, "content": "__hero_url__", "locked": True})
-    y += hero_pct
+    # Headline at 52%
+    headline = str(copy.get("headline") or "")
+    if headline:
+        elements.append({"id": "headline", "type": "text",
+            "bounds": {"x": 0.05, "y": 0.52, "w": 0.90, "h": 0.14},
+            "style": {"font": "bebas_neue", "size_role": "headline", "color": txt, "align": "center"},
+            "content": headline, "locked": False})
 
-    text_h = 0.22
-    elements.append({"id": "text_panel", "type": "shape",
-        "bounds": {"x": 0, "y": y, "w": 1.0, "h": text_h},
-        "style": {"fill": bg, "opacity": 1.0}, "content": "", "locked": True})
-    elements.append({"id": "headline", "type": "text",
-        "bounds": {"x": 0.05, "y": y + 0.02, "w": 0.90, "h": 0.10},
-        "style": {"font": "bebas_neue", "size_role": "headline", "color": txt,
-                  "weight": "bold", "align": "center"},
-        "content": str(copy.get("headline") or ""), "locked": False})
-    elements.append({"id": "subheadline", "type": "text",
-        "bounds": {"x": 0.05, "y": y + 0.12, "w": 0.90, "h": 0.06},
-        "style": {"font": "montserrat_bold", "size_role": "subheadline", "color": sec,
-                  "weight": "normal", "align": "center"},
-        "content": str(copy.get("subheadline") or ""), "locked": False})
-    y += text_h
+    # Subheadline at 67%
+    sub = str(copy.get("subheadline") or "")
+    if sub:
+        elements.append({"id": "subheadline", "type": "text",
+            "bounds": {"x": 0.05, "y": 0.67, "w": 0.90, "h": 0.06},
+            "style": {"font": "montserrat_bold", "size_role": "subheadline", "color": sec, "align": "center"},
+            "content": sub, "locked": False})
 
-    features = copy.get("features") or []
-    if features:
-        elements.append({"id": "features_grid", "type": "group",
-            "bounds": {"x": 0, "y": y, "w": 1.0, "h": 0.28},
-            "style": {"fill": bg}, "content": features, "locked": False})
-        y += 0.28
+    # CTA at 80%
+    cta = str(copy.get("cta") or "")
+    if cta:
+        elements.append({"id": "cta_button", "type": "shape",
+            "bounds": {"x": 0.10, "y": 0.80, "w": 0.80, "h": 0.08},
+            "style": {"fill": pri, "radius": 40, "opacity": 1.0}, "content": "", "locked": False})
+        elements.append({"id": "cta_text", "type": "text",
+            "bounds": {"x": 0.10, "y": 0.80, "w": 0.80, "h": 0.08},
+            "style": {"font": "bebas_neue", "size_role": "cta", "color": txt, "align": "center"},
+            "content": cta, "locked": False})
 
-    elements.append({"id": "cta_button", "type": "shape",
-        "bounds": {"x": 0.05, "y": y + 0.02, "w": 0.90, "h": 0.08},
-        "style": {"fill": pri, "radius": 40, "opacity": 1.0}, "content": "", "locked": False})
-    elements.append({"id": "cta_text", "type": "text",
-        "bounds": {"x": 0.05, "y": y + 0.02, "w": 0.90, "h": 0.08},
-        "style": {"font": "bebas_neue", "size_role": "cta", "color": txt,
-                  "weight": "bold", "align": "center"},
-        "content": str(copy.get("cta") or ""), "locked": False})
-    y += 0.10
-
+    # Tagline at 91%
     tagline = str(copy.get("tagline") or "")
     if tagline:
         elements.append({"id": "tagline", "type": "text",
-            "bounds": {"x": 0.05, "y": y + 0.01, "w": 0.90, "h": 0.04},
+            "bounds": {"x": 0.05, "y": 0.91, "w": 0.90, "h": 0.04},
             "style": {"font": "montserrat_bold", "size_role": "tagline", "color": sec, "align": "center"},
             "content": tagline, "locked": False})
-        y += 0.05
-
-    # Warn if layout overflows canvas
-    if y > 1.0:
-        logger.warning("[layout_planner] total y=%.2f exceeds canvas bounds — clipping may occur", y)
 
     return elements
 
@@ -700,112 +981,185 @@ async def _agent_image_prompter(
     copy: Dict,
     prompt_dna: Optional[Dict] = None,
 ) -> Dict:
+    # Full-bleed: image fills 100% canvas, text overlaid. Bottom 50% must be dark.
     festival_hint = ""
     if triage.get("is_festival") and triage.get("festival_name"):
-        festival_hint = f"\nFestival: {triage['festival_name']} — use authentic cultural scene."
+        festival_hint = f"\nFestival context: {triage['festival_name']} — weave in authentic cultural visual elements."
 
-    hero_pct = {"top_60": 0.60, "top_50": 0.50}.get(creative.get("hero_occupies", "top_60"), 0.60)
-    dark_zone_pct = int((1.0 - hero_pct) * 100)
-
-    # Prompt DNA — inject winning style memory when run_count >= 5 (Reflexion framework)
     dna_hint = ""
     if prompt_dna and isinstance(prompt_dna, dict):
-        run_count = prompt_dna.get("run_count", 0)
         winning = prompt_dna.get("winning_keywords") or []
         failing = prompt_dna.get("failing_patterns") or []
-        if run_count >= 5 and winning:
-            dna_hint += f"\nStyle memory (from {run_count} past generations you liked): {', '.join(winning[:8])}"
+        if prompt_dna.get("run_count", 0) >= 5 and winning:
+            dna_hint = f"\nStyle memory from past liked generations: {', '.join(winning[:8])}"
         if failing:
-            dna_hint += f"\nAvoid (patterns that failed before): {', '.join(failing[:4])}"
+            dna_hint += f"\nPatterns to avoid: {', '.join(failing[:4])}"
 
-    # Creative Bible — inject visual metaphors and forbidden elements into scene prompt
     bible = creative.get("creative_bible") or {}
-    bible_hint = ""
-    if bible.get("visual_metaphors"):
-        metaphors = [m for m in bible["visual_metaphors"] if m][:3]
-        if metaphors:
-            bible_hint += f"\nVisual metaphors to weave in: {', '.join(metaphors)}"
-    if bible.get("dominant_color_story"):
-        bible_hint += f"\nColor story: {bible['dominant_color_story']}"
-    if bible.get("composition_archetype"):
-        bible_hint += f"\nComposition: {bible['composition_archetype']}"
+    forbidden_additions = ", ".join((bible.get("forbidden_elements") or [])[:3])
 
-    # Forbidden elements → negative prompt additions
-    forbidden_additions = ""
-    if bible.get("forbidden_elements"):
-        forbidden_additions = ", ".join(bible["forbidden_elements"][:3])
+    # Build rich creative context from Creative Director's output
+    bible_context = ""
+    if bible.get("emotional_territory"):
+        bible_context += f"\nEmotional territory: {bible['emotional_territory']}"
+    if bible.get("visual_metaphors"):
+        bible_context += f"\nVisual metaphors (use as treatment, NOT as replacement for subject): {', '.join(bible['visual_metaphors'][:3])}"
+    if bible.get("dominant_color_story"):
+        bible_context += f"\nColor story: {bible['dominant_color_story']}"
+    if bible.get("composition_archetype"):
+        bible_context += f"\nComposition archetype: {bible['composition_archetype']}"
+
+    # ── Output schema the agent must produce ─────────────────────────────────
+    _OUTPUT_SCHEMA = '''{
+  "schema": "cd_integration",
+  "creative_brief": {
+    "hook": "<headline or emotional hook from CD>",
+    "emotion": "<emotional territory>",
+    "platform": "<instagram_portrait|square|story|etc>",
+    "composition": "<composition archetype>",
+    "color_strategy": "<dominant color story>"
+  },
+  "translation_notes": "<how CD elements mapped to image prompt — what was excluded and why>",
+  "text_handling": "<confirm headline/copy was excluded from image prompt>",
+  "recommended_model": "<exact model id: flux_2_pro|flux_2_dev|flux_schnell_fal|ideogram_quality|hunyuan_image>",
+  "recommendation_reason": "<1 sentence why this model fits the brief>",
+  "primary_output": {
+    "model": "<same as recommended_model>",
+    "prompt": "<vivid scene, subject-grounded, per model template, 80-120 words, ZERO text>",
+    "negative_prompt": "<model-specific negatives + always include: text,words,letters,signs,watermark,typography>",
+    "parameters": {
+      "aspect_ratio": "<4:5|1:1|9:16|16:9>",
+      "steps": <integer per model profile>,
+      "guidance": <float 3.0-7.0>,
+      "seed": null
+    },
+    "prompt_notes": "<explain 2+ key decisions: why this model, what lighting choice, how CD was applied>"
+  },
+  "draft_variant": {
+    "model": "flux_schnell_fal",
+    "prompt": "<simplified version under 60 words for fast iteration>",
+    "negative_prompt": "blurry, watermark, text overlay, deformed, low quality",
+    "parameters": {"steps": 4, "guidance": 3.5, "aspect_ratio": "<same>", "seed": null},
+    "prompt_notes": "Use for fast iteration before committing to primary model"
+  }
+}'''
 
     system = (
-        "You are an Ideogram V3 / Flux Pro background scene generator for poster ads.\n"
-        "CRITICAL: Generate ONLY the hero background — NO TEXT in the image.\n"
-        f"Bottom {dark_zone_pct}% must be naturally darker (text will overlay here).{festival_hint}{bible_hint}{dna_hint}\n"
-        "Scene must be REALISTIC and RELEVANT:\n"
-        "- SaaS/Tech: laptop/phone with dashboard UI, soft bokeh, modern desk\n"
-        "- Festival: cultural scene, atmospheric bokeh lights, vibrant colors\n"
-        "- Fashion: editorial model, dramatic lighting, clean background\n"
-        "- Food: hero product shot, warm lighting, shallow DOF\n"
-        "- Fitness: athlete in action, dynamic, cinematic\n"
-        'Return ONLY valid JSON: {"prompt":"scene description NO TEXT max 120 words",'
-        '"negative_prompt":"text, words, letters, watermark, UI overlays, typography, captions",'
-        '"model_preference":"ideogram_quality"}'
+        "You are a world-class AI Image Prompt Engineer AND Senior Art Director.\n"
+        "Task: Generate the optimized background image prompt for a full-bleed poster ad.\n"
+        "Input comes from the Creative Director agent — translate it into production-ready image prompts.\n"
+        "\n"
+        "== KNOWLEDGE BASE ==\n"
+        f"{_IMAGE_PROMPT_ENGINEER_KB}\n"
+        "== END KNOWLEDGE BASE ==\n"
+        "\n"
+        "WORKFLOW:\n"
+        "1. IDENTIFY the subject from user's brief (product, person, place, concept)\n"
+        "2. GROUND the scene — subject must be visually present\n"
+        "3. ELEVATE with CD's mood/metaphors as TREATMENT (not scene replacement)\n"
+        "4. SELECT model using MODEL SELECTION guide\n"
+        "5. ENGINEER prompt using the model's template from knowledge base\n"
+        "6. VALIDATE: prompt starts with subject, bottom 50% is naturally dark, zero text\n"
+        "7. PRODUCE draft_variant as a ≤60 word flux_schnell version for fast iteration\n"
+        f"{festival_hint}{dna_hint}\n"
+        "\n"
+        "VALIDATION BEFORE RETURNING:\n"
+        "- prompt must START with the subject (not a mood word)\n"
+        "- negative_prompt must be model-specific (not generic)\n"
+        "- steps must be within model's optimal range\n"
+        "- NO text/words/letters anywhere in the prompt\n"
+        "\n"
+        f"Return ONLY this JSON structure (no prose, no markdown):\n{_OUTPUT_SCHEMA}"
     )
+
     context = (
-        f"Industry: {triage.get('industry','general')} Brand: {str(copy.get('brand_name',''))}\n"
-        f"Mood: {creative.get('mood','energetic')} Style: {creative.get('visual_style','photorealistic')}\n"
-        f"Atmosphere: {creative.get('atmosphere','')}\n"
-        f"Accent: {creative.get('palette',{}).get('primary','#6C63FF')}\n"
-        f"Avoid: {', '.join((creative.get('avoid') or []) + ([forbidden_additions] if forbidden_additions else []))}"
+        f"User's brief: \"{triage.get('original_prompt', '')}\"\n"
+        f"Brand / Product: {str(copy.get('brand_name','') or triage.get('brand_hint','') or 'unbranded')}\n"
+        f"Poster headline (DO NOT put in image): \"{copy.get('headline','')}\"\n"
+        f"Mood: {creative.get('mood','energetic')} | "
+        f"Visual style: {creative.get('visual_style','photorealistic')} | "
+        f"Atmosphere: {creative.get('atmosphere','')}"
+        f"{bible_context}\n"
+        f"Platform/aspect: {creative.get('aspect_ratio','4:5')}\n"
+        f"Avoid in scene: {', '.join((creative.get('avoid') or []) + ([forbidden_additions] if forbidden_additions else []))}"
     )
-    raw = await _acall_gemini(system, context, temperature=0.75, agent_name="image_prompter")
+
+    raw = await _acall_gemini(system, context, temperature=0.72, agent_name="image_prompter")
     r = _extract_json(raw)
 
-    # Fallback: let AI generate one more time with the full original prompt as hint
-    bg_prompt = str(r.get("prompt") or "").strip()
+    # ── Extract from cd_integration schema ───────────────────────────────────
+    primary = r.get("primary_output") or {}
+    bg_prompt = str(primary.get("prompt") or r.get("prompt") or "").strip()
+    model_preference = str(
+        r.get("recommended_model") or primary.get("model") or r.get("model_preference") or ""
+    ).strip()
+    neg_from_schema = str(primary.get("negative_prompt") or r.get("negative_prompt") or "").strip()
+    params = primary.get("parameters") or {}
+    draft = r.get("draft_variant") or {}
+
+    # Fallback if primary prompt missing or too short
     if not bg_prompt or len(bg_prompt) < 20:
-        logger.warning("[image_prompter] empty/short prompt, regenerating with original context")
-        industry  = triage.get("industry", "general")
-        mood      = creative.get("mood", "professional")
-        atmosphere = creative.get("atmosphere", "")
-        # Give AI the original request and let it think — no hardcoded scenes
+        logger.warning("[image_prompter] cd_integration prompt missing, running fallback")
         fallback_system = (
-            "You are a cinematographer. Based on the ad request below, describe the ideal "
-            "background hero image (NO text in image). Be specific about setting, lighting, "
-            "mood. Max 80 words. Return plain text only."
+            "You are a Senior Art Director. Describe the background hero image for this ad poster.\n"
+            "Keep the actual subject from the user's brief in the scene.\n"
+            "Apply creative treatment: lighting, color, composition, mood.\n"
+            "ZERO text or letters in the image. Bottom half must be naturally dark.\n"
+            "Return plain text only — 60-100 words, no JSON."
         )
         fallback_user = (
-            f"Ad request: {context}\n"
-            f"Industry: {industry}, Mood: {mood}, Atmosphere: {atmosphere}\n"
-            "Describe the background scene (no text, no UI overlays)."
+            f"User's brief: \"{triage.get('original_prompt', '')}\"\n"
+            f"Mood: {creative.get('mood','energetic')} | Style: {creative.get('visual_style','photorealistic')}\n"
+            "Describe the background scene."
         )
         bg_prompt = await _acall_gemini(fallback_system, fallback_user,
                                         temperature=0.5, agent_name="image_prompter")
         bg_prompt = bg_prompt.strip().strip('"').strip("'")
-        # Discard JSON failure responses like "{}", "null", empty
         if bg_prompt in ("{}", "{", "}", "null", "none", "") or len(bg_prompt) < 15:
             bg_prompt = ""
 
-    # Hard negative — always block text in background image regardless of model
-    _HARD_NEGATIVE = (
+    # Sanitize — strip any text/typography keywords that leaked through
+    _TEXT_LEAK = re.compile(
+        r"\b(crisp\s+sharp\s+text|readable\s+typography|graphic\s+design|"
+        r"high\s+contrast\s+text|bold\s+typography|text\s+overlay|"
+        r"typography|legible|calligraph\w*|lettering|signage)\b",
+        re.IGNORECASE,
+    )
+    bg_prompt = _TEXT_LEAK.sub("", bg_prompt).strip().strip(",").strip()
+    bg_prompt = re.sub(r",\s*,", ",", bg_prompt)
+    bg_prompt = re.sub(r"\s{2,}", " ", bg_prompt)
+
+    # Hard negative — always block text regardless of model
+    _HARD_NEG = (
         "text, words, letters, numbers, typography, captions, labels, watermark, "
         "logo text, brand name, headline, subtitle, written words, fonts, script, "
         "calligraphy, signage, UI overlay, HUD, interface elements, blurry, low quality"
     )
-    base_negative = _HARD_NEGATIVE
+    # Merge with schema negative (which has model-specific negatives)
+    if neg_from_schema and neg_from_schema not in ("{}", "null"):
+        base_negative = f"{_HARD_NEG}, {neg_from_schema}"
+    else:
+        base_negative = _HARD_NEG
     if forbidden_additions:
         base_negative = f"{base_negative}, {forbidden_additions}"
 
+    # Smart fallback prompt
     industry = triage.get("industry", "general")
-    mood = creative.get("mood", "energetic")
-    style = creative.get("visual_style", "photorealistic")
+    mood_val = creative.get("mood", "energetic")
+    style_val = creative.get("visual_style", "photorealistic")
     _smart_fallback = (
-        f"cinematic {industry} scene, {mood} atmosphere, {style} style, "
-        f"dramatic lighting, deep shadows in bottom third, no text, clean background"
+        f"cinematic {industry} scene, {mood_val} atmosphere, {style_val} style, "
+        f"dramatic lighting, deep shadows in bottom half, no text, clean background"
     )
 
     return {
         "background_prompt": bg_prompt or _smart_fallback,
         "negative_prompt":   base_negative,
-        "model_preference":  str(r.get("model_preference") or "ideogram_quality"),
+        "model_preference":  model_preference or "flux_pro",
+        "parameters":        params,           # steps, guidance, aspect_ratio from schema
+        "draft_variant":     draft,            # flux_schnell version for fast iteration
+        "translation_notes": r.get("translation_notes", ""),
+        "recommendation_reason": r.get("recommendation_reason", ""),
     }
 
 
@@ -839,6 +1193,7 @@ class DesignAgentChain:
             # ── Stage 1: Triage (serial — everything depends on it) ──────────
             t = time.time()
             triage = await _agent_triage(safe_prompt)
+            triage["original_prompt"] = safe_prompt  # pass through for image_prompter context
             agent_times["triage"] = round(time.time() - t, 2)
 
             # ── Stage 2: Brand Intel first, then Creative Director with real brand ─
@@ -893,9 +1248,9 @@ class DesignAgentChain:
             copy = await _enforce_char_limits(copy, triage.get("platform", "instagram"))
             agent_times["char_guard"] = round(time.time() - t, 3)
 
-            # ── Stage 4: Layout Planner (pure Python, instant) ───────────────
+            # ── Stage 4: Layout Planner (Gemini-powered, full-bleed positions) ──
             t = time.time()
-            elements = _agent_layout_planner(creative, copy, aspect_ratio=aspect_ratio)
+            elements = await _agent_layout_planner(triage, creative, copy, aspect_ratio=aspect_ratio)
             agent_times["layout_planner"] = round(time.time() - t, 3)
 
             # ── Assemble final brief ─────────────────────────────────────────
@@ -921,16 +1276,24 @@ class DesignAgentChain:
             brief["negative_prompt"]   = img["negative_prompt"]
             brief["_model_preference"] = img["model_preference"]
 
+            # cd_integration schema extras — steps/guidance/draft for generate_stream to use
+            brief["_img_parameters"]        = img.get("parameters", {})
+            brief["_img_draft_variant"]     = img.get("draft_variant", {})
+            brief["_img_translation_notes"] = img.get("translation_notes", "")
+            brief["_img_recommendation"]    = img.get("recommendation_reason", "")
+
             # gemini_prompt_engine compatibility
             brief["visual_concept"] = img["background_prompt"]
             brief["mood"]           = creative.get("mood", "")
             brief["lighting"]       = "cinematic dramatic lighting"
             brief["camera"]         = "professional photography"
 
-            # Platform / routing
-            brief["platform"]      = triage.get("platform", "instagram")
-            brief["creative_type"] = triage.get("creative_type", "ad")
-            brief["goal"]          = triage.get("goal", "brand_awareness")
+            # Platform / routing + triage-recommended dimensions
+            brief["platform"]             = triage.get("platform", "instagram_portrait")
+            brief["creative_type"]        = triage.get("creative_type", "ad")
+            brief["goal"]                 = triage.get("goal", "brand_awareness")
+            brief["recommended_width"]    = triage.get("recommended_width", 1080)
+            brief["recommended_height"]   = triage.get("recommended_height", 1350)
 
             brief["_elapsed"]      = round(time.time() - t0, 2)
             brief["_agent_times"]  = agent_times

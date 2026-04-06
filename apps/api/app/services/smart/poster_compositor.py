@@ -337,149 +337,54 @@ class PosterCompositor:
 
         del tmp, d  # free measurement canvas
 
-        # ── Hero height ────────────────────────────────────────────────────────
-        hero_h_map = {
-            "top_60":    int(target_height * 0.58),
-            "top_58":    int(target_height * 0.56),   # 4:5 ratio (1080×1350)
-            "top_55":    int(target_height * 0.53),
-            "top_50":    int(target_height * 0.50),
-            "center_50": int(target_height * 0.50),
-            "full_bleed":int(target_height * 0.65),
-            "top_40":    int(target_height * 0.40),
-        }
-        hero_h = hero_h_map.get(hero_zone, int(target_height * 0.58))
-
-        # ── Feature grid geometry ──────────────────────────────────────────────
-        feat_cols = 2
-        feat_rows = math.ceil(len(features) / feat_cols) if features else 0
-        feat_card_w = (inner_w - GAP) // feat_cols
-        feat_card_h = int(W * 0.26) if features else 0  # approximate; see actual drawing
-
-        # ── Section height estimates ──────────────────────────────────────────
-        BRAND_BAR_H = int(W * 0.10) if (brand_name or logo_url) else 0
-        sl_h = int(W * 0.026) + 4 if features else 0  # "KEY FEATURES" label
-
-        text_section_h = (
-            SECTION_PAD
-            + (hl_h + GAP // 2 if hl_wrapped else 0)
-            + (sub_h if sub_wrapped else 0)
-            + (GAP // 2 + body_h if body_wrapped else 0)
-            + SECTION_PAD
-        )
-
-        features_section_h = (
-            GAP + sl_h + GAP // 2
-            + (feat_card_h + GAP // 2) * feat_rows + GAP // 2
-        ) if features else 0
-
-        cta_h = int(sz_cta * 1.8)
-        cta_section_h = (
-            GAP + cta_h
-            + (GAP // 2 + int(sz_url * 1.5) if cta_url else 0)
-            + GAP
-        ) if show_cta else GAP
-
-        tagline_h = (GAP + int(sz_tagline * 1.4) + GAP // 2) if tagline else 0
-
-        total_h = min(
-            BRAND_BAR_H + hero_h + text_section_h + features_section_h + cta_section_h + tagline_h + GAP,
-            MAX_CANVAS_H,
-        )
-        if total_h < 100:
-            total_h = target_height
-
-        # ── Create canvas (oversized by 20% to prevent crop truncation) ────────
-        canvas_h = min(int(total_h * 1.2), MAX_CANVAS_H)
-        canvas = Image.new("RGBA", (W, canvas_h), bg_color + (255,))
-        draw = ImageDraw.Draw(canvas)
-        y = 0
-
-        # ── Zone 1: Brand bar ─────────────────────────────────────────────────
-        if (brand_name or logo_img) and BRAND_BAR_H > 0:
-            draw.rectangle([0, 0, W, BRAND_BAR_H], fill=accent + (255,))
-
-            if logo_img:
-                # Fit logo inside brand bar with padding, left-aligned
-                logo_bar_h = int(BRAND_BAR_H * 0.65)
-                logo_bar_w = int(logo_bar_h * (logo_img.width / max(logo_img.height, 1)))
-                logo_bar_w = min(logo_bar_w, W // 3)  # cap at 1/3 canvas width
-                logo_resized = logo_img.resize(
-                    (logo_bar_w, logo_bar_h), Image.Resampling.LANCZOS
-                )
-                logo_x = PAD
-                logo_y = (BRAND_BAR_H - logo_bar_h) // 2
-                canvas.paste(logo_resized, (logo_x, logo_y), logo_resized)
-
-                # Brand name to the right of logo (if both present)
-                if brand_name:
-                    text_x = logo_x + logo_bar_w + PAD // 2
-                    brand_wrapped = _wrap(draw, brand_name, fn_brand, W - text_x - PAD)
-                    _, bh = _text_size(draw, brand_wrapped, fn_brand)
-                    draw.text(
-                        (text_x, (BRAND_BAR_H - bh) // 2),
-                        brand_wrapped, font=fn_brand, fill=accent_text + (255,),
-                    )
-            else:
-                # No logo — centered brand name
-                brand_wrapped = _wrap(draw, brand_name, fn_brand, inner_w)
-                _, bh = _text_size(draw, brand_wrapped, fn_brand)
-                _draw_text_centered(
-                    draw, brand_wrapped, fn_brand, W,
-                    (BRAND_BAR_H - bh) // 2, accent_text + (255,),
-                )
-            y = BRAND_BAR_H
-
         # ══════════════════════════════════════════════════════════════════════
-        # FULL-BLEED LAYOUT — image fills entire canvas, text overlaid on top
-        # This replaces the old "split zone" (image top 60% + dark panel below)
+        # FULL-BLEED LAYOUT — canvas = target_height, hero fills 100%, text on top
+        # NO separate zones below — everything overlaid directly on hero image
         # ══════════════════════════════════════════════════════════════════════
 
-        canvas_full_h = total_h
-        canvas = Image.new("RGBA", (W, min(int(canvas_full_h * 1.05), MAX_CANVAS_H)), (0, 0, 0, 255))
-        canvas_h = canvas.height
+        canvas_h = min(target_height, MAX_CANVAS_H)
+        canvas = Image.new("RGBA", (W, canvas_h), (0, 0, 0, 255))
         draw = ImageDraw.Draw(canvas)
 
         # ── Step 1: Hero image fills entire canvas ────────────────────────────
         hero_resized = ImageOps.fit(
             hero_img, (W, canvas_h),
             method=Image.Resampling.LANCZOS,
-            centering=(0.5, 0.35),
+            centering=(0.5, 0.40),
         )
         canvas.paste(hero_resized.convert("RGBA"), (0, 0))
 
-        # ── Step 2: Gradient overlays for text readability ────────────────────
-        # Bottom gradient: transparent → dark (text zone)
-        def _make_overlay(w: int, h: int, top_alpha: int, bot_alpha: int,
+        # ── Step 2: Gradient overlays ─────────────────────────────────────────
+        def _grad_overlay(w: int, h: int, top_a: int, bot_a: int,
                           color: Tuple[int,int,int]) -> Image.Image:
-            overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            """Linear gradient from top_a to bot_a alpha, full width."""
+            col = Image.new("RGBA", (1, h))
             for py in range(h):
-                a = int(top_alpha + (bot_alpha - top_alpha) * py / max(h - 1, 1))
-                overlay.putpixel((0, py), color + (a,))
-            overlay = overlay.resize((w, h), Image.Resampling.BILINEAR)
-            return overlay
+                a = int(top_a + (bot_a - top_a) * py / max(h - 1, 1))
+                col.putpixel((0, py), color + (a,))
+            return col.resize((w, h), Image.Resampling.BILINEAR)
 
-        # Bottom 65% — dark gradient for text zone
-        bot_zone_h = int(canvas_h * 0.72)
-        bot_zone_y = canvas_h - bot_zone_h
-        bot_overlay = _make_overlay(W, bot_zone_h, 0, 210, bg_color)
-        canvas.alpha_composite(bot_overlay, (0, bot_zone_y))
+        # Bottom gradient — transparent at 35% → solid dark at bottom
+        # Covers lower 70% of canvas for text readability
+        bot_h = int(canvas_h * 0.70)
+        bot_y = canvas_h - bot_h
+        canvas.alpha_composite(_grad_overlay(W, bot_h, 0, 220, bg_color), (0, bot_y))
 
-        # Top strip — subtle dark for brand bar readability
-        top_overlay = _make_overlay(W, int(canvas_h * 0.18), 160, 0, bg_color)
-        canvas.alpha_composite(top_overlay, (0, 0))
+        # Top vignette — thin dark strip for brand bar
+        top_h = int(canvas_h * 0.14)
+        canvas.alpha_composite(_grad_overlay(W, top_h, 180, 0, (0, 0, 0)), (0, 0))
 
         draw = ImageDraw.Draw(canvas)
-        shadow_offset = max(3, sz_headline // 18)
+        shadow_off = max(3, sz_headline // 16)
 
-        # ── Step 3: Brand bar (top) ───────────────────────────────────────────
-        y = 0
+        # ── Step 3: Brand bar (top strip) ────────────────────────────────────
         if brand_name or logo_img:
-            bar_h = int(canvas_h * 0.075)
+            bar_h = int(canvas_h * 0.07)
             # Accent left stripe
-            draw.rectangle([0, 0, max(6, W // 80), bar_h], fill=accent + (230,))
+            draw.rectangle([0, 0, max(5, W // 90), bar_h], fill=accent + (220,))
 
             if logo_img:
-                lh = int(bar_h * 0.60)
+                lh = int(bar_h * 0.62)
                 lw = int(lh * logo_img.width / max(logo_img.height, 1))
                 lw = min(lw, W // 4)
                 logo_r = logo_img.resize((lw, lh), Image.Resampling.LANCZOS)
@@ -492,31 +397,27 @@ class PosterCompositor:
             else:
                 bw, bh = _text_size(draw, brand_name, fn_brand)
                 draw.text(
-                    ((W - bw) // 2, (bar_h - bh) // 2),
+                    (PAD, (bar_h - bh) // 2),
                     brand_name, font=fn_brand, fill=(255, 255, 255, 220),
                 )
-            y = bar_h + GAP // 2
 
-        # ── Step 4: Headline + subheadline (lower-center of image) ───────────
-        # Position text block starting at ~52% of canvas height
-        text_start_y = max(y + GAP, int(canvas_h * 0.50))
-        ty = text_start_y
+        # ── Step 4: Main text block — positioned at 52%–78% of canvas ────────
+        # Headline starts at 52%, subheadline + body below, CTA pinned at 82%
+        ty = int(canvas_h * 0.52)
 
         if hl_wrapped:
-            # Strong text shadow for contrast on any background
             _draw_text_centered(
                 draw, hl_wrapped, fn_headline, W, ty, txt_pri + (255,),
-                shadow=True, shadow_offset=shadow_offset,
-                shadow_color=(0, 0, 0, 180),
+                shadow=True, shadow_offset=shadow_off,
+                shadow_color=(0, 0, 0, 200),
             )
             ty += hl_h + GAP // 3
 
-            # Accent underline
-            line_h = max(4, sz_headline // 18)
-            ul_w = min(inner_w, _text_width_multiline(draw, hl_wrapped, fn_headline) + PAD)
+            # Accent underline bar
+            line_h = max(4, sz_headline // 20)
+            ul_w = min(inner_w, int(W * 0.55))
             draw.rectangle(
-                [(W - ul_w) // 2, ty,
-                 (W + ul_w) // 2, ty + line_h],
+                [(W - ul_w) // 2, ty, (W + ul_w) // 2, ty + line_h],
                 fill=accent + (255,),
             )
             ty += line_h + GAP // 3
@@ -524,115 +425,64 @@ class PosterCompositor:
         if sub_wrapped:
             _draw_text_centered(
                 draw, sub_wrapped, fn_sub, W, ty, txt_sec + (240,),
-                shadow=True, shadow_offset=max(2, shadow_offset // 2),
-                shadow_color=(0, 0, 0, 160),
+                shadow=True, shadow_offset=max(2, shadow_off // 2),
+                shadow_color=(0, 0, 0, 180),
             )
-            ty += sub_h + GAP // 4
+            ty += sub_h + GAP // 3
 
         if body_wrapped:
             _draw_text_centered(
                 draw, body_wrapped, fn_body, W, ty, txt_sec + (200,),
-                shadow=True, shadow_offset=2, shadow_color=(0, 0, 0, 140),
+                shadow=True, shadow_offset=2, shadow_color=(0, 0, 0, 150),
             )
             ty += body_h + GAP // 4
 
-        ty += GAP // 2
-
-        # ── Step 5: Feature chips (compact horizontal rows on image) ─────────
-        if features:
-            chip_font  = _font(f_body, max(18, int(W * 0.025)))
-            chip_pad_x = int(W * 0.028)
-            chip_pad_y = int(W * 0.016)
-            chip_gap   = int(W * 0.018)
-            chip_r     = int(W * 0.025)
-
-            # Measure all chips first to layout 2-per-row
-            chip_sizes = []
-            for feat in features[:4]:
-                icon_s  = str(feat.get("icon") or "•").strip()
-                title_s = str(feat.get("title") or "").strip()
-                label   = f"{icon_s}  {title_s}" if icon_s and title_s else title_s or icon_s
-                cw, ch  = _text_size(draw, label, chip_font)
-                chip_sizes.append((label, cw + chip_pad_x * 2, ch + chip_pad_y * 2))
-
-            # Lay out 2 chips per row
-            for row_i in range(0, len(chip_sizes), 2):
-                row_chips = chip_sizes[row_i: row_i + 2]
-                total_row_w = sum(c[1] for c in row_chips) + chip_gap * (len(row_chips) - 1)
-                rx = (W - total_row_w) // 2
-
-                max_chip_h = 0
-                for label, cw, ch in row_chips:
-                    _rounded_rect(
-                        draw, (rx, ty, rx + cw, ty + ch),
-                        chip_r, accent + (55,),
-                    )
-                    draw.rounded_rectangle(
-                        [rx, ty, rx + cw, ty + ch],
-                        radius=chip_r, outline=accent + (140,), width=1,
-                    )
-                    lw2, lh2 = _text_size(draw, label, chip_font)
-                    draw.text(
-                        (rx + (cw - lw2) // 2, ty + (ch - lh2) // 2),
-                        label, font=chip_font, fill=txt_pri + (240,),
-                    )
-                    rx += cw + chip_gap
-                    max_chip_h = max(max_chip_h, ch)
-
-                ty += max_chip_h + chip_gap
-
-            ty += GAP // 2
-
-        # ── Step 6: CTA button ────────────────────────────────────────────────
+        # ── Step 5: CTA button — pinned at 82% canvas height ─────────────────
         if show_cta:
-            btn_h = cta_h
-            btn_w = min(int(W * 0.70), inner_w)
-            # Pin CTA to 87% of canvas height if there's room
-            cta_y = max(ty + GAP, int(canvas_h * 0.83))
+            cta_btn_h = int(sz_cta * 1.9)
+            btn_w = min(int(W * 0.68), inner_w)
+            cta_y = max(ty + GAP, int(canvas_h * 0.82))
             btn_x = (W - btn_w) // 2
 
-            # Button shadow
-            shadow_img = Image.new("RGBA", (btn_w + 12, btn_h + 12), (0, 0, 0, 0))
-            shadow_d = ImageDraw.Draw(shadow_img)
-            shadow_d.rounded_rectangle([6, 6, btn_w + 6, btn_h + 6], radius=btn_radius, fill=(0, 0, 0, 100))
-            shadow_img = shadow_img.filter(ImageFilter.GaussianBlur(6))
-            canvas.alpha_composite(shadow_img, (btn_x - 6, cta_y - 6))
-
-            _rounded_rect(draw, (btn_x, cta_y, btn_x + btn_w, cta_y + btn_h), btn_radius, accent + (255,))
-            cta_wrapped = _wrap(draw, cta_text, fn_cta, btn_w - 40)
-            cw2, ch2 = _text_size(draw, cta_wrapped, fn_cta)
-            draw.text(
-                (btn_x + (btn_w - cw2) // 2, cta_y + (btn_h - ch2) // 2),
-                cta_wrapped, font=fn_cta, fill=accent_text + (255,),
+            # Drop shadow
+            shd = Image.new("RGBA", (btn_w + 16, cta_btn_h + 16), (0, 0, 0, 0))
+            shd_d = ImageDraw.Draw(shd)
+            shd_d.rounded_rectangle(
+                [8, 8, btn_w + 8, cta_btn_h + 8],
+                radius=btn_radius, fill=(0, 0, 0, 120),
             )
-            ty = cta_y + btn_h + GAP // 2
+            shd = shd.filter(ImageFilter.GaussianBlur(8))
+            canvas.alpha_composite(shd, (btn_x - 8, cta_y - 8))
+
+            _rounded_rect(
+                draw, (btn_x, cta_y, btn_x + btn_w, cta_y + cta_btn_h),
+                btn_radius, accent + (255,),
+            )
+            cta_label = _wrap(draw, cta_text, fn_cta, btn_w - 40)
+            clw, clh = _text_size(draw, cta_label, fn_cta)
+            draw.text(
+                (btn_x + (btn_w - clw) // 2, cta_y + (cta_btn_h - clh) // 2),
+                cta_label, font=fn_cta, fill=accent_text + (255,),
+            )
 
             if cta_url:
-                url_display = cta_url if len(cta_url) <= 40 else cta_url[:37] + "..."
-                uw, uh = _text_size(draw, url_display, fn_url)
+                url_disp = cta_url if len(cta_url) <= 40 else cta_url[:37] + "..."
+                uw, uh = _text_size(draw, url_disp, fn_url)
                 draw.text(
-                    ((W - uw) // 2, ty),
-                    url_display, font=fn_url, fill=(255, 255, 255, 130),
+                    ((W - uw) // 2, cta_y + cta_btn_h + GAP // 3),
+                    url_disp, font=fn_url, fill=(255, 255, 255, 120),
                 )
-                ty += uh + GAP // 4
 
-        # ── Step 7: Tagline (bottom edge) ─────────────────────────────────────
+        # ── Step 6: Tagline — bottom edge ────────────────────────────────────
         if tagline:
             tg_w, tg_h = _text_size(draw, tagline, fn_tagline)
-            tg_y = canvas_h - tg_h - int(GAP * 0.8)
             draw.text(
-                ((W - tg_w) // 2, tg_y),
-                tagline, font=fn_tagline, fill=(255, 255, 255, 140),
+                ((W - tg_w) // 2, canvas_h - tg_h - int(GAP * 0.7)),
+                tagline, font=fn_tagline, fill=(255, 255, 255, 130),
             )
-            y = tg_y + tg_h
-
-        y = canvas_h  # full canvas used
 
         # ── Encode output ─────────────────────────────────────────────────────
-        final_h = min(y + GAP, canvas_h)
-        final = canvas.crop((0, 0, W, final_h))
-
-        # Flatten RGBA → RGB against bg_color before JPEG encode
+        final = canvas.crop((0, 0, W, canvas_h))
         bg_flat = Image.new("RGB", final.size, bg_color)
         bg_flat.paste(final.convert("RGBA"), mask=final.convert("RGBA").split()[3])
 
@@ -641,8 +491,8 @@ class PosterCompositor:
         result_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
 
         logger.info(
-            "[compositor] built poster w=%d h=%d features=%d cta=%s elapsed=N/A",
-            W, final_h, len(features), show_cta,
+            "[compositor] built poster w=%d h=%d cta=%s",
+            W, canvas_h, show_cta,
         )
         return result_b64
 
