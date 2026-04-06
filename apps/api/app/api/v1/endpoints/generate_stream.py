@@ -457,38 +457,109 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         if bucket == "typography" and isinstance(ad_copy, dict) and composite_status in ("success", "skipped"):
             _design_brief = _build_design_brief(brief, ad_copy, poster_design, raw_hero_url)
 
-        # ── Stage D: CREA Quality Gate (non-fast tiers, when creative_bible exists) ──
+# Clean Quality Gate Section (lines 460-720)
+# Replace this in generate_stream.py
+
+        # ── Stage D: Beast Quality Critic (Max 2 Images) ──
         quality_gate_result = None
         creative_bible = brief.get("creative_bible") or {}
         _run_quality_gate = (
             quality != "fast"
             and bool(creative_bible.get("emotional_territory"))
         )
+
+        # Simple rule: Max 2 images total
+        max_images_total = 2
+        images_generated = 1  # We already have Gen 1 (raw_hero_url)
+
         if _run_quality_gate:
             yield _sse("quality_checking", {
-                "message":  "AI quality review in progress",
+                "message": f"Quality review: Image 1/{max_images_total}",
                 "trace_id": trace_id,
+                "images_generated": images_generated,
             })
+
             try:
-                from app.services.smart.poster_jury import gemini_vision_score
-                # Score the hero image (before compositor overlay)
-                _score_url = raw_hero_url
-                quality_gate_result = await gemini_vision_score(
-                    image_url=_score_url,
+                from app.services.smart.quality_critic import QualityCritic
+
+                # Map quality tier to critic tier
+                critic_tier = "standard" if quality == "quality" else quality
+                critic = QualityCritic(tier=critic_tier)
+
+                # Build design_brief for critic context
+                design_brief_for_critic = {
+                    "user_prompt": req.prompt,
+                    "enhanced_prompt": enhanced_prompt,
+                    "background_prompt": brief.get("background_prompt", brief.get("visual_concept", "")),
+                    "bucket": bucket,
+                    "ad_copy": ad_copy if isinstance(ad_copy, dict) else {},
+                    "poster_design": poster_design if isinstance(poster_design, dict) else {},
+                }
+
+                # ━━━ CHECK IMAGE 1 ━━━
+                critique_1 = await critic.critique(
+                    image_url=raw_hero_url,
                     creative_bible=creative_bible,
-                    background_prompt=brief.get("background_prompt", brief.get("visual_concept", "")),
+                    design_brief=design_brief_for_critic,
+                    platform=req.platform or "instagram",
+                    revision_cycle=0,
                 )
 
-                # Auto re-run once if score < 50
-                if quality_gate_result.get("auto_rerun") and not quality_gate_result.get("_skipped"):
-                    logger.info("[stream][%s] quality_gate score=%.1f < 50, triggering re-run", trace_id, quality_gate_result["total"])
-                    critique = quality_gate_result.get("critique", "")
-                    # Inject critique as mutation note into a new generation
-                    mutation_prompt = (
-                        f"{enhanced_prompt} — IMPROVE: {critique}"
-                        if critique else enhanced_prompt
-                    ) [:500]
-                    gen_retry = await multi_client.generate(
+                quality_gate_result = critique_1
+
+                # Yield quality_scored event for image 1
+                yield _sse("quality_scored", {
+                    "overall_score": critique_1["overall_score"],
+                    "verdict": critique_1["verdict"],
+                    "dimensions": critique_1["dimensions"],
+                    "beast_gates_passed": critique_1["beast_gates_passed"],
+                    "beast_gates_total": critique_1["beast_gates_total"],
+                    "image_number": 1,
+                    "trace_id": trace_id,
+                })
+
+                verdict_1 = critique_1["verdict"]
+                score_1 = critique_1["overall_score"]
+
+                logger.info("[stream][%s] Image 1: score=%.2f, verdict=%s, gates=%d/%d",
+                          trace_id, score_1, verdict_1,
+                          critique_1["beast_gates_passed"], critique_1["beast_gates_total"])
+
+                # ━━━ DECISION LOGIC ━━━
+                if verdict_1 == "APPROVED":
+                    # Image 1 is good enough - use it!
+                    logger.info("[stream][%s] Image 1 APPROVED - no need for Image 2", trace_id)
+
+                elif verdict_1 == "ESCALATE":
+                    # Fundamental issues - use Image 1 with warning
+                    logger.warning("[stream][%s] Image 1 ESCALATED (fundamental issues)", trace_id)
+                    quality_gate_result["escalated"] = True
+
+                elif verdict_1 == "REVISE" and images_generated < max_images_total:
+                    # Generate Image 2 with targeted improvements
+                    revision_notes = critique_1.get("revision_notes", "")
+                    route_to = critique_1.get("revision_route_to", "")
+                    weak_dims = [
+                        dim_name for dim_name, dim_data in critique_1["dimensions"].items()
+                        if dim_data.get("score", 10) < dim_data.get("floor", 7.0)
+                    ]
+
+                    logger.info("[stream][%s] Image 1 REVISE - generating Image 2 (weak: %s)",
+                              trace_id, weak_dims)
+
+                    yield _sse("revision_triggered", {
+                        "image_number": 2,
+                        "route_to": route_to,
+                        "notes": revision_notes,
+                        "weak_dimensions": weak_dims,
+                        "trace_id": trace_id,
+                    })
+
+                    # Build targeted prompt with specific fixes
+                    mutation_prompt = f"{enhanced_prompt} — IMPROVE: {revision_notes}"[:500]
+
+                    # ━━━ GENERATE IMAGE 2 ━━━
+                    gen_2 = await multi_client.generate(
                         model_key=fal_model_key,
                         prompt=mutation_prompt,
                         negative_prompt=negative_prompt,
@@ -499,11 +570,60 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                         reference_image_url=req.reference_image_url,
                         rendering_speed=model_cfg.get("rendering_speed", "BALANCED"),
                     )
-                    if gen_retry.get("success") and gen_retry.get("image_url"):
-                        raw_hero_url = gen_retry["image_url"]
-                        final_image_url = raw_hero_url
-                        quality_gate_result["auto_rerun_done"] = True
-                        # Re-composite if typography
+
+                    if gen_2.get("success") and gen_2.get("image_url"):
+                        images_generated += 1
+                        image_2_url = gen_2["image_url"]
+
+                        # ━━━ CHECK IMAGE 2 ━━━
+                        yield _sse("quality_checking", {
+                            "message": f"Quality review: Image 2/{max_images_total}",
+                            "trace_id": trace_id,
+                            "images_generated": images_generated,
+                        })
+
+                        critique_2 = await critic.critique(
+                            image_url=image_2_url,
+                            creative_bible=creative_bible,
+                            design_brief=design_brief_for_critic,
+                            platform=req.platform or "instagram",
+                            revision_cycle=1,
+                        )
+
+                        # Yield quality_scored event for image 2
+                        yield _sse("quality_scored", {
+                            "overall_score": critique_2["overall_score"],
+                            "verdict": critique_2["verdict"],
+                            "dimensions": critique_2["dimensions"],
+                            "beast_gates_passed": critique_2["beast_gates_passed"],
+                            "beast_gates_total": critique_2["beast_gates_total"],
+                            "image_number": 2,
+                            "trace_id": trace_id,
+                        })
+
+                        score_2 = critique_2["overall_score"]
+
+                        logger.info("[stream][%s] Image 2: score=%.2f, verdict=%s",
+                                  trace_id, score_2, critique_2["verdict"])
+
+                        # ━━━ PICK BEST OF 2 ━━━
+                        if score_2 > score_1:
+                            logger.info("[stream][%s] Image 2 better (%.2f > %.2f) - using Image 2",
+                                      trace_id, score_2, score_1)
+                            raw_hero_url = image_2_url
+                            final_image_url = raw_hero_url
+                            quality_gate_result = critique_2
+                            quality_gate_result["image_selected"] = 2
+                        else:
+                            logger.info("[stream][%s] Image 1 better (%.2f >= %.2f) - using Image 1",
+                                      trace_id, score_1, score_2)
+                            # raw_hero_url stays as Image 1
+                            quality_gate_result = critique_1
+                            quality_gate_result["image_selected"] = 1
+
+                        quality_gate_result["images_generated"] = 2
+
+                        # Re-composite if typography bucket
                         if bucket == "typography" and isinstance(ad_copy, dict) and ad_copy.get("headline"):
                             try:
                                 from app.services.smart.poster_compositor import poster_compositor as _pc
@@ -521,10 +641,17 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                                     target_height=min(int(effective_height * 1.5), 3072),
                                 )
                                 final_image_url = f"data:image/jpeg;base64,{composed_b64_retry}"
-                            except Exception as _retry_comp_err:
-                                logger.warning("[stream][%s] retry compositor failed: %s", trace_id, _retry_comp_err)
+                            except Exception as _comp_err:
+                                logger.warning("[stream][%s] Compositor failed for selected image: %s",
+                                             trace_id, _comp_err)
+                    else:
+                        # Image 2 generation failed - use Image 1
+                        logger.warning("[stream][%s] Image 2 generation failed - using Image 1", trace_id)
+                        quality_gate_result["image_2_gen_failed"] = True
+                        quality_gate_result["images_generated"] = 1
+
             except Exception as _qg_err:
-                logger.warning("[stream][%s] quality_gate failed (non-fatal): %s", trace_id, _qg_err)
+                logger.warning("[stream][%s] Quality Critic failed (non-fatal): %s", trace_id, _qg_err)
                 quality_gate_result = None
 
         total_time = time.time() - start
