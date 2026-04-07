@@ -772,6 +772,31 @@ def detect_capability_bucket(prompt: str) -> str:
     photorealism_food, photorealism_fashion, photorealism_landscape.
     """
     prompt_lower = prompt.lower()
+
+    # SMART TEXT DETECTION (Apr 8, 2026 fix):
+    # If user provides EXPLICIT TEXT (ALL CAPS, quoted, or clear text intent),
+    # route to typography bucket even without "poster" keyword
+    import re
+
+    # Pattern 1: ALL CAPS words (likely text to render)
+    # "watch NEW ARRIVALS" → has "NEW ARRIVALS" in caps
+    all_caps_words = re.findall(r'\b[A-Z]{2,}(?:\s+[A-Z]{2,})*\b', prompt)
+    if all_caps_words and len(' '.join(all_caps_words)) >= 4:
+        # Has significant ALL CAPS text (4+ chars total)
+        return "typography"
+
+    # Pattern 2: Quoted text
+    # 'watch "New Arrivals"' or "watch 'New Arrivals'"
+    quoted_text = re.findall(r'["\']([^"\']+)["\']', prompt)
+    if quoted_text:
+        return "typography"
+
+    # Pattern 3: "with text" pattern
+    # "watch with text NEW ARRIVALS"
+    if re.search(r'with\s+text\s+[A-Z]', prompt):
+        return "typography"
+
+    # Standard keyword-based routing
     priority_order = [
         "typography",
         "vector",
