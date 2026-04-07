@@ -243,13 +243,63 @@ _AGENT_MAX_TOKENS = {
     "char_guard":       600,
 }
 
-_COPY_SPACE_PROMPT_HINTS = {
+_COPY_SPACE_PROMPT_HINTS_OLD = {
+    # OLD APPROACH (for compositor overlay) - DEPRECATED
     "top": "preserve clean negative space in the upper third for headline overlay",
     "bottom": "preserve clean negative space in the lower third for headline and CTA overlay",
     "left": "preserve clean negative space on the left side for headline and supporting copy",
     "right": "preserve clean negative space on the right side for headline and supporting copy",
     "center": "preserve a clean central copy-safe area for headline overlay",
 }
+
+def _build_native_text_instructions(headline: str, cta: str, copy_space: str, brand_name: str = "") -> str:
+    """
+    Build Ideogram native text rendering instructions.
+    Instead of "preserve space", we tell Ideogram EXACTLY what text to render and how.
+
+    Returns prompt snippet like:
+    "Bold headline text 'BEAST MODE' in upper third area, large impactful sans-serif typography,
+    white text with thick black outline, highly legible. CTA button 'SHOP NOW' at bottom center."
+    """
+    if not headline or not headline.strip():
+        return ""
+
+    # Text position mapping
+    position_map = {
+        "top": "in the upper third area",
+        "bottom": "in the lower third area",
+        "left": "on the left side",
+        "right": "on the right side",
+        "center": "in the center area",
+    }
+    position = position_map.get(copy_space, "in the upper area")
+
+    # Build headline instruction
+    headline_clean = headline.strip()[:60]  # Max 60 chars for prompt clarity
+    text_parts = []
+
+    # Main headline
+    text_parts.append(
+        f"Bold headline text '{headline_clean}' {position}, large impactful sans-serif typography, "
+        f"white text with thick black outline for maximum legibility and contrast"
+    )
+
+    # CTA if exists
+    if cta and cta.strip():
+        cta_clean = cta.strip()[:30]
+        cta_position = "at bottom center" if copy_space != "bottom" else "below headline"
+        text_parts.append(
+            f"CTA text '{cta_clean}' {cta_position}, medium-sized bold typography"
+        )
+
+    # Brand name if exists (small at top)
+    if brand_name and brand_name.strip():
+        brand_clean = brand_name.strip()[:40]
+        text_parts.append(
+            f"Small brand name '{brand_clean}' at top"
+        )
+
+    return ". ".join(text_parts)
 _TEXT_NEGATIVE_TERMS = [
     "text",
     "words",
@@ -2817,10 +2867,18 @@ def _agent_reconcile_outputs(
     chosen_direction = str(((design_room or {}).get("winner") or {}).get("direction") or "").strip()
     if chosen_direction and chosen_direction.lower() not in bg_prompt.lower():
         bg_prompt = f"{chosen_direction}. {bg_prompt}".strip(". ")
-    copy_space_hint = _COPY_SPACE_PROMPT_HINTS.get(copy_space, "")
-    if copy_space_hint and copy_space_hint.lower() not in bg_prompt.lower():
-        bg_prompt = f"{bg_prompt}. {copy_space_hint}".strip(". ")
-        notes.append(f"copy_space:{copy_space}")
+
+    # NATIVE TEXT RENDERING: Include actual text in Ideogram prompt (not "preserve space")
+    # This tells Ideogram to render text AS PART of image generation, not compositor overlay
+    native_text_instructions = _build_native_text_instructions(
+        headline=copy_final.get("headline", ""),
+        cta=copy_final.get("cta", ""),
+        copy_space=copy_space,
+        brand_name=copy_final.get("brand_name", "")
+    )
+    if native_text_instructions:
+        bg_prompt = f"{bg_prompt}. {native_text_instructions}".strip(". ")
+        notes.append(f"native_text:enabled copy_space:{copy_space}")
     if strategy["image_guardrails"].lower() not in bg_prompt.lower():
         bg_prompt = f"{bg_prompt}. {strategy['image_guardrails']}".strip(". ")
     img_final["background_prompt"] = bg_prompt

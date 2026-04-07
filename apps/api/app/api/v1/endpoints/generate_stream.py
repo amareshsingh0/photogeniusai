@@ -602,29 +602,12 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
 
                         quality_gate_result["images_generated"] = 2
 
-                        # COMPOSITOR DISABLED - Native text rendering (Ideogram handles text directly)
-                        # Typography bucket now uses Ideogram v3 to render text as part of image generation
-                        # No PIL overlay needed - text appears natively in the generated image
-                        # if bucket == "typography" and isinstance(ad_copy, dict) and ad_copy.get("headline"):
-                        #     try:
-                        #         from app.services.smart.poster_compositor import poster_compositor as _pc
-                        #         http = _get_http_client()
-                        #         img_resp2 = await http.get(raw_hero_url)
-                        #         img_resp2.raise_for_status()
-                        #         img_b64_retry = base64.b64encode(img_resp2.content).decode("ascii")
-                        #         composed_b64_retry = await asyncio.to_thread(
-                        #             _pc.composite,
-                        #             hero_b64=img_b64_retry,
-                        #             ad_copy=ad_copy,
-                        #             poster_design=poster_design,
-                        #             elements=brief.get("elements", []),
-                        #             target_width=effective_width,
-                        #             target_height=min(int(effective_height * 1.5), 3072),
-                        #         )
-                        #         final_image_url = f"data:image/jpeg;base64,{composed_b64_retry}"
-                        #     except Exception as _comp_err:
-                        #         logger.warning("[stream][%s] Compositor failed for selected image: %s",
-                        #                      trace_id, _comp_err)
+                        # NATIVE TEXT RENDERING ONLY (Apr 8, 2026)
+                        # - ALL typography bucket prompts use Ideogram v3 native text rendering
+                        # - Text is included in image generation prompt (not compositor overlay)
+                        # - Agent decides text content, position, style, thickness during prompt creation
+                        # - No PIL compositor needed - Ideogram renders complete poster with text
+                        logger.info("[stream][%s] Typography bucket → Ideogram native text rendering (no compositor)", trace_id)
                     else:
                         # Image 2 generation failed - use Image 1
                         logger.warning("[stream][%s] Image 2 generation failed - using Image 1", trace_id)
