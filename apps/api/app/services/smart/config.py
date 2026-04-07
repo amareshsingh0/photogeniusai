@@ -761,42 +761,105 @@ _LANDSCAPE_KEYWORDS = [
 ]
 
 
+def _intelligent_intent_detection(prompt: str) -> str:
+    """
+    INTELLIGENT ROUTING (Apr 8, 2026 v2):
+
+    Uses LLM to UNDERSTAND user intent, not just pattern match.
+
+    Questions agent asks:
+    - Is this advertising/marketing? (product + text)
+    - Is this a poster/design? (text-focused)
+    - Is this a pure photo? (no text needed)
+
+    Examples:
+    - "luxury watch NEW ARRIVALS" → advertising (typography)
+    - "luxury watch on table" → product photo (photorealism)
+    - "fitness poster BEAST MODE" → poster design (typography)
+    """
+    try:
+        import os
+        import google.generativeai as genai
+
+        # Quick LLM classification (fast, small prompt)
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return None  # Fallback to keyword routing
+
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-2.0-flash-exp")
+
+        system_prompt = """You are a smart image classifier. Analyze user prompt and determine intent.
+
+Classifications:
+- "typography" = advertising poster, marketing image, text-based design, poster, banner, any image that needs text rendered
+- "photo" = pure photograph, product shot, no text overlay needed, just visual imagery
+
+Rules:
+- If prompt has promotional text (SALE, NEW, OFFER, etc.) + product → "typography"
+- If prompt says "poster", "ad", "banner", "flyer" → "typography"
+- If prompt is just describing a scene/product with no text → "photo"
+
+Return ONLY the word: typography or photo"""
+
+        user_msg = f"User prompt: {prompt}\n\nClassify this:"
+
+        response = model.generate_content(
+            f"{system_prompt}\n\n{user_msg}",
+            generation_config={"temperature": 0.1, "max_output_tokens": 10}
+        )
+
+        result = response.text.strip().lower()
+
+        if "typography" in result:
+            return "typography"
+        elif "photo" in result:
+            return None  # Let keyword routing handle sub-buckets
+
+        return None  # Fallback
+
+    except Exception as e:
+        # Silent fallback to keyword routing
+        return None
+
+
 def detect_capability_bucket(prompt: str) -> str:
     """
     Detect the capability bucket from the user's raw prompt.
 
+    INTELLIGENCE LAYERS (Apr 8, 2026):
+    1. LLM intent understanding (understands advertising vs photo)
+    2. Smart text detection (ALL CAPS, quoted text)
+    3. Keyword matching (fallback)
+
     Returns one of the BUCKET_KEYWORDS keys (or a photorealism sub-bucket),
     defaulting to "photorealism".
-    Priority: earlier buckets in the list win (typography > vector > character > ...).
-    Sub-buckets returned: photorealism_portrait, photorealism_product,
-    photorealism_food, photorealism_fashion, photorealism_landscape.
     """
     prompt_lower = prompt.lower()
-
-    # SMART TEXT DETECTION (Apr 8, 2026 fix):
-    # If user provides EXPLICIT TEXT (ALL CAPS, quoted, or clear text intent),
-    # route to typography bucket even without "poster" keyword
     import re
 
+    # LAYER 1: INTELLIGENT INTENT DETECTION (LLM-based)
+    # Ask LLM: "Is this advertising/poster or pure photo?"
+    intelligent_bucket = _intelligent_intent_detection(prompt)
+    if intelligent_bucket:
+        return intelligent_bucket
+
+    # LAYER 2: SMART TEXT DETECTION (pattern-based)
     # Pattern 1: ALL CAPS words (likely text to render)
-    # "watch NEW ARRIVALS" → has "NEW ARRIVALS" in caps
     all_caps_words = re.findall(r'\b[A-Z]{2,}(?:\s+[A-Z]{2,})*\b', prompt)
     if all_caps_words and len(' '.join(all_caps_words)) >= 4:
-        # Has significant ALL CAPS text (4+ chars total)
         return "typography"
 
     # Pattern 2: Quoted text
-    # 'watch "New Arrivals"' or "watch 'New Arrivals'"
     quoted_text = re.findall(r'["\']([^"\']+)["\']', prompt)
     if quoted_text:
         return "typography"
 
     # Pattern 3: "with text" pattern
-    # "watch with text NEW ARRIVALS"
     if re.search(r'with\s+text\s+[A-Z]', prompt):
         return "typography"
 
-    # Standard keyword-based routing
+    # LAYER 3: KEYWORD MATCHING (fallback)
     priority_order = [
         "typography",
         "vector",
