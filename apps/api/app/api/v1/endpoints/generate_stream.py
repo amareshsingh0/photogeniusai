@@ -418,8 +418,8 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         poster_design   = brief.get("poster_design") or {}
         composite_status = "skipped"
 
-        # ── Stage C: Poster compositor (DISABLED — native AI text looks better) ────
-        if False and bucket == "typography" and isinstance(ad_copy, dict) and ad_copy.get("headline"):
+        # ── Stage C: Poster compositor (RE-ENABLED for ad text overlay) ────
+        if bucket == "typography" and isinstance(ad_copy, dict) and ad_copy.get("headline"):
             yield _sse("compositing", {
                 "message":  "Applying text layout",
                 "trace_id": trace_id,
@@ -712,19 +712,11 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
 
             learning = LearningEngine()
             await learning.log_generation(
-                generation_id=trace_id,
-                user_id=getattr(req, "user_id", "anonymous"),  # Will be set from Next.js after auth
-                prompt=req.prompt,
-                model_selected=gen.get("model_key", fal_model_key),
-                creative_bible=brief.get("creative_bible"),
-                layout_variant=brief.get("_layout_variants", {}).get("winner"),
-                quality_score=quality_gate_result.get("total") if quality_gate_result else None,
+                brief=brief,
+                quality_result=quality_gate_result or {},
+                generation_time_ms=int(total_time * 1000),
+                cost_usd=0.0,  # TODO: Calculate from fal.ai pricing
                 user_feedback=None,  # Will be updated via separate API when user gives thumbs up/down
-                aesthetic=bucket,
-                tier=quality,
-                platform=intent.get("platform", {}).get("name", "unknown"),
-                generation_time=gen.get("generation_time", generation_time),
-                total_time=total_time,
             )
             logger.info("[stream][%s] generation logged to learning engine", trace_id)
         except Exception as _le_err:

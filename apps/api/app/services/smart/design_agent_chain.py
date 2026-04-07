@@ -3203,7 +3203,7 @@ class DesignAgentChain:
                         aspect_ratio=aspect_ratio,
                         triage=triage,
                         industry=triage.get("industry", "general"),
-                        gemini_client=_GEMINI
+                        gemini_client=_get_gemini_client()
                     )
                     agent_times["design_director"] = round(time.time() - t, 2)
                     logger.info(f"[design_chain] Design Director decree: {design_decree.get('composition_law')}")
