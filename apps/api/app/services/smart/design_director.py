@@ -446,7 +446,16 @@ Return ONLY valid JSON (no markdown):
 """
 
         try:
-            response = await self.client.generate_content_async(prompt)
+            from google.genai import types
+
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.82,
+                    max_output_tokens=2500,
+                ),
+            )
             text = response.text.strip()
 
             # Extract JSON

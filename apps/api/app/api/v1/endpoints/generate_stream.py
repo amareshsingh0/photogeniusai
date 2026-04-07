@@ -482,8 +482,8 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                     "overall_score": critique_1.get("overall_score", 7.0),
                     "verdict": critique_1.get("verdict", "APPROVED"),
                     "dimensions": critique_1.get("dimensions", {}),
-                    "beast_gates_passed": critique_1.get("beast_gates_passed", 0),
-                    "beast_gates_total": critique_1.get("beast_gates_total", 10),
+                    "beast_gates_passed": critique_1.get("gates_passed", 0),
+                    "beast_gates_total": 10,
                     "image_number": 1,
                     "trace_id": trace_id,
                 })
@@ -493,7 +493,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
 
                 logger.info("[stream][%s] Image 1: score=%.2f, verdict=%s, gates=%d/%d",
                           trace_id, score_1, verdict_1,
-                          critique_1.get("beast_gates_passed", 0), critique_1.get("beast_gates_total", 10))
+                          critique_1.get("gates_passed", 0), 10)
 
                 # ━━━ DECISION LOGIC ━━━
                 if verdict_1 == "APPROVED":
@@ -565,8 +565,8 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                             "overall_score": critique_2.get("overall_score", 7.0),
                             "verdict": critique_2.get("verdict", "APPROVED"),
                             "dimensions": critique_2.get("dimensions", {}),
-                            "beast_gates_passed": critique_2.get("beast_gates_passed", 0),
-                            "beast_gates_total": critique_2.get("beast_gates_total", 10),
+                            "beast_gates_passed": critique_2.get("gates_passed", 0),
+                            "beast_gates_total": 10,
                             "image_number": 2,
                             "trace_id": trace_id,
                         })

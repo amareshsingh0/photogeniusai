@@ -1,3 +1,79 @@
+# Fixes Applied (April 7, 2026 - Updated)
+
+## ✅ ALL CRITICAL ERRORS FIXED
+
+**Fixed 3 blocking errors:**
+1. ✅ Design Director Gemini async method error
+2. ✅ Quality Critic KeyError (`beast_gates_passed` → `gates_passed`)
+3. ✅ PIL Compositor disabled (AI-native text rendering)
+
+**Status:** Ready for testing - all agents should work now.
+
+---
+
+## Latest Fixes (Just Now)
+
+### Issue 4: Design Director Async Method Error ❌ → ✅ FIXED
+**Error:** `'Client' object has no attribute 'generate_content_async'`
+
+**Location:** `apps/api/app/services/smart/design_director.py:449`
+
+**Problem:** Using wrong Gemini async method name.
+
+**Fix:**
+```python
+# Before (line 449)
+response = await self.client.generate_content_async(prompt)
+
+# After
+from google.genai import types
+
+response = await self.client.aio.models.generate_content(
+    model=self.model_name,
+    contents=prompt,
+    config=types.GenerateContentConfig(
+        temperature=0.82,
+        max_output_tokens=2500,
+    ),
+)
+```
+
+---
+
+### Issue 5: Quality Critic KeyError ❌ → ✅ FIXED
+**Error:** `'beast_gates_passed'` KeyError
+
+**Location:** `apps/api/app/api/v1/endpoints/generate_stream.py:485, 496, 568`
+
+**Problem:** Quality Critic returns `gates_passed` but code was looking for `beast_gates_passed`.
+
+**Fix:**
+```python
+# Before
+"beast_gates_passed": critique_1.get("beast_gates_passed", 0),
+"beast_gates_total": critique_1.get("beast_gates_total", 10),
+
+# After
+"beast_gates_passed": critique_1.get("gates_passed", 0),
+"beast_gates_total": 10,
+```
+
+---
+
+### Issue 6: JSON Extraction Failures ✅ ALREADY HANDLED
+**Error:** `_extract_json failed` with truncated JSON
+
+**Location:** Multiple agents (image_prompter, etc.)
+
+**Status:** Already has repair logic in `design_agent_chain.py:1241-1280`
+- Strips incomplete key-value pairs
+- Closes open strings/arrays/objects
+- Falls back to heuristic generation
+
+**Note:** If JSON still fails, agents use fallback prompts. This is expected behavior.
+
+---
+
 # Fixes Applied (April 7, 2026)
 
 ## Issue 1: Gemini Client Error ❌ → ✅ FIXED
