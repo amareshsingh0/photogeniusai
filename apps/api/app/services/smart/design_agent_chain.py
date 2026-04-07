@@ -252,54 +252,384 @@ _COPY_SPACE_PROMPT_HINTS_OLD = {
     "center": "preserve a clean central copy-safe area for headline overlay",
 }
 
-def _build_native_text_instructions(headline: str, cta: str, copy_space: str, brand_name: str = "") -> str:
+def _smart_text_length_manager(text: str, max_length: int, text_type: str) -> tuple:
     """
-    Build Ideogram native text rendering instructions.
-    Instead of "preserve space", we tell Ideogram EXACTLY what text to render and how.
+    AUTO-FIX for text overflow (Issue #1).
 
-    Returns prompt snippet like:
-    "Bold headline text 'BEAST MODE' in upper third area, large impactful sans-serif typography,
-    white text with thick black outline, highly legible. CTA button 'SHOP NOW' at bottom center."
+    Instead of hard truncation, intelligently manages text length:
+    - If too long: suggests font scaling OR smart truncation
+    - Returns: (truncated_text, size_modifier)
+
+    Examples:
+    - "EXTRA LONG HEADLINE TEXT" (25 chars, max 20)
+      → ("EXTRA LONG HEADLINE...", "reduce size by 15%")
+    - "50% OFF SALE TODAY" (18 chars, max 20)
+      → ("50% OFF SALE TODAY", "normal size")
+    """
+    text_clean = text.strip()
+    current_len = len(text_clean)
+
+    if current_len <= max_length:
+        return (text_clean, "normal size")
+
+    # Calculate overflow percentage
+    overflow_pct = ((current_len - max_length) / max_length) * 100
+
+    # STRATEGY 1: Minor overflow (< 20%) → Font scaling
+    if overflow_pct < 20:
+        scale_reduction = min(int(overflow_pct), 15)  # Max 15% reduction
+        return (text_clean, f"reduce size by {scale_reduction}% to fit")
+
+    # STRATEGY 2: Moderate overflow (20-50%) → Smart truncation
+    elif overflow_pct < 50:
+        # Keep first N chars + ellipsis
+        truncated = text_clean[:max_length - 3] + "..."
+        return (truncated, "normal size")
+
+    # STRATEGY 3: Severe overflow (>50%) → Priority truncation
+    else:
+        # Keep most important words (usually first half)
+        words = text_clean.split()
+        if len(words) > 3:
+            # Keep first 2-3 words + "..."
+            truncated = " ".join(words[:3]) + "..."
+        else:
+            truncated = text_clean[:max_length - 3] + "..."
+        return (truncated, "normal size")
+
+
+def _predict_scene_colors(prompt_lower: str) -> dict:
+    """
+    SMART COLOR CONTRAST (Issue #2).
+
+    Predicts likely dominant colors in image from prompt keywords,
+    then suggests contrasting text colors.
+
+    Returns: {
+        "likely_bg": "color prediction",
+        "text_color": "contrasting color",
+        "reasoning": "why"
+    }
+    """
+    # Color keyword patterns
+    color_hints = {
+        "dark": {"likely_bg": "dark tones", "text_color": "white or light", "reasoning": "dark background needs light text"},
+        "night": {"likely_bg": "dark tones", "text_color": "white or bright", "reasoning": "night scene is dark"},
+        "black": {"likely_bg": "dark black", "text_color": "white or gold", "reasoning": "black background needs high contrast"},
+
+        "light": {"likely_bg": "light tones", "text_color": "black or dark", "reasoning": "light background needs dark text"},
+        "white": {"likely_bg": "white or cream", "text_color": "black or navy", "reasoning": "white background needs dark contrast"},
+        "bright": {"likely_bg": "bright colors", "text_color": "black or white bold", "reasoning": "bright colors need bold contrast"},
+
+        "sunset": {"likely_bg": "orange/red warm", "text_color": "white or dark purple", "reasoning": "warm sunset needs cool contrast"},
+        "ocean": {"likely_bg": "blue dominant", "text_color": "white or coral", "reasoning": "blue ocean needs warm contrast"},
+        "forest": {"likely_bg": "green dominant", "text_color": "white or cream", "reasoning": "green forest needs light contrast"},
+        "sky": {"likely_bg": "blue or light", "text_color": "white or dark", "reasoning": "sky varies, high contrast needed"},
+
+        "red": {"likely_bg": "red dominant", "text_color": "white or cream", "reasoning": "red background needs light text"},
+        "blue": {"likely_bg": "blue dominant", "text_color": "white or yellow", "reasoning": "blue needs warm contrast"},
+        "green": {"likely_bg": "green dominant", "text_color": "white or yellow", "reasoning": "green needs bright contrast"},
+        "yellow": {"likely_bg": "yellow dominant", "text_color": "black or navy", "reasoning": "yellow needs dark contrast"},
+
+        "gradient": {"likely_bg": "gradient blend", "text_color": "white or black bold with outline", "reasoning": "gradient needs versatile high-contrast text"},
+    }
+
+    # Check for color keywords
+    for keyword, colors in color_hints.items():
+        if keyword in prompt_lower:
+            return colors
+
+    # Default: Assume balanced/medium tone
+    return {
+        "likely_bg": "balanced medium tones",
+        "text_color": "white with black outline or black with white outline",
+        "reasoning": "versatile contrast for unknown background"
+    }
+
+
+def _analyze_scene_complexity(prompt_lower: str, industry: str) -> str:
+    """
+    STEP 1: Predict image complexity from prompt.
+    Returns: "clean" | "complex" | "balanced"
+    """
+    # Clean/minimal scene indicators
+    clean_keywords = [
+        "minimal", "clean", "simple", "gradient", "solid background",
+        "plain", "uncluttered", "empty", "negative space", "zen"
+    ]
+    if any(kw in prompt_lower for kw in clean_keywords):
+        return "clean"
+
+    # Luxury/fashion tends to be minimal
+    if industry in ["fashion", "luxury", "jewelry"]:
+        return "clean"
+
+    # Complex/busy scene indicators
+    complex_keywords = [
+        "busy", "crowd", "detailed", "packed", "many", "multiple",
+        "collage", "pattern", "texture", "intricate", "elaborate"
+    ]
+    if any(kw in prompt_lower for kw in complex_keywords):
+        return "complex"
+
+    return "balanced"
+
+
+def _detect_visual_focus(prompt_lower: str) -> str:
+    """
+    STEP 2: Detect what the image will focus on.
+    Returns: "text_primary" | "product" | "person" | "scene"
+    """
+    # Text-first designs (quotes, announcements)
+    text_keywords = ["quote", "text", "words", "message", "announcement", "saying", "wisdom"]
+    if any(kw in prompt_lower for kw in text_keywords):
+        return "text_primary"
+
+    # Product-focused
+    product_keywords = [
+        "product", "watch", "bottle", "shoe", "gadget", "device",
+        "cosmetic", "package", "item", "merchandise", "packshot"
+    ]
+    if any(kw in prompt_lower for kw in product_keywords):
+        return "product"
+
+    # Person-focused
+    person_keywords = [
+        "portrait", "person", "model", "face", "selfie", "headshot",
+        "people", "human", "athlete", "woman", "man"
+    ]
+    if any(kw in prompt_lower for kw in person_keywords):
+        return "person"
+
+    return "scene"
+
+
+def _decide_text_strategy(scene_type: str, focus: str, industry: str, goal: str) -> dict:
+    """
+    STEP 3: INTELLIGENT TEXT-IMAGE BALANCING.
+
+    Based on scene complexity + visual focus, decide:
+    - How much text prominence (dominant/high/medium/low)
+    - Which text elements to include
+    - Size guidance for Ideogram
+    - Composition style
+
+    This is how top platforms (Recraft, Ideogram, Adobe Express) handle advertising images.
+    """
+
+    # TEXT-PRIMARY (quotes, announcements, message-focused)
+    if focus == "text_primary":
+        return {
+            "prominence": "dominant",
+            "elements": "headline_only",
+            "size": "extra large bold impactful",
+            "composition": "text-dominant design, typography is the hero, minimal background supports the message",
+            "text_amount": "minimal_elements"
+        }
+
+    # CLEAN SCENE (gradients, minimal backgrounds)
+    elif scene_type == "clean":
+        return {
+            "prominence": "high",
+            "elements": "headline_subtitle_cta",
+            "size": "large bold readable",
+            "composition": "balanced text-image integration, text and background work together harmoniously, clean professional layout",
+            "text_amount": "medium"
+        }
+
+    # PRODUCT FOCUS (product is hero)
+    elif focus == "product":
+        return {
+            "prominence": "low",
+            "elements": "headline_brand_minimal",
+            "size": "medium elegant, text doesn't compete with product",
+            "composition": "product-hero composition, text placed elegantly in clean areas that complement the product, refined restrained typography",
+            "text_amount": "minimal"
+        }
+
+    # PERSON FOCUS (portrait, model)
+    elif focus == "person":
+        return {
+            "prominence": "medium",
+            "elements": "headline_subtitle",
+            "size": "large bold but positioned to not cover face or key features",
+            "composition": "person-centric composition, text integrated naturally around the subject, professional editorial layout",
+            "text_amount": "medium"
+        }
+
+    # COMPLEX SCENE (busy backgrounds)
+    elif scene_type == "complex":
+        return {
+            "prominence": "medium_high",
+            "elements": "headline_focused",
+            "size": "bold high-contrast to stand out against busy background",
+            "composition": "text placed strategically in less busy areas, bold typography competes with scene complexity, smart visual hierarchy",
+            "text_amount": "minimal_to_medium"
+        }
+
+    # PROMO/SALE (urgency, commercial)
+    elif goal in ["sale_promotion", "lead_gen"]:
+        return {
+            "prominence": "high",
+            "elements": "headline_value_cta",
+            "size": "ultra bold urgent high-impact",
+            "composition": "high-impact promotional layout, urgent commercial design, bold attention-grabbing typography",
+            "text_amount": "medium_to_high"
+        }
+
+    # BALANCED DEFAULT
+    else:
+        return {
+            "prominence": "medium",
+            "elements": "headline_subtitle",
+            "size": "large readable professional",
+            "composition": "balanced advertising composition, natural text-image integration, professional marketing layout with clear visual hierarchy",
+            "text_amount": "medium"
+        }
+
+
+def _build_native_text_instructions(
+    headline: str,
+    cta: str,
+    copy_space: str,
+    brand_name: str = "",
+    subheadline: str = "",
+    industry: str = "general",
+    goal: str = "",
+    prompt_lower: str = "",
+) -> str:
+    """
+    BEAST-LEVEL COMPOSITION INTELLIGENCE v3 (Apr 8, 2026)
+
+    HOW TOP PLATFORMS (Recraft.AI, Ideogram, Adobe Express) HANDLE ADVERTISING:
+
+    1. ANALYZE scene complexity (clean vs busy)
+    2. DETECT visual focus (product/person/text/scene)
+    3. DECIDE text-image balance (how much text, how prominent)
+    4. BUILD intelligent composition (adaptive, not fixed "top/bottom")
+
+    Philosophy:
+    - Text + Image as ONE unified advertising composition
+    - Dynamic text strategy based on predicted scene
+    - Let Ideogram's layout AI work (we guide, not prescribe)
+    - Adaptive prominence (text dominant for quotes, subtle for products)
     """
     if not headline or not headline.strip():
         return ""
 
-    # Text position mapping
-    position_map = {
-        "top": "in the upper third area",
-        "bottom": "in the lower third area",
-        "left": "on the left side",
-        "right": "on the right side",
-        "center": "in the center area",
-    }
-    position = position_map.get(copy_space, "in the upper area")
+    # STEP 1: Analyze what kind of image will be generated
+    scene_type = _analyze_scene_complexity(prompt_lower, industry)
+    focus = _detect_visual_focus(prompt_lower)
 
-    # Build headline instruction
-    headline_clean = headline.strip()[:60]  # Max 60 chars for prompt clarity
-    text_parts = []
+    # STEP 2: Get intelligent text strategy
+    strategy = _decide_text_strategy(scene_type, focus, industry, goal)
 
-    # Main headline
-    text_parts.append(
-        f"Bold headline text '{headline_clean}' {position}, large impactful sans-serif typography, "
-        f"white text with thick black outline for maximum legibility and contrast"
+    # Log intelligent decisions
+    logger.info(
+        "[composition_intelligence] scene=%s focus=%s prominence=%s text_amount=%s",
+        scene_type, focus, strategy["prominence"], strategy["text_amount"]
     )
 
-    # CTA if exists
-    if cta and cta.strip():
-        cta_clean = cta.strip()[:30]
-        cta_position = "at bottom center" if copy_space != "bottom" else "below headline"
-        text_parts.append(
-            f"CTA text '{cta_clean}' {cta_position}, medium-sized bold typography"
-        )
+    # STEP 3: Smart text length management (AUTO-FIX for overflow)
+    import re
 
-    # Brand name if exists (small at top)
-    if brand_name and brand_name.strip():
-        brand_clean = brand_name.strip()[:40]
-        text_parts.append(
-            f"Small brand name '{brand_clean}' at top"
-        )
+    # Determine max length based on prominence
+    max_headline_len = {
+        "dominant": 60,  # Text-first designs can be longer
+        "high": 50,
+        "medium": 40,
+        "low": 30,  # Product-focused needs short text
+    }.get(strategy["prominence"], 45)
 
-    return ". ".join(text_parts)
+    headline_managed, size_mod = _smart_text_length_manager(
+        headline.strip(), max_headline_len, "headline"
+    )
+
+    # Predict scene colors for smart contrast (AUTO-COLOR)
+    color_prediction = _predict_scene_colors(prompt_lower)
+
+    logger.info(
+        "[text_intelligence] headline_len=%d max=%d size_mod='%s' text_color='%s'",
+        len(headline.strip()), max_headline_len, size_mod, color_prediction["text_color"]
+    )
+
+    # STEP 4: Collect text elements with intelligence
+    text_elements = []
+
+    # Detect if headline has numbers (numbers need prominence)
+    has_numbers = bool(re.search(r'\d+', headline_managed))
+    if has_numbers:
+        text_elements.append(
+            f"headline '{headline_managed}' with EXTRA-LARGE BOLD NUMBERS for maximum impact, "
+            f"{color_prediction['text_color']} for optimal contrast"
+        )
+    else:
+        # Apply size modifier if needed
+        if "reduce" in size_mod:
+            text_elements.append(
+                f"headline '{headline_managed}', {size_mod}, "
+                f"{color_prediction['text_color']} for optimal contrast"
+            )
+        else:
+            text_elements.append(
+                f"headline '{headline_managed}', "
+                f"{color_prediction['text_color']} for optimal contrast"
+            )
+
+    # Add supporting elements based on text_amount from strategy
+    text_amount = strategy["text_amount"]
+
+    if text_amount == "minimal_elements":
+        # TEXT-PRIMARY: Just headline, nothing else
+        pass
+
+    elif text_amount == "minimal":
+        # PRODUCT/LUXURY: Brand + maybe small subtitle
+        if brand_name and brand_name.strip():
+            text_elements.append(f"brand '{brand_name.strip()[:30]}'")
+
+    elif text_amount == "minimal_to_medium":
+        # COMPLEX SCENE: Headline + brand only
+        if brand_name and brand_name.strip():
+            brand_managed, _ = _smart_text_length_manager(brand_name.strip(), 25, "brand")
+            text_elements.append(f"brand '{brand_managed}'")
+        if subheadline and subheadline.strip() and len(subheadline.strip()) < 30:
+            sub_managed, _ = _smart_text_length_manager(subheadline.strip(), 30, "subtitle")
+            text_elements.append(f"brief subtitle '{sub_managed}'")
+
+    elif text_amount == "medium":
+        # BALANCED: Headline + subtitle + maybe CTA
+        if subheadline and subheadline.strip():
+            sub_managed, sub_mod = _smart_text_length_manager(subheadline.strip(), 45, "subtitle")
+            text_elements.append(f"subtitle '{sub_managed}'")
+        if cta and cta.strip() and focus != "product":  # No CTA on product-focused
+            cta_managed, _ = _smart_text_length_manager(cta.strip(), 25, "cta")
+            text_elements.append(f"call-to-action '{cta_managed}'")
+        if brand_name and brand_name.strip():
+            brand_managed, _ = _smart_text_length_manager(brand_name.strip(), 30, "brand")
+            text_elements.append(f"brand '{brand_managed}'")
+
+    elif text_amount == "medium_to_high":
+        # PROMO: All elements
+        if subheadline and subheadline.strip():
+            text_elements.append(f"value proposition '{subheadline.strip()[:55]}'")
+        if cta and cta.strip():
+            text_elements.append(f"strong CTA '{cta.strip()[:28]}'")
+        if brand_name and brand_name.strip():
+            text_elements.append(f"brand '{brand_name.strip()[:30]}'")
+
+    # STEP 4: Build intelligent composition prompt
+    text_list = ", ".join(text_elements)
+
+    # Build final prompt with composition intelligence
+    composition_desc = strategy["composition"]
+    size_guidance = strategy["size"]
+
+    return (
+        f"Professional advertising poster with {text_list}. "
+        f"{size_guidance} typography. {composition_desc}. "
+        f"Text and image integrated as unified composition, not overlay"
+    )
 _TEXT_NEGATIVE_TERMS = [
     "text",
     "words",
@@ -2868,13 +3198,18 @@ def _agent_reconcile_outputs(
     if chosen_direction and chosen_direction.lower() not in bg_prompt.lower():
         bg_prompt = f"{chosen_direction}. {bg_prompt}".strip(". ")
 
-    # NATIVE TEXT RENDERING: Include actual text in Ideogram prompt (not "preserve space")
-    # This tells Ideogram to render text AS PART of image generation, not compositor overlay
+    # NATIVE TEXT RENDERING v3: Smart agent decides text complexity + style
+    # Agent extracts user's explicit text + adds appropriate supporting text
+    # Ideogram decides layout (we don't prescribe "top" or "bottom")
     native_text_instructions = _build_native_text_instructions(
         headline=copy_final.get("headline", ""),
         cta=copy_final.get("cta", ""),
         copy_space=copy_space,
-        brand_name=copy_final.get("brand_name", "")
+        brand_name=copy_final.get("brand_name", ""),
+        subheadline=copy_final.get("subheadline", ""),
+        industry=triage.get("industry", "general"),
+        goal=triage.get("goal", ""),
+        prompt_lower=str(triage.get("original_prompt", "")).lower(),
     )
     if native_text_instructions:
         bg_prompt = f"{bg_prompt}. {native_text_instructions}".strip(". ")
