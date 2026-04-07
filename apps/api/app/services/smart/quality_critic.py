@@ -335,19 +335,28 @@ class QualityCritic:
 
     def __init__(self, tier: str = "premium"):
         self.gemini_client = None
+        self.groq_client = None
         self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.tier = tier.lower()
         self.config = _get_tier_config(self.tier)
+        # Quality Critic provider: "groq" (Llama 3.2 Vision - best free tier) or "gemini" (fallback)
+        self.provider = os.getenv("QUALITY_CRITIC_PROVIDER", "groq").lower()
 
     def _get_gemini_client(self):
-        """Lazy init Gemini client."""
-        if self.gemini_client is None:
-            from google import genai
-            api_key = os.getenv("GEMINI_API_KEY")
+        """Get Gemini client from shared pool (round-robin across multiple API keys)."""
+        from app.services.smart.design_agent_chain import _get_gemini_client as get_pooled_client
+        # Use the shared client pool for automatic key rotation and fallback
+        return get_pooled_client()
+
+    def _get_groq_client(self):
+        """Get Groq client for Llama 3.2 Vision."""
+        if self.groq_client is None:
+            from groq import AsyncGroq
+            api_key = os.getenv("GROQ_API_KEY")
             if not api_key:
-                raise RuntimeError("GEMINI_API_KEY not set for Quality Critic")
-            self.gemini_client = genai.Client(api_key=api_key)
-        return self.gemini_client
+                raise RuntimeError("GROQ_API_KEY not set for Quality Critic")
+            self.groq_client = AsyncGroq(api_key=api_key)
+        return self.groq_client
 
     async def critique(
         self,
@@ -444,6 +453,72 @@ class QualityCritic:
                 "error": str(e),
             }
 
+    async def _call_vision_model(self, system_prompt: str, user_prompt: str, image_b64: str, max_tokens: int = 4000) -> str:
+        """Call vision model (Groq or Gemini) for image analysis with automatic fallback."""
+        if self.provider == "groq":
+            # Try Groq Llama 3.2 Vision (free tier, generous limits)
+            try:
+                client = self._get_groq_client()
+                import base64
+
+                response = await client.chat.completions.create(
+                    model="llama-3.2-90b-vision-preview",  # Llama 3.2 90B with vision (11B deprecated)
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": system_prompt
+                        },
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{image_b64}"
+                                    }
+                                },
+                                {
+                                    "type": "text",
+                                    "text": user_prompt
+                                }
+                            ]
+                        }
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=0.3,
+                )
+                raw_text = response.choices[0].message.content
+                logger.info(f"[quality_critic] Groq response: {len(raw_text)} chars, finish_reason={response.choices[0].finish_reason}")
+                return raw_text
+            except Exception as e:
+                logger.warning(f"[quality_critic] Groq failed ({e}), falling back to Gemini")
+                # Fall through to Gemini fallback
+
+        # Gemini fallback (or primary if provider != groq)
+        client = self._get_gemini_client()
+        from google.genai import types
+
+        response = await client.aio.models.generate_content(
+            model=self.gemini_model,
+            contents=[{
+                "role": "user",
+                "parts": [
+                    {"text": user_prompt},
+                    {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}}
+                ]
+            }],
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.3,
+                max_output_tokens=max_tokens,
+                response_mime_type="application/json",
+            ),
+        )
+        raw_text = response.text or "{}"
+        finish_reason = response.candidates[0].finish_reason if response.candidates else "N/A"
+        logger.info(f"[quality_critic] Gemini response: {len(raw_text)} chars, finish_reason={finish_reason}")
+        return raw_text
+
     async def _score_all_dimensions(
         self,
         image_url: str,
@@ -451,40 +526,54 @@ class QualityCritic:
         design_brief: Dict,
         platform: str,
     ) -> Dict:
-        """Score all 12 dimensions in parallel using Gemini Vision."""
-        # For speed, we batch all dimensions into ONE Gemini call with structured output
-        system_prompt = self._build_dimension_system_prompt(creative_bible, design_brief, platform)
-        user_prompt = "Analyze this image across all 12 quality dimensions. Score each 0-10 with reasoning."
+        """Score all 12 dimensions using vision model with smart batching for free tier."""
+        # For Gemini free tier: split into 3 batches to avoid MAX_TOKENS truncation
+        # Each batch gets 4 dimensions, fits within ~150 token limit
 
         try:
-            client = self._get_gemini_client()
-            from google.genai import types
-
-            # Fetch image first to catch download errors
+            # Fetch image first
             image_b64 = await self._fetch_image_base64(image_url)
-            logger.info(f"[quality_critic] Image fetched, size: {len(image_b64)} bytes")
+            logger.info(f"[quality_critic] Image fetched, size: {len(image_b64)} bytes, provider={self.provider}")
 
-            # Single call with all 12 dimensions
-            response = await client.aio.models.generate_content(
-                model=self.gemini_model,
-                contents=[
-                    {"role": "user", "parts": [
-                        {"text": user_prompt},
-                        {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}}
-                    ]}
-                ],
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=0.3,
-                    max_output_tokens=3000,
-                ),
-            )
+            # Split dimensions into 6 batches (2 dims each) to fit Gemini free tier token limits
+            all_dims = list(QUALITY_DIMENSIONS.keys())
+            batch_size = 2
+            batches = [all_dims[i:i + batch_size] for i in range(0, len(all_dims), batch_size)]
 
-            raw_text = response.text or "{}"
-            logger.info(f"[quality_critic] Gemini response length: {len(raw_text)} chars")
-            if len(raw_text) < 100:
-                logger.warning(f"[quality_critic] Short response: {raw_text[:200]}")
-            scores_json = self._extract_json(raw_text)
+            logger.info(f"[quality_critic] Splitting {len(all_dims)} dimensions into {len(batches)} batches for parallel scoring")
+
+            # Build MINIMAL system prompt (dimension details go in user prompt per batch)
+            bible_context = ""
+            if creative_bible:
+                bible_context = f"Creative Bible: {creative_bible.get('emotional_territory', 'N/A')}"
+
+            system_base = f"Senior Creative Director. Score image quality dimensions 0-10. {bible_context} Platform: {platform}"
+
+            # Call each batch in parallel
+            async def score_batch(batch_dims: List[str], batch_num: int) -> Dict:
+                # Ultra-concise dimension spec for token efficiency
+                dims_spec = "\n".join([
+                    f"{dim}: {QUALITY_DIMENSIONS[dim]['criteria'][:80]}"
+                    for dim in batch_dims
+                ])
+
+                prompt = f"Score each 0-10. Return JSON: {{\"dim_name\": {{\"score\": 8.0, \"reasoning\": \"brief text\"}}}}\n\n{dims_spec}"
+
+                raw_text = await self._call_vision_model(system_base, prompt, image_b64, max_tokens=1500)
+                logger.info(f"[quality_critic] Batch {batch_num+1}/{len(batches)}: {len(raw_text)} chars")
+                return self._extract_json(raw_text)
+
+            # Execute all batches in parallel
+            batch_results = await asyncio.gather(*[
+                score_batch(batch, i) for i, batch in enumerate(batches)
+            ])
+
+            # Merge results from all batches
+            scores_json = {}
+            for batch_result in batch_results:
+                scores_json.update(batch_result)
+
+            logger.info(f"[quality_critic] Merged {len(scores_json)} dimension scores from {len(batches)} batches")
 
             # Parse and validate scores
             dimension_scores = {}
@@ -579,32 +668,14 @@ CRITICAL REMINDER:
         """Validate 10 Beast Standard gates (Pass/Fail)."""
         # For speed, batch all 10 gates into ONE Gemini call
         system_prompt = self._build_beast_gates_system_prompt(creative_bible, design_brief)
-        user_prompt = "Evaluate this image against all 10 Beast Standards. Score each gate 0-10."
+        user_prompt = "Score 10 Beast gates (0-10). Brief reason per gate. JSON only, start with {."
 
         try:
-            client = self._get_gemini_client()
-            from google.genai import types
-
-            # Fetch image (already cached from dimensions call)
+            # Fetch image
             image_b64 = await self._fetch_image_base64(image_url)
 
-            response = await client.aio.models.generate_content(
-                model=self.gemini_model,
-                contents=[
-                    {"role": "user", "parts": [
-                        {"text": user_prompt},
-                        {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}}
-                    ]}
-                ],
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=0.2,  # Lower temp for pass/fail decisions
-                    max_output_tokens=2000,
-                ),
-            )
-
-            raw_text = response.text or "{}"
-            logger.info(f"[quality_critic] Beast gates response length: {len(raw_text)} chars")
+            # Call vision model
+            raw_text = await self._call_vision_model(system_prompt, user_prompt, image_b64, max_tokens=3000)
             gates_json = self._extract_json(raw_text)
 
             # Parse and validate gates
@@ -808,18 +879,32 @@ Score 0-10 for each gate. Be CRITICAL — these are the world's highest standard
         """Extract JSON from Gemini response (handles markdown fences)."""
         import re
         text = text.strip()
+
+        # Log raw response for debugging
+        logger.info(f"[quality_critic] Raw Gemini response length: {len(text)} chars")
+        if len(text) < 500:
+            logger.info(f"[quality_critic] Raw response: {text}")
+        else:
+            logger.info(f"[quality_critic] Raw response (first 500): {text[:500]}")
+
         text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
         try:
-            return json.loads(text)
-        except json.JSONDecodeError:
+            parsed = json.loads(text)
+            logger.info(f"[quality_critic] Successfully parsed JSON with {len(parsed)} keys")
+            return parsed
+        except json.JSONDecodeError as e:
+            logger.warning(f"[quality_critic] Initial JSON parse failed: {e}")
             # Try to find {...} in text
             match = re.search(r"\{[\s\S]*\}", text)
             if match:
                 try:
-                    return json.loads(match.group())
-                except:
-                    pass
-        logger.warning("[quality_critic] JSON parse failed, returning empty dict")
+                    parsed = json.loads(match.group())
+                    logger.info(f"[quality_critic] Extracted JSON from regex match with {len(parsed)} keys")
+                    return parsed
+                except Exception as e2:
+                    logger.error(f"[quality_critic] Regex match JSON parse also failed: {e2}", exc_info=True)
+
+        logger.error(f"[quality_critic] JSON parse failed completely. Text was: {text[:1000]}")
         return {}
 
     def _timestamp(self) -> str:

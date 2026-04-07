@@ -304,9 +304,18 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         if req.negative_prompt is not None:
             negative_prompt = f"{req.negative_prompt}, {negative_prompt}" if negative_prompt else req.negative_prompt
 
+        # FORCE Ideogram for typography bucket (native text rendering)
+        # Typography bucket uses Ideogram v3 to render text directly in image generation
+        # This overrides any CDI recommendation to ensure text appears properly
+        if bucket == "typography":
+            fal_model_key = "ideogram_quality"
+            model_label = _MODEL_LABELS.get("ideogram_quality", "Ideogram v3 Quality")
+            logger.info("[stream][%s] Typography bucket → forcing ideogram_quality for native text rendering", trace_id)
+
         # CDI model override — AI picks better model than router when context warrants it
+        # Skip CDI override for typography bucket (Ideogram is mandatory for text rendering)
         _cdi_recommended = _canonical_model_key(params.get("recommended_model"), default="")
-        if _cdi_recommended and _cdi_recommended in _MODEL_LABELS:
+        if _cdi_recommended and _cdi_recommended in _MODEL_LABELS and bucket != "typography":
             if _cdi_recommended != fal_model_key:
                 logger.info(
                     "[stream][%s] CDI model override: %s → %s (%s)",
@@ -593,27 +602,29 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
 
                         quality_gate_result["images_generated"] = 2
 
-                        # Re-composite if typography bucket
-                        if bucket == "typography" and isinstance(ad_copy, dict) and ad_copy.get("headline"):
-                            try:
-                                from app.services.smart.poster_compositor import poster_compositor as _pc
-                                http = _get_http_client()
-                                img_resp2 = await http.get(raw_hero_url)
-                                img_resp2.raise_for_status()
-                                img_b64_retry = base64.b64encode(img_resp2.content).decode("ascii")
-                                composed_b64_retry = await asyncio.to_thread(
-                                    _pc.composite,
-                                    hero_b64=img_b64_retry,
-                                    ad_copy=ad_copy,
-                                    poster_design=poster_design,
-                                    elements=brief.get("elements", []),
-                                    target_width=effective_width,
-                                    target_height=min(int(effective_height * 1.5), 3072),
-                                )
-                                final_image_url = f"data:image/jpeg;base64,{composed_b64_retry}"
-                            except Exception as _comp_err:
-                                logger.warning("[stream][%s] Compositor failed for selected image: %s",
-                                             trace_id, _comp_err)
+                        # COMPOSITOR DISABLED - Native text rendering (Ideogram handles text directly)
+                        # Typography bucket now uses Ideogram v3 to render text as part of image generation
+                        # No PIL overlay needed - text appears natively in the generated image
+                        # if bucket == "typography" and isinstance(ad_copy, dict) and ad_copy.get("headline"):
+                        #     try:
+                        #         from app.services.smart.poster_compositor import poster_compositor as _pc
+                        #         http = _get_http_client()
+                        #         img_resp2 = await http.get(raw_hero_url)
+                        #         img_resp2.raise_for_status()
+                        #         img_b64_retry = base64.b64encode(img_resp2.content).decode("ascii")
+                        #         composed_b64_retry = await asyncio.to_thread(
+                        #             _pc.composite,
+                        #             hero_b64=img_b64_retry,
+                        #             ad_copy=ad_copy,
+                        #             poster_design=poster_design,
+                        #             elements=brief.get("elements", []),
+                        #             target_width=effective_width,
+                        #             target_height=min(int(effective_height * 1.5), 3072),
+                        #         )
+                        #         final_image_url = f"data:image/jpeg;base64,{composed_b64_retry}"
+                        #     except Exception as _comp_err:
+                        #         logger.warning("[stream][%s] Compositor failed for selected image: %s",
+                        #                      trace_id, _comp_err)
                     else:
                         # Image 2 generation failed - use Image 1
                         logger.warning("[stream][%s] Image 2 generation failed - using Image 1", trace_id)
