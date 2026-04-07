@@ -2023,7 +2023,7 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
         '"visual_metaphors":["<concrete noun 1>","<concrete noun 2>","<concrete noun 3>"],'
         '"forbidden_elements":["<specific visual no-go 1>","<specific no-go 2>","<specific no-go 3>"],'
         '"dominant_color_story":"<one sentence: how the 60-30-10 colors work together>",'
-        '"composition_archetype":"<one sentence: describe the diagonal/tension/balance specifically>"}}'
+        '"composition_archetype":"hero_dominant|split_60_40|typographic_led|frame_within_frame|dynamic_diagonal|asymmetric_grid|full_bleed"}}'
     )
     # Beast-level context enrichment
     emotion_target = triage.get("emotion_target", "aspiration")

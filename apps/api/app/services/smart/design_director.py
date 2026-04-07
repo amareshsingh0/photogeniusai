@@ -149,7 +149,7 @@ class DesignDirector:
 
     def __init__(self, gemini_client=None):
         self.client = gemini_client
-        self.model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
+        self.model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
     async def issue_decree(
         self,
