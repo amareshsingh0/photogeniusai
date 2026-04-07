@@ -1,0 +1,507 @@
+{
+  "_meta": {
+    "system": "BEAST Creative Studio — Generational Intelligence & Psychographic Profiling",
+    "version": "2026-Q2",
+    "updated_at": "2026-04-07",
+    "philosophy": "Age is not a number. It's a worldview, a trust filter, a language, a set of unspoken expectations.",
+    "scope": "5 primary generations + 8 psychographic profiles for India market"
+  },
+
+  "generations": {
+    "gen_z_india": {
+      "generation_id": "gen_z_india",
+      "age_range": [18, 26],
+      "birth_years": [2000, 2008],
+      "india_context": "first_true_digital_natives_post_jio_revolution",
+
+      "worldview": {
+        "core_values": [
+          "authenticity_over_perfection",
+          "self_expression_identity",
+          "community_belonging",
+          "anti_generic_anti_corporate",
+          "mental_health_awareness",
+          "sustainability_genuine_not_greenwash"
+        ],
+        "trust_signals": "peer_recommendations > celebrity > brand_advertising",
+        "decision_drivers": "values_alignment, creator_endorsement, aesthetic_fit",
+        "skepticism_high": ["corporate_speak", "generic_motivation", "fake_perfection"],
+        "embraces": ["raw_unfiltered", "niche_subcultures", "meme_language", "side_hustle_culture"]
+      },
+
+      "aesthetic_preference": {
+        "visual_style": "raw_or_extreme_polish_never_middle",
+        "composition": "asymmetric_intentional_imperfection",
+        "color_preference": "electric_neon_or_earthy_organic_never_corporate",
+        "typography": "bold_expressive_or_lo_fi_chaotic",
+        "texture": "film_grain_analog_digital_hybrid",
+        "preferred_aesthetics": ["retro_futures", "post_ironic_sincerity", "anti_aesthetic", "ai_native"]
+      },
+
+      "copy_voice": {
+        "tone": "casual_witty_specific_never_formal",
+        "vocabulary": "internet_slang_aware_hinglish_mix",
+        "sentence_structure": "short_punchy_conversational",
+        "emoji_usage": "yes_natural_not_forced",
+        "examples": [
+          "This hits different 🔥",
+          "Tell me you're a 90s kid without telling me",
+          "POV: You finally found the one",
+          "No cap, this is it"
+        ],
+        "forbidden": [
+          "Youngsters will love this",
+          "Cool and trendy",
+          "Hip and happening",
+          "Corporate buzzwords"
+        ]
+      },
+
+      "platform_behavior": {
+        "primary_platforms": ["instagram", "tiktok", "youtube", "snapchat"],
+        "engagement_peak_hours": "9pm_to_1am_night_owls",
+        "content_consumption": "short_form_video > static_image",
+        "discovery_mode": "algorithm_explore > following_feed",
+        "share_triggers": "relatable_funny_niche_identity"
+      },
+
+      "purchasing_psychology": {
+        "price_sensitivity": "high_but_will_pay_for_values_alignment",
+        "brand_loyalty": "low_switches_based_on_vibes",
+        "influencer_impact": "high_micro_influencers > celebrities",
+        "sustainability_weight": "medium_to_high_greenwash_detector",
+        "peer_validation": "social_proof_critical"
+      },
+
+      "india_specific_nuances": {
+        "language_mix": "hinglish_natural_code_switching",
+        "cultural_pride": "modern_indian_global_citizen",
+        "aspirations": "creator_economy_side_hustle_entrepreneurship",
+        "education": "college_degree_questioned_skills_valued",
+        "living_situation": "often_living_with_parents_tier_1_metro"
+      }
+    },
+
+    "millennial_parent_india": {
+      "generation_id": "millennial_parent_india",
+      "age_range": [28, 42],
+      "birth_years": [1984, 1998],
+      "india_context": "economic_liberalization_kids_raising_digital_natives",
+
+      "worldview": {
+        "core_values": [
+          "family_first_security",
+          "value_for_money_practical",
+          "convenience_time_saving",
+          "trust_established_brands",
+          "children_better_life",
+          "work_life_balance_seeking"
+        ],
+        "trust_signals": "reviews > ads, expert_recommendations, brand_heritage",
+        "decision_drivers": "safety, value, convenience, reputation",
+        "skepticism_high": ["too_cheap_suspect_quality", "unproven_new_brands"],
+        "embraces": ["online_shopping", "digital_payments", "edtech_for_kids", "health_tracking"]
+      },
+
+      "aesthetic_preference": {
+        "visual_style": "warm_relatable_quality_signals",
+        "composition": "clean_organized_trustworthy",
+        "color_preference": "warm_neutrals_trust_blue_family_friendly",
+        "typography": "readable_sans_serif_clear_hierarchy",
+        "texture": "soft_approachable_premium_but_not_cold",
+        "preferred_aesthetics": ["bio_organic_geometry", "quiet_luxury_loud", "cultural_maximalism"]
+      },
+
+      "copy_voice": {
+        "tone": "helpful_warm_specific_benefit_driven",
+        "vocabulary": "clear_english_or_hinglish_formal_informal_mix",
+        "sentence_structure": "medium_length_explanatory",
+        "emoji_usage": "minimal_functional_not_excessive",
+        "examples": [
+          "Built for busy parents like you",
+          "Because your time matters",
+          "Trusted by 10,000+ families",
+          "Safe. Proven. Reliable."
+        ],
+        "forbidden": [
+          "YOLO lifestyle",
+          "Disruptive revolutionary",
+          "Gen Z slang attempts",
+          "Too casual for trust"
+        ]
+      },
+
+      "platform_behavior": {
+        "primary_platforms": ["facebook", "instagram", "youtube", "whatsapp"],
+        "engagement_peak_hours": "7am_to_9am_and_8pm_to_10pm_family_time",
+        "content_consumption": "video_tutorials > short_reels",
+        "discovery_mode": "search_intent > explore_algorithm",
+        "share_triggers": "useful_informative_family_relevant"
+      },
+
+      "purchasing_psychology": {
+        "price_sensitivity": "medium_will_pay_for_quality_value",
+        "brand_loyalty": "high_once_trust_established",
+        "influencer_impact": "medium_expert_reviews > celebrities",
+        "sustainability_weight": "low_to_medium_if_affordable",
+        "peer_validation": "parent_community_recommendations_critical"
+      },
+
+      "india_specific_nuances": {
+        "language_mix": "english_for_professional_hinglish_for_social",
+        "cultural_anchoring": "balancing_tradition_modernity",
+        "aspirations": "children_education_home_ownership_retirement_planning",
+        "education": "college_educated_white_collar_jobs",
+        "living_situation": "nuclear_family_tier_1_tier_2_cities"
+      }
+    },
+
+    "achiever_urban_india": {
+      "generation_id": "achiever_urban_india",
+      "age_range": [24, 38],
+      "birth_years": [1988, 2002],
+      "india_context": "upwardly_mobile_professionals_startup_corporate_success",
+
+      "worldview": {
+        "core_values": [
+          "success_visible_achievement",
+          "efficiency_productivity",
+          "status_earned_not_inherited",
+          "growth_mindset_learning",
+          "premium_quality_worth_paying",
+          "career_identity_linked"
+        ],
+        "trust_signals": "data > emotion, peer_success_stories, premium_brand_signals",
+        "decision_drivers": "ROI, status_signal, efficiency_gain, career_advancement",
+        "skepticism_high": ["mass_market_generic", "cheap_inferior"],
+        "embraces": ["premium_tools", "productivity_hacks", "networking", "personal_branding"]
+      },
+
+      "aesthetic_preference": {
+        "visual_style": "clean_modern_aspirational_premium",
+        "composition": "minimal_sophisticated_grid_based",
+        "color_preference": "dark_premium_navy_black_or_bold_single_accent",
+        "typography": "modern_sans_serif_tight_kerning_confidence",
+        "texture": "smooth_premium_subtle_luxury",
+        "preferred_aesthetics": ["quiet_luxury_loud", "brutalism_luxury", "ai_native"]
+      },
+
+      "copy_voice": {
+        "tone": "direct_confident_achievement_oriented",
+        "vocabulary": "professional_aspirational_specific_metrics",
+        "sentence_structure": "short_declarative_powerful",
+        "emoji_usage": "minimal_professional_context_only",
+        "examples": [
+          "Built for leaders who move fast",
+          "3 hours saved. Every single day.",
+          "The tool that scaled 1,000+ startups",
+          "Premium performance. Zero compromise."
+        ],
+        "forbidden": [
+          "Work-life balance (implies weakness)",
+          "Slow down and relax",
+          "Good enough quality",
+          "Mass market appeal"
+        ]
+      },
+
+      "platform_behavior": {
+        "primary_platforms": ["linkedin", "instagram", "youtube", "twitter"],
+        "engagement_peak_hours": "6am_to_8am_morning_routine_and_lunch_12pm_to_2pm",
+        "content_consumption": "insights > entertainment, long_form_if_valuable",
+        "discovery_mode": "intentional_search > passive_scroll",
+        "share_triggers": "career_relevant_status_signal_learning"
+      },
+
+      "purchasing_psychology": {
+        "price_sensitivity": "low_for_value_high_for_commodity",
+        "brand_loyalty": "medium_will_switch_for_better_performance",
+        "influencer_impact": "low_peer_success > influencer_promotion",
+        "sustainability_weight": "low_unless_premium_signal",
+        "peer_validation": "competitive_what_successful_peers_use"
+      },
+
+      "india_specific_nuances": {
+        "language_mix": "english_dominant_professional_contexts",
+        "cultural_anchoring": "modern_global_indian_identity",
+        "aspirations": "startup_founder_senior_leadership_international_career",
+        "education": "IIT_IIM_tier_1_college_or_international_degree",
+        "living_situation": "independent_or_nuclear_family_metro_cities"
+      }
+    },
+
+    "premium_buyer_india": {
+      "generation_id": "premium_buyer_india",
+      "age_range": [30, 55],
+      "birth_years": [1971, 1996],
+      "india_context": "established_wealth_luxury_consumers_discerning_taste",
+
+      "worldview": {
+        "core_values": [
+          "exclusivity_rarity",
+          "quality_craftsmanship",
+          "status_subtle_signals",
+          "experience_over_things",
+          "heritage_legacy",
+          "discernment_connoisseurship"
+        ],
+        "trust_signals": "brand_heritage > advertising, personal_recommendation, curated_sources",
+        "decision_drivers": "exclusivity, craftsmanship, brand_story, personal_service",
+        "skepticism_high": ["mass_marketing", "discounts_suspect_quality", "nouveau_riche_flash"],
+        "embraces": ["bespoke_services", "limited_editions", "artisanal", "provenance"]
+      },
+
+      "aesthetic_preference": {
+        "visual_style": "quiet_luxury_minimal_maximum_craft",
+        "composition": "generous_whitespace_editorial_precision",
+        "color_preference": "black_white_gold_deep_jewel_tones_muted_sophistication",
+        "typography": "refined_serifs_or_minimal_sans_tight_tracking",
+        "texture": "tactile_quality_paper_stock_material_visible",
+        "preferred_aesthetics": ["quiet_luxury_loud", "bio_organic_geometry", "brutalism_luxury"]
+      },
+
+      "copy_voice": {
+        "tone": "understated_precise_confident_never_salesy",
+        "vocabulary": "sophisticated_english_minimal_jargon",
+        "sentence_structure": "elegant_restrained_implication_over_declaration",
+        "emoji_usage": "never",
+        "examples": [
+          "Handcrafted in limited quantities",
+          "For those who know",
+          "Since 1947",
+          "Available by appointment"
+        ],
+        "forbidden": [
+          "Sale! Discount! Offer!",
+          "Best value for money",
+          "Everyone's buying this",
+          "Affordable luxury"
+        ]
+      },
+
+      "platform_behavior": {
+        "primary_platforms": ["instagram_curated", "print_editorial", "email_exclusive", "private_events"],
+        "engagement_peak_hours": "anytime_leisure_driven_not_routine",
+        "content_consumption": "long_form_storytelling_if_premium_context",
+        "discovery_mode": "curated_recommendations > algorithm",
+        "share_triggers": "personal_connection_insider_knowledge"
+      },
+
+      "purchasing_psychology": {
+        "price_sensitivity": "near_zero_quality_matters",
+        "brand_loyalty": "extremely_high_multi_generational",
+        "influencer_impact": "near_zero_prefers_personal_curation",
+        "sustainability_weight": "high_if_heritage_craft_signal",
+        "peer_validation": "insider_circle_recommendations_only"
+      },
+
+      "india_specific_nuances": {
+        "language_mix": "english_dominant_hindi_for_heritage_context",
+        "cultural_anchoring": "heritage_meets_global_sophistication",
+        "aspirations": "legacy_building_philanthropy_cultural_patronage",
+        "education": "international_education_or_family_business_heritage",
+        "living_situation": "independent_luxury_residential_tier_1_metros"
+      }
+    },
+
+    "mass_market_india": {
+      "generation_id": "mass_market_india",
+      "age_range": [20, 50],
+      "birth_years": [1976, 2006],
+      "india_context": "tier_2_tier_3_cities_value_conscious_aspirational",
+
+      "worldview": {
+        "core_values": [
+          "affordability_value",
+          "reliability_trust",
+          "familiarity_comfort",
+          "family_community",
+          "practical_utility",
+          "aspiration_upward_mobility"
+        ],
+        "trust_signals": "familiar_brands > new, celebrity_endorsement, word_of_mouth",
+        "decision_drivers": "price, trust, convenience, proven_track_record",
+        "skepticism_high": ["unknown_brands", "too_expensive", "complex_messaging"],
+        "embraces": ["deals_offers", "local_language", "simple_messaging", "whatsapp_communication"]
+      },
+
+      "aesthetic_preference": {
+        "visual_style": "bright_clear_simple_friendly_approachable",
+        "composition": "straightforward_centered_clear_focal",
+        "color_preference": "primary_colors_high_contrast_warm_inviting",
+        "typography": "bold_readable_large_sans_serif",
+        "texture": "clean_no_abstract_literal_representation",
+        "preferred_aesthetics": ["cultural_maximalism", "post_ironic_sincerity"]
+      },
+
+      "copy_voice": {
+        "tone": "simple_benefit_driven_reassuring",
+        "vocabulary": "hindi_english_regional_languages_simple_words",
+        "sentence_structure": "short_direct_benefit_clear",
+        "emoji_usage": "yes_friendly_accessible",
+        "examples": [
+          "Sabke liye. Sab din.",
+          "Bharosa. Quality. Value.",
+          "50% off — aaj hi!",
+          "Ghar ghar ki pasand"
+        ],
+        "forbidden": [
+          "Complex English",
+          "Abstract concepts",
+          "Minimalist messaging",
+          "Irony or sarcasm"
+        ]
+      },
+
+      "platform_behavior": {
+        "primary_platforms": ["facebook", "youtube", "whatsapp", "local_tv"],
+        "engagement_peak_hours": "evening_7pm_to_10pm_family_time",
+        "content_consumption": "video > image, regional_language_preferred",
+        "discovery_mode": "recommendations > exploration",
+        "share_triggers": "whatsapp_forward_potential_relatable_useful"
+      },
+
+      "purchasing_psychology": {
+        "price_sensitivity": "extremely_high_every_rupee_counts",
+        "brand_loyalty": "high_for_trusted_brands_if_affordable",
+        "influencer_impact": "high_celebrity_endorsement_matters",
+        "sustainability_weight": "near_zero_price_over_planet",
+        "peer_validation": "community_family_recommendations_critical"
+      },
+
+      "india_specific_nuances": {
+        "language_mix": "regional_language_primary_hindi_english_minimal",
+        "cultural_anchoring": "traditional_values_modern_aspiration",
+        "aspirations": "children_education_better_life_home_ownership",
+        "education": "school_to_graduation_vocational_skills",
+        "living_situation": "joint_family_tier_2_tier_3_tier_4_cities"
+      }
+    }
+  },
+
+  "psychographic_profiles": {
+    "value_seeker": {
+      "profile_id": "value_seeker",
+      "description": "Price-conscious but not cheap. Wants maximum value. Researches extensively.",
+      "decision_pattern": "compare_prices_read_reviews_wait_for_deals",
+      "messaging_strategy": "highlight_savings_value_proposition_social_proof",
+      "platforms": ["facebook", "youtube", "price_comparison_sites"],
+      "copy_hooks": ["Save 40%", "Best value in category", "10,000+ satisfied customers"]
+    },
+
+    "status_seeker": {
+      "profile_id": "status_seeker",
+      "description": "Brand-conscious. Visible success signals. Peer comparison driven.",
+      "decision_pattern": "what_do_peers_have_brand_recognition_latest_trends",
+      "messaging_strategy": "exclusivity_limited_edition_status_signals",
+      "platforms": ["instagram", "linkedin", "premium_retail"],
+      "copy_hooks": ["Limited to 100", "Exclusive collection", "As seen on [celebrity]"]
+    },
+
+    "convenience_seeker": {
+      "profile_id": "convenience_seeker",
+      "description": "Time-poor. Values efficiency. Willing to pay for convenience.",
+      "decision_pattern": "fastest_solution_easiest_option_minimal_effort",
+      "messaging_strategy": "time_saved_ease_of_use_hassle_free",
+      "platforms": ["google_search", "amazon", "delivery_apps"],
+      "copy_hooks": ["In 10 minutes", "Zero setup", "Delivered tomorrow"]
+    },
+
+    "experience_collector": {
+      "profile_id": "experience_collector",
+      "description": "Values experiences over things. Travel, events, memories.",
+      "decision_pattern": "unique_stories_instagram_worthy_memories",
+      "messaging_strategy": "experience_narrative_transformational_stories",
+      "platforms": ["instagram", "pinterest", "travel_blogs"],
+      "copy_hooks": ["Unforgettable moments", "Stories you'll tell forever", "Experience the extraordinary"]
+    },
+
+    "wellness_conscious": {
+      "profile_id": "wellness_conscious",
+      "description": "Health-first. Natural, organic, sustainable. Self-care priority.",
+      "decision_pattern": "ingredient_check_sustainability_holistic_health",
+      "messaging_strategy": "natural_ingredients_sustainability_wellness_benefits",
+      "platforms": ["instagram", "youtube_wellness", "health_blogs"],
+      "copy_hooks": ["100% natural", "Sustainably sourced", "Clinically proven"]
+    },
+
+    "early_adopter": {
+      "profile_id": "early_adopter",
+      "description": "Tech-savvy. First to try. Innovation-driven. Influencer potential.",
+      "decision_pattern": "whats_new_cutting_edge_future_trends",
+      "messaging_strategy": "innovation_first_exclusive_access_beta_programs",
+      "platforms": ["twitter", "product_hunt", "tech_communities"],
+      "copy_hooks": ["Revolutionary technology", "First 1,000 users", "Early access"]
+    },
+
+    "community_driven": {
+      "profile_id": "community_driven",
+      "description": "Values belonging. Social cause alignment. Peer recommendations.",
+      "decision_pattern": "what_community_uses_values_alignment_peer_endorsed",
+      "messaging_strategy": "community_stories_shared_values_peer_testimonials",
+      "platforms": ["facebook_groups", "reddit", "whatsapp_communities"],
+      "copy_hooks": ["Join 50,000 members", "Built by community", "For people like you"]
+    },
+
+    "aspiring_achiever": {
+      "profile_id": "aspiring_achiever",
+      "description": "Upwardly mobile. Learning-oriented. Career-focused. Aspirational.",
+      "decision_pattern": "career_growth_skill_building_success_stories",
+      "messaging_strategy": "transformation_skill_development_success_path",
+      "platforms": ["linkedin", "youtube_educational", "course_platforms"],
+      "copy_hooks": ["Learn from top 1%", "Career transformation", "Master in 30 days"]
+    }
+  },
+
+  "cross_generational_insights": {
+    "trust_hierarchy": {
+      "gen_z": "peer_reviews > creator > brand_ads",
+      "millennial": "reviews > expert_opinions > brand_heritage",
+      "achiever": "data_results > peer_success > brand",
+      "premium": "personal_recommendation > brand_heritage > advertising_never",
+      "mass_market": "celebrity_endorsement > familiar_brand > word_of_mouth"
+    },
+
+    "content_consumption_preferences": {
+      "gen_z": "short_form_video_tiktok_reels_instant_gratification",
+      "millennial": "video_tutorials_how_to_practical_guides",
+      "achiever": "long_form_insights_podcasts_data_driven",
+      "premium": "editorial_storytelling_print_curated_experiences",
+      "mass_market": "regional_video_whatsapp_forwards_simple_entertainment"
+    },
+
+    "decision_speed": {
+      "gen_z": "impulse_instant_influenced_by_algorithm",
+      "millennial": "research_compare_decide_within_week",
+      "achiever": "fast_if_data_supports_efficiency_focused",
+      "premium": "slow_deliberate_bespoke_timeless",
+      "mass_market": "cautious_family_consult_wait_for_deals"
+    }
+  },
+
+  "generational_detection_rules": {
+    "age_range_mapping": {
+      "18_to_26": "gen_z_india",
+      "27_to_35": "achiever_urban_india",
+      "28_to_42": "millennial_parent_india",
+      "30_to_55": "premium_buyer_india",
+      "20_to_50_tier_2_3": "mass_market_india"
+    },
+
+    "keyword_signals": {
+      "gen_z": ["authentic", "vibe", "aesthetic", "no cap", "hits different"],
+      "millennial": ["family", "value", "reviews", "trusted", "convenient"],
+      "achiever": ["productivity", "growth", "premium", "efficiency", "results"],
+      "premium": ["exclusive", "limited", "heritage", "craftsmanship", "bespoke"],
+      "mass_market": ["offer", "deal", "sabke liye", "affordable", "trusted_brand"]
+    }
+  },
+
+  "notes": [
+    "Generational signals update annually — cultural shifts accelerate in India",
+    "Psychographic profiles matter MORE than age in urban India",
+    "Language mix (English/Hindi/Hinglish) is the fastest generational signal",
+    "Platform behavior changes fastest (TikTok ban → Instagram Reels shift)",
+    "Learning Engine should track which generational strategies convert best per product category"
+  ]
+}

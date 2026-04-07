@@ -33,6 +33,8 @@ import re
 import time
 from typing import Dict, List, Optional
 
+from app.config.loader import config as beast_config
+
 logger = logging.getLogger(__name__)
 
 # Import enhanced Brand Intelligence Agent
@@ -1967,6 +1969,26 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
     industry = triage.get("industry", "general")
     goal     = triage.get("goal", "brand_awareness")
 
+    # ── BEAST CONFIG: Auto-detect aesthetic from industry + keywords ──────────
+    aesthetic_id = beast_config.detect_aesthetic_by_industry(industry)
+    # Override if prompt has specific aesthetic keywords
+    keyword_aesthetic = beast_config.detect_aesthetic_by_keywords(prompt)
+    if keyword_aesthetic and keyword_aesthetic != "ai_native":
+        aesthetic_id = keyword_aesthetic
+
+    aesthetic_data = beast_config.get_aesthetic(aesthetic_id) or {}
+    aesthetic_direction = aesthetic_data.get("visual_direction", {})
+    aesthetic_prompt_lang = aesthetic_data.get("prompt_language", {})
+
+    # Inject aesthetic into creative guardrails
+    if aesthetic_direction:
+        logger.info(f"[creative_director] Aesthetic: {aesthetic_id} (trend: {aesthetic_data.get('trend_strength', 0)})")
+
+    # Extract generation profile for cultural/generational alignment
+    generation_profile_id = triage.get("generation_profile", "mass_market_india")
+    gen_profile = beast_config.get_generation_profile(generation_profile_id) or {}
+    gen_aesthetic = gen_profile.get("aesthetic_preference", {})
+
     system = (
         "You are a Senior Creative Director with 15+ years at Wieden+Kennedy, Ogilvy, BBDO.\n"
         "You make opinionated, distinctly non-generic creative decisions.\n"
@@ -2018,6 +2040,30 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
             f"   Palette Override: {'YES — use festival colors' if cultural_moment.get('palette_override') else 'NO — keep brand colors'}"
         )
 
+    # Aesthetic vocabulary for Gemini
+    aesthetic_hint = ""
+    if aesthetic_direction:
+        color_palette = aesthetic_direction.get("color_palette", [])
+        lighting = aesthetic_direction.get("lighting_style", "")
+        composition = aesthetic_direction.get("composition", "")
+        aesthetic_hint = (
+            f"\n🎨 AESTHETIC CODE ({aesthetic_id.upper()}, trend strength: {aesthetic_data.get('trend_strength', 0)}/10):\n"
+            f"   Colors: {', '.join(color_palette[:4]) if color_palette else 'Use brand colors'}\n"
+            f"   Lighting: {lighting}\n"
+            f"   Composition: {composition}\n"
+        )
+
+    gen_hint = ""
+    if gen_aesthetic:
+        preferred_styles = gen_aesthetic.get("preferred_visual_styles", [])
+        forbidden_styles = gen_aesthetic.get("avoid", [])
+        if preferred_styles or forbidden_styles:
+            gen_hint = (
+                f"\n👥 GENERATION PROFILE ({generation_profile_id.replace('_', ' ').title()}):\n"
+                f"   Preferred: {', '.join(preferred_styles[:3]) if preferred_styles else 'Any'}\n"
+                f"   Avoid: {', '.join(forbidden_styles[:3]) if forbidden_styles else 'None'}\n"
+            )
+
     context = (
         f"Brief: {prompt}\n"
         f"Brand: {brand.get('brand_name','')} | Tone: {brand.get('tone','')} | Industry: {industry}\n"
@@ -2026,7 +2072,7 @@ async def _agent_creative_director(triage: Dict, brand: Dict, prompt: str) -> Di
         f"\n🎯 BEAST-LEVEL INTELLIGENCE:\n"
         f"   Target Emotion: {emotion_target.upper()} — Your creative direction MUST trigger this emotion\n"
         f"   Psychographic: {psychographic} — Design for this mindset\n"
-        f"   Attention Budget: {attention_budget}s — You have THIS LONG to make impact{cultural_context}\n"
+        f"   Attention Budget: {attention_budget}s — You have THIS LONG to make impact{cultural_context}{aesthetic_hint}{gen_hint}\n"
         f"\nCreative guardrails: {strategy['creative_guardrails']}"
     )
     raw = await _acall_gemini(system, context, temperature=0.82, agent_name="creative_director")

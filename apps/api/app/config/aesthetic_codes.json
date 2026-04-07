@@ -1,0 +1,357 @@
+{
+  "_meta": {
+    "system": "BEAST Creative Studio — Aesthetic Zeitgeist Intelligence",
+    "version": "2026-Q2",
+    "updated_at": "2026-04-07",
+    "next_update": "2026-07-01",
+    "philosophy": "Cultural fluency is not optional. Trends serve you. You don't serve trends.",
+    "update_schedule": "Quarterly aesthetic refresh based on global design movements"
+  },
+
+  "aesthetic_codes_2026_q2": {
+    "brutalism_luxury": {
+      "code_id": "brutalism_luxury",
+      "trend_strength": 8.5,
+      "trend_trajectory": "rising",
+      "peak_adoption": "tech_architecture_design_forward_brands",
+
+      "description": "Raw typography on polished surfaces. Expensive materials shown unfinished. Industrial refinement.",
+      "signal": "I'm so confident I don't need to try",
+      "emotion": "quiet_power_understated_confidence",
+
+      "visual_language": {
+        "keywords_for_models": "raw concrete texture, brutal typography, expensive material contrast, architectural negative space, editorial quality, unfinished premium edges",
+        "composition": "asymmetric_grids, negative space as power move, intentional roughness",
+        "typography": "bold condensed sans-serif, heavy weights, intentional awkwardness, tight tracking",
+        "materials": "exposed concrete, raw steel, unfinished wood, premium stone",
+        "texture": "rough tactile, honest construction, visible structure"
+      },
+
+      "color_palette": {
+        "primary": "#2B2B2B",
+        "secondary": "#F5F5F5",
+        "accent": "#8B8B8B",
+        "neutral": "#1A1A1A",
+        "strategy": "monochrome with single industrial accent color"
+      },
+
+      "when_to_use": "Tech startups, architecture firms, design-forward brands, challenger brands, avant-garde fashion",
+      "avoid_with": "Beauty, food, wellness (too cold), traditional family brands, mass market",
+
+      "brand_examples": "Balenciaga website, Apple design events, A24 films",
+      "competitor_codes": ["quiet_luxury", "ai_native"],
+
+      "platforms": {
+        "best_fit": ["instagram", "print_editorial", "brand_website"],
+        "poor_fit": ["facebook", "whatsapp", "mass_market_social"]
+      }
+    },
+
+    "ai_native": {
+      "code_id": "ai_native",
+      "trend_strength": 9.2,
+      "trend_trajectory": "peak",
+      "peak_adoption": "tech_crypto_digital_first_innovation",
+
+      "description": "Procedural textures, parametric forms, data-as-design language. Grid logic made visible.",
+      "signal": "I understand the tools of the future",
+      "emotion": "forward_looking_intelligent_mastery",
+
+      "visual_language": {
+        "keywords_for_models": "procedural texture, generative pattern, mathematical geometry, grid logic visible, parametric design, algorithmic beauty, glitch aesthetic",
+        "composition": "data-as-design, visible algorithms, procedural symmetry",
+        "typography": "monospace fonts, glitch effects, digital natives, variable fonts",
+        "materials": "holographic, iridescent, chrome, digital shimmer",
+        "texture": "generative noise, procedural patterns, mathematical precision"
+      },
+
+      "color_palette": {
+        "primary": "#00D4FF",
+        "secondary": "#FF00FF",
+        "accent": "#00FF94",
+        "neutral": "#1A1A2E",
+        "strategy": "cyber neon on deep dark, high saturation contrast"
+      },
+
+      "when_to_use": "AI tools, crypto, blockchain, tech innovation, digital-first platforms, SaaS products, future-oriented brands",
+      "avoid_with": "Traditional finance (trust needed), healthcare (human touch needed), legacy brands, conservative industries",
+
+      "brand_examples": "Midjourney brand, Stripe website gradients, Linear app",
+      "competitor_codes": ["retro_futures", "brutalism_luxury"],
+
+      "platforms": {
+        "best_fit": ["twitter", "linkedin_tech", "product_hunt", "github"],
+        "poor_fit": ["facebook", "print_traditional"]
+      }
+    },
+
+    "bio_organic_geometry": {
+      "code_id": "bio_organic_geometry",
+      "trend_strength": 8.0,
+      "trend_trajectory": "steady",
+      "peak_adoption": "wellness_sustainability_natural_products",
+
+      "description": "Shapes that feel grown not designed. Natural geometry. Living-system forms. Biomimicry.",
+      "signal": "Premium. Natural. Inevitable.",
+      "emotion": "calm_organic_premium_sustainable",
+
+      "visual_language": {
+        "keywords_for_models": "organic flowing shapes, natural material textures, botanical reference, handcrafted quality, soft irregular edges, grown not made, biomorphic forms",
+        "composition": "asymmetric but balanced, natural rhythm, flowing curves",
+        "typography": "rounded sans-serif, organic serifs, flowing forms, natural spacing",
+        "materials": "natural fibers, wood grain, stone texture, botanical elements",
+        "texture": "organic irregular, handmade quality, natural imperfection"
+      },
+
+      "color_palette": {
+        "primary": "#8B7355",
+        "secondary": "#C4A57B",
+        "accent": "#2C5F2D",
+        "neutral": "#E8DCC4",
+        "strategy": "earth tones, botanical greens, warm naturals"
+      },
+
+      "when_to_use": "Wellness brands, sustainability, natural products, eco-brands, organic food, skincare, yoga, mindfulness",
+      "avoid_with": "Tech (wrong material language), industrial, aggressive brands, fast food, gaming",
+
+      "brand_examples": "Aesop, Patagonia editorial, Goop",
+      "competitor_codes": ["quiet_luxury", "post_ironic_sincerity"],
+
+      "platforms": {
+        "best_fit": ["instagram", "pinterest", "print_magazine"],
+        "poor_fit": ["linkedin_corporate", "twitter"]
+      }
+    },
+
+    "post_ironic_sincerity": {
+      "code_id": "post_ironic_sincerity",
+      "trend_strength": 7.8,
+      "trend_trajectory": "rising",
+      "peak_adoption": "gen_z_cultural_movements_social_causes",
+
+      "description": "Earnest in a world trained to be cynical. Simple words. Direct emotion. Constructed authenticity.",
+      "signal": "We actually mean this",
+      "emotion": "authentic_vulnerable_earnest",
+
+      "visual_language": {
+        "keywords_for_models": "authentic documentary style, natural light, real moment captured, unposed, genuine emotion, raw unfiltered, honest imperfection",
+        "composition": "documentary framing, caught moments, natural asymmetry",
+        "typography": "handwritten, imperfect, human, variable baseline",
+        "materials": "real textures, un-retouched, visible grain",
+        "texture": "film grain, natural imperfection, authentic mistakes"
+      },
+
+      "color_palette": {
+        "primary": "#FF6B6B",
+        "secondary": "#4ECDC4",
+        "accent": "#FFE66D",
+        "neutral": "#1A535C",
+        "strategy": "warm approachable, slightly desaturated for authenticity"
+      },
+
+      "when_to_use": "Gen Z brands, cultural movements, social causes, anti-corporate messaging, indie music, community-first brands",
+      "avoid_with": "Corporate B2B (too risky), traditional marketing, luxury (wrong tone), finance",
+
+      "brand_examples": "Patagonia activism, Glossier early days, Liquid Death",
+      "competitor_codes": ["bio_organic_geometry"],
+
+      "platforms": {
+        "best_fit": ["tiktok", "instagram_stories", "twitter"],
+        "poor_fit": ["linkedin", "print_luxury"]
+      }
+    },
+
+    "retro_futures": {
+      "code_id": "retro_futures",
+      "trend_strength": 8.8,
+      "trend_trajectory": "peak",
+      "peak_adoption": "fashion_music_youth_brands_nostalgia",
+
+      "description": "Y2K chrome, 70s sci-fi color, 90s rave remixed with today precision. VHS grain on 4K clarity.",
+      "signal": "I'm nostalgic for a future that never happened",
+      "emotion": "playful_nostalgia_energetic_optimism",
+
+      "visual_language": {
+        "keywords_for_models": "Y2K aesthetic, chrome metallic surfaces, holographic sheen, retro-futuristic, vintage digital, VHS grain, CRT glow, analog digital hybrid",
+        "composition": "layered dimensional depth, nostalgic overlays, retro UI elements",
+        "typography": "outline fonts, chrome effects, retro-futuristic, bubbly rounded",
+        "materials": "chrome, holographic foil, plastic sheen, digital artifacts",
+        "texture": "VHS noise, CRT scan lines, low-res upscaled, glitch artifacts"
+      },
+
+      "color_palette": {
+        "primary": "#FF00FF",
+        "secondary": "#00FFFF",
+        "accent": "#FFFF00",
+        "neutral": "#000000",
+        "strategy": "electric neons, complementary clashes, nostalgic vibrancy"
+      },
+
+      "when_to_use": "Fashion, music industry, youth brands, nostalgia plays, Gen Z targeting, gaming, streetwear, nightlife",
+      "avoid_with": "Finance (dated perception), healthcare, B2B corporate, luxury (wrong tone), traditional brands",
+
+      "brand_examples": "Depop, early TikTok filters, Travis Scott merch",
+      "competitor_codes": ["ai_native", "cultural_maximalism"],
+
+      "platforms": {
+        "best_fit": ["instagram", "tiktok", "snapchat", "music_platforms"],
+        "poor_fit": ["linkedin", "facebook", "email"]
+      }
+    },
+
+    "quiet_luxury_loud": {
+      "code_id": "quiet_luxury_loud",
+      "trend_strength": 9.0,
+      "trend_trajectory": "steady",
+      "peak_adoption": "premium_fashion_luxury_high_end_services",
+
+      "description": "Understated until it isn't. Subtle flex. Know-you-know. Stealth wealth. Whispered premium.",
+      "signal": "This doesn't need to explain itself",
+      "emotion": "exclusive_confident_refined",
+
+      "visual_language": {
+        "keywords_for_models": "minimalist luxury, generous white space, subtle texture, premium materials, understated elegance, refined restraint, maximum craft minimum decoration",
+        "composition": "white space as status signal, restrained hierarchy, editorial precision",
+        "typography": "refined serifs, minimal sans, generous spacing, tight kerning",
+        "materials": "cashmere, silk texture, fine grain leather, matte precious metals",
+        "texture": "subtle weave, fine grain, premium matte, tactile quality"
+      },
+
+      "color_palette": {
+        "primary": "#F5F5DC",
+        "secondary": "#8B7355",
+        "accent": "#2C2C2C",
+        "neutral": "#D4C5B9",
+        "strategy": "neutral earth tones, muted sophistication, single dark accent"
+      },
+
+      "when_to_use": "Premium fashion, luxury goods, high-end services, insider brands, private banking, luxury real estate, fine dining",
+      "avoid_with": "Mass market (misses the point), youth brands, discount/sale messaging, volume products",
+
+      "brand_examples": "Loro Piana, The Row, Brunello Cucinelli, Hermès",
+      "competitor_codes": ["brutalism_luxury", "bio_organic_geometry"],
+
+      "platforms": {
+        "best_fit": ["print_editorial", "instagram_minimal", "private_email"],
+        "poor_fit": ["tiktok", "facebook", "youtube"]
+      }
+    },
+
+    "cultural_maximalism": {
+      "code_id": "cultural_maximalism",
+      "trend_strength": 7.5,
+      "trend_trajectory": "steady",
+      "peak_adoption": "local_india_cultural_regional_pride",
+
+      "description": "Layered visual density that reads as richness not clutter. Heritage in modern grid. Hyper-local pride.",
+      "signal": "I know who I am. I'm proud of it. Come with me.",
+      "emotion": "celebratory_proud_abundant",
+
+      "visual_language": {
+        "keywords_for_models": "rich layered composition, jewel tone palette, geometric heritage motifs, festive density, South Asian luxury, intricate patterns, cultural symbols, layered ornamentation",
+        "composition": "dense but readable, hidden grid beneath chaos, richness hierarchy",
+        "typography": "bold display, cultural scripts, layered text, decorative headers",
+        "materials": "silk patterns, gold embroidery, jewel tones, festival textures",
+        "texture": "intricate patterns, layered ornamentation, rich detail, woven complexity"
+      },
+
+      "color_palette": {
+        "primary": "#FF6B00",
+        "secondary": "#FFD700",
+        "accent": "#8B0000",
+        "highlight": "#4B0082",
+        "strategy": "jewel tones, festival vibrancy, layered color harmony"
+      },
+
+      "when_to_use": "Local Indian businesses, cultural campaigns, regional brands, festival marketing, heritage products, Indian weddings, celebration events",
+      "avoid_with": "Global minimal brands (too narrow), tech startups, Western luxury, corporate B2B",
+
+      "brand_examples": "Tanishq festival campaigns, Fabindia, Indian wedding invites",
+      "competitor_codes": ["retro_futures"],
+
+      "platforms": {
+        "best_fit": ["instagram", "whatsapp", "print_local", "outdoor"],
+        "poor_fit": ["linkedin_global", "minimal_platforms"]
+      }
+    },
+
+    "anti_aesthetic": {
+      "code_id": "anti_aesthetic",
+      "trend_strength": 6.5,
+      "trend_trajectory": "emerging",
+      "peak_adoption": "underground_fashion_art_counterculture",
+
+      "description": "Post-perfect. Intentionally ugly-beautiful. Imperfection reads as real. Anti-algorithm.",
+      "signal": "Too cool to try",
+      "emotion": "rebellious_authentic_insider",
+
+      "visual_language": {
+        "keywords_for_models": "intentional imperfection, lo-fi aesthetic, anti-polish, raw unfinished, deliberate amateurism, zine quality, punk DIY",
+        "composition": "broken grid, asymmetric chaos, unconventional layout",
+        "typography": "lo-fi fonts, intentional bad kerning, anti-design, chaotic mix",
+        "materials": "photocopied texture, risograph grain, DIY collage",
+        "texture": "degraded, pixelated, compressed artifacts, analog noise"
+      },
+
+      "color_palette": {
+        "primary": "#FF0066",
+        "secondary": "#00FF00",
+        "accent": "#FFFF00",
+        "neutral": "#000000",
+        "strategy": "jarring contrasts, intentional color clash, anti-harmony"
+      },
+
+      "when_to_use": "Underground fashion, art brands, counterculture, indie music, skateboarding, punk revival, anti-corporate messaging",
+      "avoid_with": "Luxury, corporate, finance, healthcare, family brands, premium products",
+
+      "brand_examples": "Supreme (early era), Palace, underground zines",
+      "competitor_codes": ["post_ironic_sincerity", "brutalism_luxury"],
+
+      "platforms": {
+        "best_fit": ["instagram_alt", "twitter", "print_zine"],
+        "poor_fit": ["linkedin", "facebook", "corporate_email"]
+      }
+    }
+  },
+
+  "aesthetic_detection_rules": {
+    "auto_detection_by_industry": {
+      "tech_saas_ai": "ai_native",
+      "luxury_fashion": "quiet_luxury_loud",
+      "wellness_organic": "bio_organic_geometry",
+      "youth_streetwear": "retro_futures",
+      "architecture_design": "brutalism_luxury",
+      "social_cause_gen_z": "post_ironic_sincerity",
+      "indian_local_festival": "cultural_maximalism",
+      "underground_fashion": "anti_aesthetic"
+    },
+
+    "auto_detection_by_keywords": {
+      "ai|crypto|blockchain|tech": "ai_native",
+      "luxury|premium|exclusive|high-end": "quiet_luxury_loud",
+      "wellness|organic|natural|sustainable": "bio_organic_geometry",
+      "y2k|retro|nostalgia|90s": "retro_futures",
+      "diwali|festival|celebration|indian": "cultural_maximalism",
+      "raw|authentic|real|honest": "post_ironic_sincerity",
+      "concrete|industrial|minimal": "brutalism_luxury",
+      "underground|punk|anti|rebel": "anti_aesthetic"
+    },
+
+    "confidence_threshold": 0.75,
+    "fallback_aesthetic": "ai_native"
+  },
+
+  "aesthetic_evolution_tracker": {
+    "declining": ["minimalism_2010s", "flat_design_pure", "millennial_pink"],
+    "stable": ["quiet_luxury_loud", "bio_organic_geometry", "cultural_maximalism"],
+    "rising": ["ai_native", "retro_futures", "brutalism_luxury", "post_ironic_sincerity"],
+    "emerging": ["anti_aesthetic", "dimensional_depth_flat", "semantic_whitespace"]
+  },
+
+  "notes": [
+    "Update aesthetic trend_strength quarterly based on adoption metrics",
+    "Track Learning Engine data to see which aesthetics convert best per industry",
+    "New aesthetics emerge 2-3 per year — add when adoption > 5% in target segments",
+    "Retire aesthetics when trend_strength < 5.0 for 2 consecutive quarters"
+  ]
+}

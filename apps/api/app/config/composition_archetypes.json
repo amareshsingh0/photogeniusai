@@ -1,0 +1,526 @@
+{
+  "_meta": {
+    "system": "BEAST Creative Studio — Composition Archetypes Library",
+    "version": "2026-Q2",
+    "updated_at": "2026-04-07",
+    "philosophy": "Composition is not decoration. It's the reading path. The power hierarchy. The invisible force that guides the eye.",
+    "archetypes_count": 7
+  },
+
+  "archetypes": {
+    "hero_dominant": {
+      "archetype_id": "hero_dominant",
+      "archetype_name": "HERO DOMINANT",
+
+      "visual_description": "Subject is the entire story. Minimal background noise. 80% visual weight on hero element.",
+      "energy": "still_confident_self_evident_powerful",
+      "reading_path": "instant_focal_point_no_journey_needed",
+
+      "composition_rules": {
+        "visual_weight": "80_image_20_type",
+        "grid": "image_bleeds_to_edges_or_generous_negative_space",
+        "subject_position": "centered_or_rule_of_thirds_dominant",
+        "background_treatment": "minimal_clean_blur_or_seamless",
+        "focal_point": "single_unmissable_hero_element"
+      },
+
+      "space_character": {
+        "type": "generous_breathing_room",
+        "margin_multiplier": 1.5,
+        "density": "low_20_to_30_percent_filled",
+        "whitespace_role": "lets_hero_breathe_premium_signal"
+      },
+
+      "typography_treatment": {
+        "text_placement": "floats_in_clear_zones_never_competes_with_hero",
+        "text_size_hierarchy": "headline_medium_not_competing",
+        "text_weight": "20_percent_max_visual_attention",
+        "acceptable_placements": ["top_center", "bottom_third", "side_margin"]
+      },
+
+      "when_to_use": [
+        "product_is_the_story",
+        "beauty_product_closeup",
+        "fashion_hero_garment",
+        "luxury_showcase",
+        "app_icon_hero",
+        "portrait_editorial"
+      ],
+
+      "avoid_when": [
+        "message_more_important_than_visual",
+        "complex_multi_product",
+        "text_heavy_poster",
+        "infographic_data_visualization"
+      ],
+
+      "platform_fit": {
+        "best": ["instagram_feed", "print_poster", "billboard", "product_page", "email_hero"],
+        "poor": ["youtube_thumbnail_text_heavy", "banner_ads_small_space"]
+      },
+
+      "examples_reference": [
+        "Apple product photography",
+        "Fashion editorial single garment",
+        "Luxury watch closeup",
+        "Food hero shot (single dish dominating)",
+        "Beauty product on clean background"
+      ],
+
+      "prompt_engineering_notes": {
+        "subject_instruction": "subject_centered_full_frame_dominant_presence",
+        "background_instruction": "minimal_background_detail_negative_space_clean",
+        "camera_angle": "straight_on_or_hero_angle_slightly_below",
+        "lighting": "clean_studio_or_editorial_natural_light",
+        "depth": "shallow_depth_of_field_hero_sharp_background_soft"
+      }
+    },
+
+    "typographic_led": {
+      "archetype_id": "typographic_led",
+      "archetype_name": "TYPOGRAPHIC LED",
+
+      "visual_description": "Type IS the visual. Image becomes texture or supporting element. Bold declarative.",
+      "energy": "bold_declarative_impossible_to_ignore_confident",
+      "reading_path": "type_first_image_supports",
+
+      "composition_rules": {
+        "visual_weight": "70_type_30_image_or_texture",
+        "grid": "type_as_architecture_image_as_background_texture",
+        "type_dominance": "large_bold_fills_frame",
+        "image_role": "texture_backdrop_or_integrated_element",
+        "focal_point": "typography_is_the_focal_point"
+      },
+
+      "space_character": {
+        "type": "tight_intentional_density",
+        "margin_multiplier": 0.75,
+        "density": "70_to_80_percent_filled",
+        "whitespace_role": "contrast_breathing_around_type_blocks"
+      },
+
+      "typography_treatment": {
+        "text_placement": "dominates_entire_canvas",
+        "text_size_hierarchy": "extremely_large_display_type_min_48px",
+        "text_weight": "70_to_80_percent_visual_attention",
+        "type_styles": ["condensed_bold_caps", "ultra_black_weights", "tight_tracking_negative_0_05em"]
+      },
+
+      "when_to_use": [
+        "idea_more_powerful_than_product_visual",
+        "quote_poster",
+        "brand_manifesto",
+        "event_announcement_text_is_message",
+        "billboard_2_to_5_words",
+        "typographic_brand_identity"
+      ],
+
+      "avoid_when": [
+        "product_must_be_hero",
+        "complex_visual_storytelling",
+        "subtle_luxury_quiet_brand",
+        "detailed_product_features_to_show"
+      ],
+
+      "platform_fit": {
+        "best": ["poster", "social_quote_card", "billboard", "story_ad_text_heavy", "print_editorial"],
+        "poor": ["youtube_thumbnail", "product_ecommerce", "detailed_infographic"]
+      },
+
+      "examples_reference": [
+        "Nike 'Just Do It' type posters",
+        "Music festival bold typography",
+        "Saul Bass movie posters",
+        "Supreme box logo style",
+        "Protest sign aesthetics"
+      ],
+
+      "prompt_engineering_notes": {
+        "subject_instruction": "bold_typography_dominates_frame_minimal_image",
+        "background_instruction": "texture_gradient_or_single_color_supports_type",
+        "type_rendering": "use_ideogram_for_text_in_image_precision",
+        "lighting": "flat_even_or_dramatic_for_texture_background",
+        "depth": "flat_design_or_subtle_texture_depth_only"
+      }
+    },
+
+    "editorial_split": {
+      "archetype_id": "editorial_split",
+      "archetype_name": "EDITORIAL SPLIT",
+
+      "visual_description": "Two equal elements in conversation. Hard vertical or horizontal divide. Journalistic balance.",
+      "energy": "controlled_contrast_journalistic_balanced",
+      "reading_path": "Z_PATTERN or LEFT_RIGHT balanced scan",
+
+      "composition_rules": {
+        "visual_weight": "50_50 or 60_40 split",
+        "grid": "hard_vertical_or_horizontal_divide",
+        "division_type": "clean_split_or_overlapping_boundary",
+        "balance": "intentional_symmetry_or_asymmetric_tension",
+        "focal_point": "two_focal_points_equal_weight"
+      },
+
+      "space_character": {
+        "type": "structured_balanced_editorial",
+        "margin_multiplier": 1.0,
+        "density": "40_to_50_percent_filled",
+        "whitespace_role": "divider_breathing_room_clean_zones"
+      },
+
+      "typography_treatment": {
+        "text_placement": "one_side_of_split_or_overlay_on_clean_zone",
+        "text_size_hierarchy": "medium_readable_editorial_style",
+        "text_weight": "30_to_40_percent_visual_attention",
+        "acceptable_placements": ["left_half", "right_half", "bottom_third_overlay"]
+      },
+
+      "when_to_use": [
+        "two_products_comparison",
+        "before_after_transformation",
+        "product_plus_lifestyle_context",
+        "dual_message_equal_weight",
+        "editorial_article_header"
+      ],
+
+      "avoid_when": [
+        "single_hero_product",
+        "fast_scroll_social_media",
+        "billboard_simplicity_needed",
+        "mobile_vertical_format_small_space"
+      ],
+
+      "platform_fit": {
+        "best": ["print_ad", "linkedin", "desktop_banner", "magazine_spread", "email_header"],
+        "poor": ["instagram_story", "tiktok", "mobile_banner_small"]
+      },
+
+      "examples_reference": [
+        "Magazine editorial layouts",
+        "Before/after transformations",
+        "Product vs lifestyle dual imagery",
+        "Editorial split headline/image",
+        "Corporate annual report design"
+      ],
+
+      "prompt_engineering_notes": {
+        "subject_instruction": "two_subjects_equal_weight_or_split_composition",
+        "background_instruction": "clean_divide_vertical_or_horizontal_contrast_zones",
+        "camera_angle": "balanced_composition_symmetrical_or_mirrored",
+        "lighting": "even_both_sides_or_contrast_lighting_left_right",
+        "depth": "both_sides_equal_focus_or_one_sharp_one_soft"
+      }
+    },
+
+    "dynamic_diagonal": {
+      "archetype_id": "dynamic_diagonal",
+      "archetype_name": "DYNAMIC DIAGONAL",
+
+      "visual_description": "Energy flows on 30-45° axis. Movement, speed, disruption. Kinetic tension.",
+      "energy": "kinetic_urgent_forward_moving_disruptive",
+      "reading_path": "DIAGONAL flow lower_left_to_upper_right",
+
+      "composition_rules": {
+        "visual_weight": "full_bleed_diagonal_axis_dominates",
+        "grid": "30_to_45_degree_composition_axis",
+        "movement_direction": "lower_left_to_upper_right_or_reverse",
+        "tension_source": "diagonal_creates_instability_energy",
+        "focal_point": "intersection_point_or_movement_terminus"
+      },
+
+      "space_character": {
+        "type": "active_sliced_energetic",
+        "margin_multiplier": 0.5,
+        "density": "60_to_80_percent_filled_dense_active",
+        "whitespace_role": "contrast_zones_sharp_diagonal_cuts"
+      },
+
+      "typography_treatment": {
+        "text_placement": "along_diagonal_axis_or_counter_diagonal",
+        "text_size_hierarchy": "bold_angled_or_horizontal_contrast",
+        "text_weight": "30_percent_visual_attention",
+        "type_styles": ["condensed_italic_forward_lean", "bold_caps_kinetic"]
+      },
+
+      "when_to_use": [
+        "sports_athletic_energy",
+        "automotive_speed",
+        "gaming_action",
+        "event_high_energy_music_festival",
+        "sale_urgency_disruption",
+        "tech_innovation_forward_moving"
+      ],
+
+      "avoid_when": [
+        "luxury_premium_quiet_brands",
+        "healthcare_trust_stability_needed",
+        "financial_services_reliability",
+        "family_friendly_warm_brands"
+      ],
+
+      "platform_fit": {
+        "best": ["story_ad", "sports_poster", "gaming_banner", "event_flyer", "mobile_app_splash"],
+        "poor": ["linkedin_professional", "print_luxury", "business_card"]
+      },
+
+      "examples_reference": [
+        "Nike sports campaigns",
+        "Fast & Furious movie posters",
+        "Gaming tournament graphics",
+        "Energy drink advertising",
+        "Action sports photography"
+      ],
+
+      "prompt_engineering_notes": {
+        "subject_instruction": "subject_angled_45_degrees_dynamic_movement_visible",
+        "background_instruction": "motion_blur_speed_lines_diagonal_energy_flow",
+        "camera_angle": "dutch_angle_or_dynamic_perspective",
+        "lighting": "dramatic_directional_long_shadows_diagonal",
+        "depth": "motion_blur_background_subject_sharp_kinetic_energy"
+      }
+    },
+
+    "asymmetric_tension": {
+      "archetype_id": "asymmetric_tension",
+      "archetype_name": "ASYMMETRIC TENSION",
+
+      "visual_description": "Intentionally off-center. Negative space IS the design. Uncomfortable but right.",
+      "energy": "uncomfortable_right_avant_garde_sophisticated",
+      "reading_path": "VOID_first_then_subject creates suspense",
+
+      "composition_rules": {
+        "visual_weight": "intentionally_off_center_30_70_split",
+        "grid": "negative_space_IS_the_design_element",
+        "subject_position": "far_left_or_far_right_or_extreme_top_bottom",
+        "void_treatment": "empty_space_active_participant",
+        "focal_point": "small_subject_large_void_tension"
+      },
+
+      "space_character": {
+        "type": "deliberate_void_maximum_breathing",
+        "margin_multiplier": 2.5,
+        "density": "10_to_30_percent_filled_extreme_negative_space",
+        "whitespace_role": "primary_design_element_not_leftover"
+      },
+
+      "typography_treatment": {
+        "text_placement": "opposite_void_or_integrated_in_negative_space",
+        "text_size_hierarchy": "small_whisper_or_medium_never_screaming",
+        "text_weight": "10_to_20_percent_visual_attention",
+        "type_styles": ["refined_serif_minimal", "condensed_sans_tight"]
+      },
+
+      "when_to_use": [
+        "fashion_avant_garde",
+        "luxury_extreme_premium",
+        "art_gallery_poster",
+        "architecture_minimal",
+        "editorial_statement_pieces",
+        "brand_with_extreme_confidence"
+      ],
+
+      "avoid_when": [
+        "mass_market_needs_clarity",
+        "sale_promotional_urgency",
+        "family_friendly_approachable",
+        "small_format_mobile_banner"
+      ],
+
+      "platform_fit": {
+        "best": ["print_editorial", "fashion_lookbook", "art_poster", "luxury_brand_website"],
+        "poor": ["facebook_feed", "youtube_thumbnail", "google_display_banner"]
+      },
+
+      "examples_reference": [
+        "Celine fashion campaigns",
+        "The Row brand aesthetic",
+        "Kinfolk magazine layouts",
+        "Minimalist art posters",
+        "Japanese design (Ma concept)"
+      ],
+
+      "prompt_engineering_notes": {
+        "subject_instruction": "small_subject_far_left_or_right_large_empty_space",
+        "background_instruction": "clean_empty_void_minimal_texture_single_tone",
+        "camera_angle": "wide_frame_subject_isolated_generous_negative_space",
+        "lighting": "soft_even_or_single_dramatic_source_creating_void",
+        "depth": "shallow_subject_isolated_background_clean_void"
+      }
+    },
+
+    "maximalist_density": {
+      "archetype_id": "maximalist_density",
+      "archetype_name": "MAXIMALIST DENSITY",
+
+      "visual_description": "Layered richness. 100% canvas coverage. Hidden grid beneath apparent chaos. Joyful abundance.",
+      "energy": "joyful_overwhelm_richness_celebratory",
+      "reading_path": "RADIAL or EXPLORATORY multi-point scanning",
+
+      "composition_rules": {
+        "visual_weight": "100_percent_canvas_coverage_dense",
+        "grid": "hidden_grid_beneath_chaos_structured_density",
+        "layering": "multiple_visual_planes_overlapping_elements",
+        "color_density": "4_to_6_colors_rich_palette",
+        "focal_point": "multiple_focal_points_or_radial_center"
+      },
+
+      "space_character": {
+        "type": "active_everywhere_rich_layered",
+        "margin_multiplier": 0.25,
+        "density": "80_to_95_percent_filled_maximum_richness",
+        "whitespace_role": "micro_breathing_between_elements_only"
+      },
+
+      "typography_treatment": {
+        "text_placement": "integrated_within_density_layered_with_elements",
+        "text_size_hierarchy": "large_bold_cuts_through_density",
+        "text_weight": "40_to_50_percent_visual_attention",
+        "type_styles": ["bold_display_decorative", "ornamental_cultural_scripts"]
+      },
+
+      "when_to_use": [
+        "festival_celebration_diwali_holi",
+        "music_event_concert_poster",
+        "cultural_indian_wedding_invitation",
+        "maximalist_brand_identity",
+        "street_art_urban_culture",
+        "food_abundance_feast_imagery"
+      ],
+
+      "avoid_when": [
+        "luxury_minimal_brands",
+        "corporate_professional_context",
+        "healthcare_trust_simplicity",
+        "tech_clean_interface_aesthetic"
+      ],
+
+      "platform_fit": {
+        "best": ["festival_poster", "music_event", "instagram_feed_scroll_stop", "whatsapp_forward"],
+        "poor": ["linkedin", "billboard_distance_viewing", "app_icon_tiny_size"]
+      },
+
+      "examples_reference": [
+        "Indian festival posters",
+        "Music festival psychedelic art",
+        "Wes Anderson color maximalism",
+        "Traditional rangoli patterns digitalized",
+        "Street food market imagery"
+      ],
+
+      "prompt_engineering_notes": {
+        "subject_instruction": "richly_layered_composition_decorative_elements_filling_frame",
+        "background_instruction": "intricate_detailed_background_patterns_motifs_layered",
+        "camera_angle": "flat_overhead_or_straight_on_shows_all_detail",
+        "lighting": "even_bright_all_elements_visible_celebratory",
+        "depth": "multiple_visual_planes_layered_depth_rich_detail"
+      }
+    },
+
+    "thumbnail_halves": {
+      "archetype_id": "thumbnail_halves",
+      "archetype_name": "THUMBNAIL HALVES",
+
+      "visual_description": "50/50 split. Subject one side, text other. Optimized for instant click decision.",
+      "energy": "hook_emotion_information_balanced",
+      "reading_path": "SIMULTANEOUS left_right instant scan",
+
+      "composition_rules": {
+        "visual_weight": "50_subject_50_text exact split",
+        "grid": "hard_vertical_divide_left_subject_right_text_or_reverse",
+        "subject_treatment": "close_up_face_emotion_visible_or_hero_product",
+        "text_treatment": "large_bold_max_6_words_high_contrast",
+        "focal_point": "face_emotion_or_text_hook_simultaneous"
+      },
+
+      "space_character": {
+        "type": "efficient_every_pixel_works_no_waste",
+        "margin_multiplier": 0.5,
+        "density": "90_to_100_percent_filled_functional",
+        "whitespace_role": "divider_between_subject_and_text_only"
+      },
+
+      "typography_treatment": {
+        "text_placement": "dedicated_half_of_canvas_large_readable",
+        "text_size_hierarchy": "extremely_large_min_72px_mobile_readable",
+        "text_weight": "50_percent_visual_attention",
+        "type_styles": ["ultra_bold_caps", "high_contrast_colors", "shadow_outline_for_legibility"]
+      },
+
+      "when_to_use": [
+        "youtube_thumbnail_mandatory",
+        "blog_header_image",
+        "email_hero_with_message",
+        "social_media_announcement",
+        "course_thumbnail_educational"
+      ],
+
+      "avoid_when": [
+        "print_editorial_sophistication",
+        "luxury_brand_minimal_aesthetic",
+        "product_hero_showcase",
+        "artistic_expression_freedom"
+      ],
+
+      "platform_fit": {
+        "best": ["youtube_thumbnail", "blog_header", "email_hero", "course_platform", "webinar_promo"],
+        "poor": ["print_magazine", "billboard", "luxury_instagram"]
+      },
+
+      "examples_reference": [
+        "YouTube thumbnail standard format",
+        "Blog post featured images",
+        "Online course thumbnails",
+        "Webinar promotional graphics",
+        "Podcast episode artwork"
+      ],
+
+      "prompt_engineering_notes": {
+        "subject_instruction": "subject_left_or_right_half_close_up_emotion_clear",
+        "background_instruction": "clean_background_one_side_solid_color_other_side_for_text",
+        "camera_angle": "straight_on_or_slight_angle_face_emotion_visible",
+        "lighting": "high_contrast_face_well_lit_emotion_readable",
+        "depth": "subject_sharp_background_clean_for_text_overlay"
+      }
+    }
+  },
+
+  "composition_selection_rules": {
+    "by_asset_type": {
+      "poster_event": "typographic_led or hero_dominant",
+      "poster_product": "hero_dominant or editorial_split",
+      "poster_festival": "maximalist_density or typographic_led",
+      "youtube_thumbnail": "thumbnail_halves",
+      "instagram_feed": "hero_dominant or maximalist_density",
+      "billboard": "typographic_led or hero_dominant",
+      "fashion_editorial": "asymmetric_tension or editorial_split",
+      "sports_ad": "dynamic_diagonal",
+      "luxury_brand": "asymmetric_tension or hero_dominant"
+    },
+
+    "by_emotion": {
+      "urgency": "dynamic_diagonal",
+      "exclusivity": "asymmetric_tension",
+      "joy": "maximalist_density",
+      "confidence": "hero_dominant",
+      "authority": "editorial_split",
+      "rebellion": "dynamic_diagonal or asymmetric_tension",
+      "celebration": "maximalist_density"
+    },
+
+    "by_platform": {
+      "instagram_feed": ["hero_dominant", "maximalist_density"],
+      "youtube_thumbnail": ["thumbnail_halves"],
+      "billboard": ["typographic_led", "hero_dominant"],
+      "print_magazine": ["editorial_split", "asymmetric_tension"],
+      "tiktok": ["dynamic_diagonal", "maximalist_density"],
+      "linkedin": ["editorial_split", "hero_dominant"]
+    }
+  },
+
+  "notes": [
+    "Composition archetype is the FIRST creative decision — everything else follows",
+    "Never mix archetypes within single asset (dilutes impact)",
+    "Platform format should constrain archetype choice (vertical = no editorial split)",
+    "Learning Engine should track which archetypes convert best per industry",
+    "New archetypes emerge slowly (1-2 per year) — validate via pattern analysis"
+  ]
+}

@@ -1,0 +1,628 @@
+{
+  "_meta": {
+    "system": "BEAST Creative Studio — 12-Dimension Quality Scoring System",
+    "version": "2026-Q2",
+    "updated_at": "2026-04-07",
+    "philosophy": "Quality is not subjective. It's a system of measurable standards. Every dimension has a definition, rubric, and threshold.",
+    "dimensions_count": 12,
+    "minimum_score_to_ship": 8.5,
+    "beast_standard_gates": 10
+  },
+
+  "dimensions": {
+    "concept_integrity": {
+      "dimension_id": "concept_integrity",
+      "weight": 1.2,
+      "normalized_weight": 0.109,
+      "description": "Does execution honor the concept? Is the creative idea visible in the final output?",
+
+      "scoring_rubric": {
+        "10_elite": "Concept executed with surgical precision. Every element serves the idea. Nothing extraneous.",
+        "8_to_9_strong": "Concept clearly visible. Execution solid. Minor elements could be tighter.",
+        "6_to_7_acceptable": "Concept present but diluted. Some elements distract from core idea.",
+        "4_to_5_weak": "Concept barely visible. Execution lost the plot. Generic outcome.",
+        "0_to_3_fail": "Concept completely missing. Execution has no connection to brief."
+      },
+
+      "evaluation_questions": [
+        "Can I describe the concept in one sentence from the visual alone?",
+        "Do all elements support the single idea?",
+        "Is there a clear insight or tension being resolved?",
+        "Would removing any element weaken the concept or improve focus?"
+      ],
+
+      "common_failures": [
+        "Too many ideas competing — diluted concept",
+        "Generic execution — could be any brand",
+        "Literal interpretation — no creative leap",
+        "Execution ignores brief insight"
+      ],
+
+      "promethean_level_example": "Apple '1984' ad — concept (rebellion against conformity) visible in every frame"
+    },
+
+    "emotional_precision": {
+      "dimension_id": "emotional_precision",
+      "weight": 1.3,
+      "normalized_weight": 0.118,
+      "description": "Does it trigger the EXACT target emotion? Not adjacent. Not close. Exact.",
+
+      "scoring_rubric": {
+        "10_elite": "Surgical emotional trigger. Viewer feels EXACTLY the intended emotion instantly.",
+        "8_to_9_strong": "Strong emotional hit. Occasionally triggers adjacent emotion.",
+        "6_to_7_acceptable": "Emotion present but not precise. Could be 2-3 related emotions.",
+        "4_to_5_weak": "Wrong emotion triggered. Aspiration feels like urgency.",
+        "0_to_3_fail": "No emotion. Flat. Viewer feels nothing."
+      },
+
+      "emotion_catalog": {
+        "urgency": "Fast heartbeat. Must act now. FOMO.",
+        "desire": "I want that. Aspiration. Longing.",
+        "trust": "Safe. Reliable. Proven. Calm confidence.",
+        "awe": "Breath-taking. Magnificent. Overwhelming beauty.",
+        "joy": "Smile-inducing. Light. Celebratory. Warm.",
+        "pride": "Achievement. Status. Dignified. Earned.",
+        "curiosity": "What happens next? Mystery. Question.",
+        "exclusivity": "I'm special. Insider. Rare access.",
+        "rebellion": "Fuck the system. Disrupt. Challenge.",
+        "nostalgia": "Remember when. Warm past. Familiar comfort.",
+        "power": "Strength. Control. Dominance. Authority.",
+        "calm": "Peace. Slow down. Breathe. Stillness.",
+        "surprise": "Unexpected. Delight. Pleasant shock.",
+        "aspiration": "I want to become. Future self. Growth.",
+        "belonging": "Community. Us. Included. Accepted.",
+        "authenticity": "Real. Unfiltered. Honest. Vulnerable.",
+        "adventure": "Explore. Unknown. Thrill. Freedom."
+      },
+
+      "evaluation_questions": [
+        "Name the single emotion in 2 words — what is it?",
+        "Does color palette match emotion target?",
+        "Does composition energy match emotion?",
+        "Does copy voice match emotion?"
+      ],
+
+      "common_failures": [
+        "Mixed emotional signals — joy color palette but urgency copy",
+        "Generic 'positive' emotion — not specific enough",
+        "Wrong composition for emotion — calm concept with dynamic diagonal",
+        "Emotion not culturally calibrated"
+      ]
+    },
+
+    "visual_hierarchy": {
+      "dimension_id": "visual_hierarchy",
+      "weight": 1.1,
+      "normalized_weight": 0.100,
+      "description": "Is the reading path effortless? Does the eye know where to go first, second, third?",
+
+      "scoring_rubric": {
+        "10_elite": "Effortless reading path. Eye flows naturally. Perfect focal point → secondary → tertiary.",
+        "8_to_9_strong": "Clear hierarchy. Occasional competition between elements.",
+        "6_to_7_acceptable": "Hierarchy present but requires effort. 2 elements compete.",
+        "4_to_5_weak": "Weak hierarchy. Eye wanders. No clear focal point.",
+        "0_to_3_fail": "Chaos. Everything screams. Eye has nowhere to land."
+      },
+
+      "hierarchy_laws": {
+        "level_1_primary": {
+          "rule": "EXACTLY ONE element. The eye anchor. Nothing competes.",
+          "method": "Largest OR brightest OR most isolated OR highest contrast",
+          "test": "Cover everything except level 1 — viewer should know what to do."
+        },
+        "level_2_secondary": {
+          "rule": "Supports level 1. Cannot compete. 60% weight of level 1.",
+          "method": "60% size or brightness of level 1",
+          "test": "Removing level 2 loses important info but design still works."
+        },
+        "level_3_tertiary": {
+          "rule": "Info, brand, legal, fine print. 30% weight of level 1.",
+          "method": "30% size or brightness of level 1",
+          "test": "Removing level 3 doesn't break design. If it does, it's too heavy."
+        }
+      },
+
+      "evaluation_questions": [
+        "Where does my eye land first? Is it intentional?",
+        "Can I trace the reading path in order? (1 → 2 → 3)",
+        "Do any two elements compete for attention?",
+        "At 10% size (thumbnail), is hierarchy still clear?"
+      ],
+
+      "common_failures": [
+        "Two focal points competing — headline same size as product",
+        "Flat hierarchy — all elements same visual weight",
+        "Background too busy — competes with subject",
+        "CTA button invisible — wrong color or size"
+      ]
+    },
+
+    "typographic_excellence": {
+      "dimension_id": "typographic_excellence",
+      "weight": 1.0,
+      "normalized_weight": 0.091,
+      "description": "Does type serve the design? Tracking, kerning, weight, size, hierarchy — all intentional?",
+
+      "scoring_rubric": {
+        "10_elite": "Typography is invisible craft. Perfectly kerned. Tracking intentional. Zero mistakes.",
+        "8_to_9_strong": "Strong typography. Readable. Intentional choices. Minor kerning issues.",
+        "6_to_7_acceptable": "Acceptable typography. Functional. Default tracking. Safe choices.",
+        "4_to_5_weak": "Weak typography. Bad kerning. Wrong weights. Poor contrast.",
+        "0_to_3_fail": "Typography disaster. Illegible. Random choices. No hierarchy."
+      },
+
+      "typography_checklist": {
+        "max_typefaces": 2,
+        "max_weights": 3,
+        "max_sizes": 6,
+        "tracking_intentional": "Display type (48px+) must be tracked tight (-0.03em to -0.05em)",
+        "kerning_pairs": "Critical pairs manually kerned (AV, To, Yo, We, etc.)",
+        "contrast_minimum": "4.5:1 WCAG AA for text, aim for 7:1",
+        "line_length": "45-75 characters optimal, max 90",
+        "alignment": "Left-aligned for body (most readable), centered for headlines OK",
+        "widows_orphans": "Forbidden in print and premium digital"
+      },
+
+      "evaluation_questions": [
+        "Is all text readable at intended platform size?",
+        "Is tracking intentional or default?",
+        "Do typeface choices match brand personality?",
+        "Is there clear typographic hierarchy (size + weight)?"
+      ],
+
+      "common_failures": [
+        "Too many typefaces (3+) — visual chaos",
+        "Default tracking on large display type — feels loose",
+        "Poor contrast — gray text on light background",
+        "ALL CAPS with tight tracking — illegible",
+        "Wrong typeface for brand (Comic Sans for law firm)"
+      ]
+    },
+
+    "color_execution": {
+      "dimension_id": "color_execution",
+      "weight": 1.0,
+      "normalized_weight": 0.091,
+      "description": "Is palette executed with precision? 60-30-10 ratio? Color psychology aligned with emotion?",
+
+      "scoring_rubric": {
+        "10_elite": "Color palette surgical. Ratios perfect. Psychology aligned. Zero mistakes.",
+        "8_to_9_strong": "Strong palette execution. Ratios good. Minor balance issues.",
+        "6_to_7_acceptable": "Acceptable palette. Functional. Safe choices. No surprises.",
+        "4_to_5_weak": "Weak palette. Ratios off. Colors fight. Wrong psychology.",
+        "0_to_3_fail": "Color disaster. Vibrating complementaries. No strategy. Random."
+      },
+
+      "color_laws": {
+        "max_colors_per_asset": 4,
+        "festival_exception_max": 6,
+        "ratio_law": "60_dominant_30_secondary_10_accent",
+        "contrast_minimum": "4.5:1 WCAG AA for text",
+        "vibration_prohibition": "NEVER high-saturation complementaries adjacent (red #FF0000 next to cyan #00FFFF)",
+        "psychology_alignment": "Color must match emotion target (calm ≠ electric neon)"
+      },
+
+      "color_physics": {
+        "dark_saturated": "Sinks to bottom. Feels heavy. Grounded.",
+        "light_pale": "Rises to top. Feels airy. Ethereal.",
+        "warm_colors": "Advance toward viewer. Active. Urgent.",
+        "cool_colors": "Recede away. Calm. Distant."
+      },
+
+      "evaluation_questions": [
+        "Count the colors — are there more than 4 (or 6 for festivals)?",
+        "Is 60-30-10 ratio visible?",
+        "Do colors match emotion target?",
+        "Any vibrating complementary pairs causing eye strain?"
+      ],
+
+      "common_failures": [
+        "Too many colors (7+) — visual chaos",
+        "Equal color distribution — no dominant color",
+        "Vibrating complementaries — red text on green background",
+        "Wrong color psychology — neon colors for trust/calm brand"
+      ]
+    },
+
+    "platform_fitness": {
+      "dimension_id": "platform_fitness",
+      "weight": 1.2,
+      "normalized_weight": 0.109,
+      "description": "Was this made FOR where it lives? Platform contracts honored?",
+
+      "scoring_rubric": {
+        "10_elite": "Perfectly optimized for platform. Feels native. Honors all contracts.",
+        "8_to_9_strong": "Strong platform fit. Minor spec violations. Functional.",
+        "6_to_7_acceptable": "Acceptable fit. Works but generic. Could be any platform.",
+        "4_to_5_weak": "Weak fit. Wrong dimensions. Wrong density. Feels imported.",
+        "0_to_3_fail": "Platform disaster. Wrong format. Illegible. Violates core contracts."
+      },
+
+      "platform_contract_checklist": {
+        "dimensions_correct": "1080x1080 Instagram? 1280x720 YouTube? Specs exact?",
+        "safe_zones_respected": "Story top/bottom 250px clear? Billboard readable at 300ft?",
+        "attention_window_matched": "1.5s Instagram? 0.8s YouTube? 0.5s TikTok?",
+        "text_density_appropriate": "Text-minimal for Stories? Text-OK for LinkedIn?",
+        "sound_assumption": "No-sound for feed? Sound-on for TikTok?",
+        "scroll_stop_power": "High for feed? Extreme for TikTok? Medium for LinkedIn?"
+      },
+
+      "evaluation_questions": [
+        "Does this feel native to the platform or imported?",
+        "Are dimensions exact per platform specs?",
+        "Is message clear in platform's attention window?",
+        "Would this stop scroll in its actual feed context?"
+      ],
+
+      "common_failures": [
+        "Wrong aspect ratio — landscape YouTube thumbnail in 9:16 story format",
+        "Text in safe zones — Story CTA covered by UI",
+        "Too complex for attention window — 5s message for 0.8s platform",
+        "Wrong aesthetic for platform — LinkedIn gets TikTok chaos"
+      ]
+    },
+
+    "brand_coherence": {
+      "dimension_id": "brand_coherence",
+      "weight": 1.1,
+      "normalized_weight": 0.100,
+      "description": "Recognizable as brand without logo? Brand DNA visible in every element?",
+
+      "scoring_rubric": {
+        "10_elite": "Remove logo — still 100% recognizable. Brand DNA in every pixel.",
+        "8_to_9_strong": "Strong brand coherence. Recognizable. Minor off-brand elements.",
+        "6_to_7_acceptable": "Brand present. Logo required for recognition. Generic execution.",
+        "4_to_5_weak": "Weak brand coherence. Could be any competitor. Logo is only signal.",
+        "0_to_3_fail": "Zero brand coherence. Wrong colors, voice, aesthetic. Different brand."
+      },
+
+      "brand_dna_elements": {
+        "color_palette": "Primary, secondary, accent colors consistent with brand?",
+        "typography": "Typeface family matches brand system?",
+        "voice_tone": "Copy voice matches brand personality?",
+        "visual_style": "Photography/illustration style on-brand?",
+        "composition": "Layout archetype consistent with brand?",
+        "must_include": "Brand equity elements present? (signature elements)",
+        "must_never": "Forbidden elements avoided? (competitor signals)"
+      },
+
+      "evaluation_questions": [
+        "Remove logo test — is brand still recognizable?",
+        "Do colors match brand palette (not competitor palette)?",
+        "Does visual style match brand aesthetic register?",
+        "Would brand team approve this as on-brand?"
+      ],
+
+      "common_failures": [
+        "Wrong brand colors — used competitor palette by accident",
+        "Wrong tone — playful copy for serious luxury brand",
+        "Wrong aesthetic — minimalist brand gets maximalist density",
+        "Generic execution — could be any brand in category"
+      ]
+    },
+
+    "originality": {
+      "dimension_id": "originality",
+      "weight": 1.0,
+      "normalized_weight": 0.091,
+      "description": "Have I seen this before? Fresh or derivative? Trend-aware or trend-slave?",
+
+      "scoring_rubric": {
+        "10_elite": "Never seen this before. Fresh. Memorable. Cultural leadership.",
+        "8_to_9_strong": "Strong originality. Fresh angle on familiar territory. Surprising.",
+        "6_to_7_acceptable": "Acceptable originality. Competent. Expected. Safe.",
+        "4_to_5_weak": "Derivative. Seen this 100 times. Template vibes. Trend-slave.",
+        "0_to_3_fail": "Blatant copy. Stock photo energy. Generic template. Zero effort."
+      },
+
+      "originality_spectrum": {
+        "cultural_leadership": "3 years ahead. Setting trends. Risky. Polarizing.",
+        "trend_aware": "Current. Fresh. Aware of zeitgeist. Not copying.",
+        "competent_execution": "Expected. Safe. Professional. Forgettable.",
+        "trend_slave": "Copying trends 6 months late. Derivative.",
+        "generic_template": "Stock photo. Template. AI slop. Zero originality."
+      },
+
+      "evaluation_questions": [
+        "Have I seen this exact visual approach in the last month?",
+        "Is this a fresh angle or tired trope?",
+        "Does this feel like a template or custom creation?",
+        "Would this be memorable 24 hours later?"
+      ],
+
+      "common_failures": [
+        "Stock photo generic — could be any brand",
+        "Trend copying — Y2K aesthetic 2 years after peak",
+        "Template vibes — Canva template energy",
+        "AI slop — generic Midjourney/DALL-E aesthetic with no customization"
+      ]
+    },
+
+    "execution_quality": {
+      "dimension_id": "execution_quality",
+      "weight": 1.1,
+      "normalized_weight": 0.100,
+      "description": "Zero artifacts. Technical perfection. No AI mistakes, no sloppy cropping, no alignment errors.",
+
+      "scoring_rubric": {
+        "10_elite": "Flawless execution. Zero artifacts. Pixel-perfect. Print-ready perfection.",
+        "8_to_9_strong": "Strong execution. Professional. Minor imperfections under scrutiny.",
+        "6_to_7_acceptable": "Acceptable execution. Functional. Visible minor flaws.",
+        "4_to_5_weak": "Weak execution. Multiple artifacts. Sloppy. Amateur mistakes.",
+        "0_to_3_fail": "Execution disaster. Major artifacts. Broken elements. Unusable."
+      },
+
+      "technical_checklist": {
+        "ai_artifacts": "No extra fingers, merged hands, warped faces, impossible geometry",
+        "image_quality": "Sharp focus (if intended), no pixelation, no compression artifacts",
+        "alignment": "Elements grid-aligned, no random offsets, clean edges",
+        "cropping": "Intentional crops, no awkward amputations, safe zones respected",
+        "text_rendering": "No garbled letters, clean edges, consistent baseline",
+        "color_accuracy": "No banding, smooth gradients, accurate skin tones",
+        "resolution": "Meets platform specs (1080px Instagram, 300dpi print, etc.)"
+      },
+
+      "evaluation_questions": [
+        "Zoom to 200% — any artifacts visible?",
+        "Are all elements intentionally placed or randomly positioned?",
+        "Is text rendering clean or garbled?",
+        "Any AI generation mistakes (extra fingers, merged objects)?"
+      ],
+
+      "common_failures": [
+        "AI artifacts — 6 fingers, merged hands, warped faces",
+        "Text garbled — Ideogram misspelling, illegible characters",
+        "Sloppy cropping — subject cut awkwardly at edges",
+        "Misalignment — elements randomly positioned not grid-aligned",
+        "Low resolution — pixelated when viewed at intended size"
+      ]
+    },
+
+    "audience_resonance": {
+      "dimension_id": "audience_resonance",
+      "weight": 1.2,
+      "normalized_weight": 0.109,
+      "description": "Will TARGET audience respond as intended? Not generic audience. The specific psychographic.",
+
+      "scoring_rubric": {
+        "10_elite": "Surgical audience targeting. Feels made specifically for them. Deep resonance.",
+        "8_to_9_strong": "Strong audience fit. Relevant. Recognizable. Minor misalignments.",
+        "6_to_7_acceptable": "Acceptable fit. Generic appeal. Works but not specific.",
+        "4_to_5_weak": "Weak fit. Wrong audience signals. Misaligned psychographic.",
+        "0_to_3_fail": "Audience disaster. Offends or alienates target. Wrong everything."
+      },
+
+      "audience_signal_checklist": {
+        "generational_signals": "Language, platform, aesthetic match generation? (Gen Z ≠ Boomer)",
+        "psychographic_fit": "Values alignment clear? (achiever ≠ wellness-seeker)",
+        "cultural_fluency": "India context correct? (tier-1 metro ≠ tier-3 mass market)",
+        "aspiration_level": "Matches audience self-image? (premium buyer ≠ value seeker)",
+        "trust_signals": "Appropriate for audience? (peer reviews Gen Z, heritage premium)"
+      },
+
+      "evaluation_questions": [
+        "Would TARGET audience (not me) respond positively?",
+        "Are generational signals correct? (language, platform, aesthetic)",
+        "Does aspiration level match audience? (too premium or too mass?)",
+        "Any cultural missteps that alienate target?"
+      ],
+
+      "common_failures": [
+        "Wrong generation — Boomer aesthetic for Gen Z audience",
+        "Wrong psychographic — luxury signals for value-seeker",
+        "Cultural misstep — Western luxury for local Indian mass market",
+        "Wrong platform aesthetic — LinkedIn polish for TikTok audience"
+      ]
+    },
+
+    "cultural_intelligence": {
+      "dimension_id": "cultural_intelligence",
+      "weight": 1.3,
+      "normalized_weight": 0.118,
+      "description": "Zero cultural errors. Full marks or escalate. India context, global fluency, respect.",
+
+      "scoring_rubric": {
+        "10_elite": "Perfect cultural intelligence. Locally fluent. Globally aware. Respectful. Authentic.",
+        "8_to_9_strong": "Strong cultural awareness. Minor imprecision. No errors.",
+        "6_to_7_escalate": "Cultural uncertainty. Potential misstep. ESCALATE to human review.",
+        "0_to_5_reject": "Cultural error detected. Wrong symbols, offensive, ignorant. REJECT immediately."
+      },
+
+      "cultural_checklist_india": {
+        "festival_accuracy": "Diwali palette correct? Holi symbols accurate? Eid respectful?",
+        "religious_symbols": "Hindu/Muslim/Christian symbols used correctly and respectfully?",
+        "skin_tone_representation": "Dignified representation? Avoid 'exotic/dusky/ethnic' language?",
+        "regional_awareness": "North/South/East/West cultural differences respected?",
+        "language_mix": "Hinglish authentic or forced? Regional languages respected?",
+        "caste_class_sensitivity": "No stereotyping? Inclusive representation?",
+        "gender_representation": "Modern progressive or regressive stereotypes?",
+        "food_cultural_context": "Veg/non-veg sensitivity? Regional cuisine accuracy?"
+      },
+
+      "global_cultural_fluency": {
+        "avoid_appropriation": "Cultural elements used respectfully not as decoration?",
+        "stereotype_check": "Zero lazy stereotypes (sombrero Mexican, geisha Japanese)?",
+        "inclusive_representation": "Diverse representation when appropriate?",
+        "religious_respect": "Sacred symbols used appropriately or avoided?"
+      },
+
+      "evaluation_questions": [
+        "Any cultural symbols used — are they 100% accurate and respectful?",
+        "India context — is festival/regional representation authentic?",
+        "Skin tone/representation — dignified or othering?",
+        "Any potential to offend any community?"
+      ],
+
+      "mandatory_escalation_triggers": [
+        "Any religious symbol usage (escalate for human review)",
+        "Festival creative (Diwali, Eid, etc.) — verify accuracy",
+        "Regional cultural elements — verify with local context",
+        "Skin tone representation — verify dignified portrayal",
+        "Any doubt about cultural appropriateness — escalate immediately"
+      ]
+    },
+
+    "want_one_test": {
+      "dimension_id": "want_one_test",
+      "weight": 1.2,
+      "normalized_weight": 0.109,
+      "description": "Does a stranger want to own/share this? Covetable. Memorable. 'I want one' reaction.",
+
+      "scoring_rubric": {
+        "10_elite": "Instant covetability. 'I want one.' Shareable. Memorable. Desire triggered.",
+        "8_to_9_strong": "Strong appeal. Attractive. Would share. Positive reaction.",
+        "6_to_7_acceptable": "Acceptable. Nice. Forgettable. No strong desire.",
+        "4_to_5_weak": "Weak appeal. Meh. Scroll past. No desire triggered.",
+        "0_to_3_fail": "Actively unappealing. Avoid. Negative reaction."
+      },
+
+      "covetability_signals": {
+        "visual_magnetism": "Eye drawn to it. Hard to look away. Beautiful or intriguing.",
+        "shareability": "Would I send this to a friend? Post to story? Save for later?",
+        "memorability": "24 hours later, can I describe it? Does it stick?",
+        "desire_trigger": "Do I want the product/experience? Does it make me feel something?",
+        "screenshot_worthy": "Would I screenshot this for inspiration/reference?"
+      },
+
+      "evaluation_questions": [
+        "Stranger test — zero context, would they stop scrolling?",
+        "Share test — would they forward/save/screenshot?",
+        "Memory test — 24 hours later, describable from memory?",
+        "Desire test — do they want to own/experience/share it?"
+      ],
+
+      "common_failures": [
+        "Generic forgettable — nice but nothing special",
+        "No emotional hook — technically correct but feels nothing",
+        "Trying too hard — desperate energy repels",
+        "Ugly-bad not ugly-interesting — just unappealing"
+      ]
+    }
+  },
+
+  "dimension_weight_normalization": {
+    "total_weight": 11.0,
+    "normalized_weights": {
+      "concept_integrity": 0.109,
+      "emotional_precision": 0.118,
+      "visual_hierarchy": 0.100,
+      "typographic_excellence": 0.091,
+      "color_execution": 0.091,
+      "platform_fitness": 0.109,
+      "brand_coherence": 0.100,
+      "originality": 0.091,
+      "execution_quality": 0.100,
+      "audience_resonance": 0.109,
+      "cultural_intelligence": 0.118,
+      "want_one_test": 0.109
+    },
+    "note": "Weights sum to 1.0 for normalized scoring. Emotional precision and cultural intelligence are highest weighted."
+  },
+
+  "beast_standard_gates": {
+    "stranger_test": {
+      "gate_id": "stranger_test",
+      "description": "Zero context stranger understands message in 1.5 seconds",
+      "pass_criteria": "Core message clear without reading caption or knowing brand",
+      "test_method": "Show to someone unfamiliar for 1.5 seconds — what did they understand?"
+    },
+    "scroll_stop_test": {
+      "gate_id": "scroll_stop_test",
+      "description": "In feed of 100 posts, this stops the thumb",
+      "pass_criteria": "Visual magnetism or emotion strong enough to interrupt scroll",
+      "test_method": "Place in grid of 20 similar posts — does it stand out?"
+    },
+    "remove_color_test": {
+      "gate_id": "remove_color_test",
+      "description": "Composition works in pure black and white",
+      "pass_criteria": "Hierarchy and focal point clear without color",
+      "test_method": "Desaturate to grayscale — composition still works?"
+    },
+    "10_percent_size_test": {
+      "gate_id": "10_percent_size_test",
+      "description": "Design communicates at 10% of intended size",
+      "pass_criteria": "Readable and recognizable as thumbnail",
+      "test_method": "Shrink to 108x108px — message still clear?"
+    },
+    "tomorrow_test": {
+      "gate_id": "tomorrow_test",
+      "description": "Looks current today, not dated in 6 months",
+      "pass_criteria": "Timeless or current — not trend-slave that will age badly",
+      "test_method": "Does this feel like 2026 or 2023? Will it feel dated by Q4 2026?"
+    },
+    "brand_remove_test": {
+      "gate_id": "brand_remove_test",
+      "description": "Remove logo — still feels like the brand",
+      "pass_criteria": "Brand DNA visible in colors, voice, aesthetic without logo",
+      "test_method": "Literally remove logo — is brand still recognizable?"
+    },
+    "emotion_test": {
+      "gate_id": "emotion_test",
+      "description": "Name the single emotion in 2 words",
+      "pass_criteria": "Clear emotional signal — not mixed or muddy",
+      "test_method": "Ask 3 people to name emotion — do they all say same thing?"
+    },
+    "competitor_test": {
+      "gate_id": "competitor_test",
+      "description": "Better than top 3 competitors' similar assets",
+      "pass_criteria": "Objective quality comparison — would viewer choose this over competitor?",
+      "test_method": "Place next to competitor ads — does this win on quality/appeal?"
+    },
+    "context_test": {
+      "gate_id": "context_test",
+      "description": "Fits where it will actually live",
+      "pass_criteria": "Platform-native feel — not imported from wrong context",
+      "test_method": "View in actual platform feed/placement — does it belong?"
+    },
+    "memory_test": {
+      "gate_id": "memory_test",
+      "description": "24 hours later describable from memory",
+      "pass_criteria": "Memorable enough to recall key elements next day",
+      "test_method": "Ask viewer to describe it tomorrow — can they?"
+    }
+  },
+
+  "scoring_system": {
+    "minimum_to_ship": 8.5,
+    "dimension_floor": 7.0,
+    "auto_reject_below": 3.0,
+    "cultural_escalate_below": 6.0,
+    "gates_minimum_pass": 9,
+
+    "verdict_logic": {
+      "ELITE": "Score ≥9.5 AND all 10 gates pass — exceptional work",
+      "APPROVED": "Score ≥8.5 AND ≥9 gates pass — ship it",
+      "CONDITIONAL": "Score 7.5-8.4 OR 7-8 gates pass — minor revisions needed",
+      "REVISE": "Score 5.0-7.4 OR <7 gates pass — targeted fixes required",
+      "MAJOR_REVISE": "Score 3.0-4.9 OR <5 gates pass — significant rework needed",
+      "REJECT": "Score <3.0 OR cultural error detected — start over"
+    }
+  },
+
+  "revision_routing": {
+    "concept_integrity_low": "Route to: creative_director (concept needs strengthening)",
+    "emotional_precision_low": "Route to: creative_director + design_director (emotion mismatch)",
+    "visual_hierarchy_low": "Route to: design_director (composition/hierarchy fix)",
+    "typographic_excellence_low": "Route to: senior_designer (typography refinement)",
+    "color_execution_low": "Route to: brand_intelligence + senior_designer (palette fix)",
+    "platform_fitness_low": "Route to: senior_designer + prompt_engineer (platform optimization)",
+    "brand_coherence_low": "Route to: brand_intelligence → design_director (brand alignment)",
+    "originality_low": "Route to: creative_director (fresh concept needed)",
+    "execution_quality_low": "Route to: prompt_engineer (regeneration with better prompts)",
+    "audience_resonance_low": "Route to: creative_director + copywriter (audience recalibration)",
+    "cultural_intelligence_issue": "Route to: HUMAN_ESCALATION_REQUIRED (cultural review)",
+    "want_one_test_low": "Route to: creative_director (concept needs different entry point)"
+  },
+
+  "max_revision_cycles": 3,
+  "revision_cycle_note": "After 3 cycles, escalate to human creative director for fresh direction",
+
+  "notes": [
+    "Dimension weights are normalized to sum to 1.0 for fair scoring",
+    "Cultural intelligence is highest weighted (0.118) — zero tolerance for errors",
+    "Emotional precision is second highest (0.118) — precision over proximity",
+    "Beast gates are pass/fail — minimum 9 of 10 must pass",
+    "Learning Engine should track which dimensions fail most often per industry",
+    "Quarterly review of dimension weights based on conversion data"
+  ]
+}

@@ -16,13 +16,52 @@ import logging
 import os
 from typing import Dict, List, Literal, Optional
 
+from app.config.loader import config as beast_config
+
 logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Quality Dimensions (12 total — weighted scoring)
+# Quality Dimensions Loading (from BeastConfig or legacy fallback)
 # ══════════════════════════════════════════════════════════════════════════════
 
-QUALITY_DIMENSIONS = {
+def _load_quality_dimensions() -> Dict:
+    """Load quality dimensions from BeastConfig or use legacy fallback."""
+    beast_dimensions = beast_config.get_all_quality_dimensions()
+
+    if beast_dimensions:
+        # BeastConfig has dimensions - adapt to internal format
+        adapted = {}
+        for dim_id, dim_data in beast_dimensions.items():
+            criteria_text = dim_data.get("criteria", "Quality assessment")
+            questions = dim_data.get("evaluation_questions", [])
+
+            # Get weight (normalized or raw)
+            weight = dim_data.get("normalized_weight") or dim_data.get("weight", 0.08)
+
+            # Get floor from scoring rubric (assume 7.0 default)
+            floor = 7.0
+            rubric = dim_data.get("scoring_rubric", {})
+            if "7_solid" in rubric or "7_good" in rubric:
+                floor = 7.0
+            elif "6_acceptable" in rubric:
+                floor = 6.0
+
+            adapted[dim_id] = {
+                "weight": weight,
+                "floor": floor,
+                "criteria": criteria_text,
+                "questions": questions
+            }
+
+        logger.info(f"[quality_critic] Loaded {len(adapted)} dimensions from BeastConfig")
+        return adapted
+
+    # Fallback to legacy if BeastConfig not available
+    logger.warning("[quality_critic] BeastConfig dimensions not available, using legacy")
+    return _LEGACY_QUALITY_DIMENSIONS
+
+# Legacy fallback (original hardcoded dimensions)
+_LEGACY_QUALITY_DIMENSIONS = {
     # ── Visual Execution (40%) ────────────────────────────────────────────────
     "composition": {
         "weight": 0.12,
@@ -153,11 +192,36 @@ QUALITY_DIMENSIONS = {
     },
 }
 
+# Load actual quality dimensions (BeastConfig or legacy)
+QUALITY_DIMENSIONS = _load_quality_dimensions()
+
 # ══════════════════════════════════════════════════════════════════════════════
 # The 10 Beast Standards (Pass/Fail Gates)
 # ══════════════════════════════════════════════════════════════════════════════
 
-BEAST_STANDARDS = {
+def _load_beast_gates() -> Dict:
+    """Load Beast Standard gates from BeastConfig or use legacy fallback."""
+    beast_gates = beast_config.get_beast_gates()
+
+    if beast_gates:
+        # BeastConfig has gates - adapt to internal format
+        adapted = {}
+        for gate_id, gate_data in beast_gates.items():
+            adapted[gate_id] = {
+                "name": gate_data.get("gate_name", gate_id.replace("_", " ").title()),
+                "criteria": gate_data.get("criteria", "Quality gate"),
+                "pass_threshold": 7.0,  # Default threshold
+            }
+
+        logger.info(f"[quality_critic] Loaded {len(adapted)} Beast gates from BeastConfig")
+        return adapted
+
+    # Fallback to legacy
+    logger.warning("[quality_critic] BeastConfig gates not available, using legacy")
+    return _LEGACY_BEAST_STANDARDS
+
+# Legacy fallback (original hardcoded gates)
+_LEGACY_BEAST_STANDARDS = {
     "stranger_test": {
         "name": "Stranger Test",
         "criteria": "A stranger with zero context understands the core message in 1.5 seconds",
@@ -210,14 +274,39 @@ BEAST_STANDARDS = {
     },
 }
 
+# Load actual Beast gates (BeastConfig or legacy)
+BEAST_STANDARDS = _load_beast_gates()
+
 # ══════════════════════════════════════════════════════════════════════════════
-# Environment Configuration
+# Environment Configuration (with BeastConfig fallback)
 # ══════════════════════════════════════════════════════════════════════════════
 
-QUALITY_THRESHOLD = float(os.getenv("QUALITY_CRITIC_THRESHOLD", "8.5"))  # Min overall score
-DIMENSION_FLOOR = float(os.getenv("QUALITY_DIMENSION_FLOOR", "7.0"))     # Min per dimension
-MAX_REVISION_CYCLES = int(os.getenv("QUALITY_REVISION_MAX_CYCLES", "3")) # Max revision loops
-BEAST_GATES_MIN_PASS = int(os.getenv("QUALITY_BEAST_GATES_MIN", "9"))    # Min gates to pass (out of 10)
+def _load_quality_thresholds():
+    """Load quality thresholds from BeastConfig or environment variables."""
+    thresholds = beast_config.get_scoring_thresholds()
+
+    if thresholds:
+        return {
+            "quality_threshold": thresholds.get("minimum_to_ship", 8.5),
+            "dimension_floor": thresholds.get("dimension_floor", 7.0),
+            "max_revision_cycles": thresholds.get("max_revision_cycles", 3),
+            "beast_gates_min_pass": thresholds.get("gates_minimum_pass", 9),
+        }
+
+    # Fallback to environment variables
+    return {
+        "quality_threshold": float(os.getenv("QUALITY_CRITIC_THRESHOLD", "8.5")),
+        "dimension_floor": float(os.getenv("QUALITY_DIMENSION_FLOOR", "7.0")),
+        "max_revision_cycles": int(os.getenv("QUALITY_REVISION_MAX_CYCLES", "3")),
+        "beast_gates_min_pass": int(os.getenv("QUALITY_BEAST_GATES_MIN", "9")),
+    }
+
+_THRESHOLDS = _load_quality_thresholds()
+
+QUALITY_THRESHOLD = _THRESHOLDS["quality_threshold"]
+DIMENSION_FLOOR = _THRESHOLDS["dimension_floor"]
+MAX_REVISION_CYCLES = _THRESHOLDS["max_revision_cycles"]
+BEAST_GATES_MIN_PASS = _THRESHOLDS["beast_gates_min_pass"]
 
 # Tier-specific config helper
 def _get_tier_config(tier: str) -> dict:
@@ -634,7 +723,16 @@ Score 0-10 for each gate. Be CRITICAL — these are the world's highest standard
 
     def _dimension_to_agent(self, dimension_name: str) -> str:
         """Map dimension to responsible agent for revision routing."""
-        routing = {
+        # Try to load from BeastConfig first
+        beast_routing = beast_config.get_revision_routing()
+
+        if beast_routing and dimension_name in beast_routing:
+            agent = beast_routing[dimension_name]
+            logger.info(f"[quality_critic] BeastConfig routing: {dimension_name} → {agent}")
+            return agent
+
+        # Fallback to legacy routing
+        legacy_routing = {
             "composition": "layout_planner",
             "color_authority": "creative_director",  # Palette issue
             "typography": "layout_planner",
@@ -647,7 +745,7 @@ Score 0-10 for each gate. Be CRITICAL — these are the world's highest standard
             "resolution_quality": "image_prompter",  # Re-generate
             "text_legibility": "layout_planner",
         }
-        return routing.get(dimension_name, "layout_planner")
+        return legacy_routing.get(dimension_name, "layout_planner")
 
     def _generate_summary(self, dimension_scores: Dict, beast_gates: Dict, verdict: str) -> str:
         """Generate human-readable critique summary."""

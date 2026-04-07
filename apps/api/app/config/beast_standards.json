@@ -1,0 +1,1203 @@
+{
+  "_meta": {
+    "system": "BEAST Creative Studio — Agent Orchestration JSON",
+    "version": "4.0",
+    "philosophy": "Every pixel is a decision. Every decision has a reason. No guessing. No randomness. Pure intelligence.",
+    "beats": ["Midjourney", "ChatGPT DALL-E", "Seedream", "Leonardo", "Nano Banana", "Adobe Firefly", "Stable Diffusion generic"],
+    "standard": "Output must look like it was made by Google Creative Lab, Wieden+Kennedy, or Apple's design team",
+    "last_updated": "2025-2026 edition"
+  },
+
+  "pipeline_stages": [
+    "STAGE_0_INTAKE",
+    "STAGE_1_TRIAGE",
+    "STAGE_2_BRAND_INTEL",
+    "STAGE_3_CREATIVE_DIRECTION",
+    "STAGE_4_DESIGN_DIRECTION",
+    "STAGE_5_COPY",
+    "STAGE_6_PRE_GENERATION_DECISION",
+    "STAGE_7_PROMPT_ENGINEERING",
+    "STAGE_8_GENERATION",
+    "STAGE_9_POST_PROCESSING",
+    "STAGE_10_QUALITY_GATE",
+    "STAGE_11_OUTPUT"
+  ],
+
+  "STAGE_0_INTAKE": {
+    "agent": "intake_parser",
+    "job": "Parse raw user request into structured intake object",
+    "inputs": ["raw_text_prompt", "attached_images?", "brand_assets?", "reference_images?"],
+    "outputs": "intake_object",
+    "intake_object_schema": {
+      "raw_request": "string",
+      "asset_keywords_detected": ["poster", "ad", "thumbnail", "etc"],
+      "brand_signals": ["brand name", "colors mentioned", "logo attached"],
+      "platform_signals": ["instagram", "youtube", "print", "etc"],
+      "cultural_signals": ["Diwali", "sale", "launch", "etc"],
+      "urgency": "draft | standard | premium | critical",
+      "has_reference_image": "boolean",
+      "user_provided_copy": "string or null",
+      "user_provided_colors": ["#hex or null"]
+    }
+  },
+
+  "STAGE_1_TRIAGE": {
+    "agent": "triage_agent",
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.3,
+    "job": "Decode what is ACTUALLY needed and classify every dimension",
+
+    "asset_type_classification": {
+      "poster": {
+        "subtypes": ["event_poster", "product_poster", "brand_poster", "movie_poster", "music_poster", "festival_poster", "motivational_poster", "sale_poster"],
+        "default_dimensions": "1080x1350",
+        "print_dimensions": "2480x3508_at_300dpi"
+      },
+      "ad_digital": {
+        "subtypes": ["social_feed_ad", "story_ad", "display_banner", "native_ad", "search_ad_visual"],
+        "platform_map": {
+          "instagram": {"feed": "1080x1080", "story": "1080x1920", "portrait": "1080x1350"},
+          "facebook": {"feed": "1200x628", "square": "1080x1080"},
+          "twitter_x": {"card": "1200x675"},
+          "linkedin": {"post": "1200x627"},
+          "tiktok": {"video_frame": "1080x1920"},
+          "pinterest": {"pin": "1000x1500"},
+          "google_display": {
+            "leaderboard": "728x90",
+            "medium_rect": "300x250",
+            "half_page": "300x600",
+            "billboard_web": "970x250"
+          }
+        }
+      },
+      "thumbnail": {
+        "subtypes": ["youtube_thumbnail", "blog_thumbnail", "podcast_cover", "app_store_screenshot"],
+        "youtube": "1280x720",
+        "blog": "1200x628",
+        "podcast": "3000x3000"
+      },
+      "business_card": {
+        "standard_mm": "85x55",
+        "standard_px_300dpi": "1004x649",
+        "variants": ["minimal", "premium", "creative", "tech", "luxury"]
+      },
+      "billboard": {
+        "standard": "1400x480",
+        "bus_shelter": "1200x1800",
+        "rule": "MAX 7 words. Usually 3-5."
+      },
+      "packaging": {
+        "subtypes": ["box", "label", "bag", "wrapper", "bottle"],
+        "requires": "3D mockup decision"
+      },
+      "email_header": {"dimensions": "600x200", "safe_zone": "500x150_center"},
+      "app_icon": {"ios": "1024x1024", "android": "512x512"},
+      "logo": {"formats": ["svg", "png_transparent"], "model_preference": "recraft_v4_svg"}
+    },
+
+    "platform_context_intelligence": {
+      "instagram_feed": {
+        "viewer_behavior": "scroll_at_speed",
+        "attention_window_seconds": 1.5,
+        "content_density": "medium",
+        "aesthetic_register": "editorial_to_lifestyle",
+        "cta_strength": "medium",
+        "caption_reads": "sometimes"
+      },
+      "youtube_thumbnail": {
+        "viewer_behavior": "scanning_for_relevance",
+        "attention_window_seconds": 0.8,
+        "content_density": "high_contrast_low_complexity",
+        "aesthetic_register": "emotion_shock_curiosity",
+        "face_rule": "face_preferred_40_percent_minimum",
+        "text_rule": "max_6_words_min_72px"
+      },
+      "tiktok": {
+        "viewer_behavior": "instant_scroll_or_stay",
+        "attention_window_seconds": 0.5,
+        "content_density": "extreme_scroll_stop_priority",
+        "aesthetic_register": "raw_authentic_or_extreme_polish",
+        "hook": "visible_action_in_first_frame"
+      },
+      "linkedin": {
+        "viewer_behavior": "professional_consideration",
+        "attention_window_seconds": 3,
+        "content_density": "authority_signals",
+        "aesthetic_register": "clean_trustworthy_restrained"
+      },
+      "print_poster": {
+        "viewer_behavior": "standing_still_reading",
+        "attention_window_seconds": 15,
+        "content_density": "can_be_rich",
+        "aesthetic_register": "craft_detail_texture"
+      },
+      "billboard_ooh": {
+        "viewer_behavior": "moving_at_speed",
+        "attention_window_seconds": 2,
+        "content_density": "extreme_simplicity",
+        "words_max": 7,
+        "font_size_minimum": "readable_at_300ft"
+      }
+    },
+
+    "cultural_moment_detector": {
+      "indian_festivals": {
+        "Diwali": {
+          "window": "Oct-Nov",
+          "palette": {"primary": "#F4A62A", "secondary": "#1A1035", "accent": "#E05B0E", "highlight": "#FFE57A"},
+          "motifs": ["diya", "rangoli", "marigold", "sparkle", "glow"],
+          "emotion": "warmth_prosperity_togetherness",
+          "copy_themes": ["light_over_darkness", "new_beginnings", "prosperity", "gifting"]
+        },
+        "Holi": {
+          "window": "Mar",
+          "palette": "multi_rotating_no_dominant",
+          "base": "#FFFFFF",
+          "motifs": ["powder_burst", "joy", "color_explosion"],
+          "emotion": "pure_uninhibited_joy",
+          "copy_themes": ["color_of_X", "play", "spread_X"]
+        },
+        "Navratri": {
+          "window": "Sep-Oct",
+          "palette": {"primary": "#E63946", "secondary": "#F4D03F", "tertiary": "#2E86AB"},
+          "motifs": ["garba", "dandiya", "mirror_mosaic", "goddess_energy"],
+          "emotion": "festive_power_feminine_energy"
+        },
+        "Eid": {
+          "window": "varies",
+          "palette": {"primary": "#1D6B48", "secondary": "#C9A84C", "neutral": "#FFFFFF"},
+          "motifs": ["crescent", "geometric_patterns", "lanterns"],
+          "emotion": "gratitude_togetherness_celebration"
+        },
+        "Christmas_India": {
+          "window": "Dec",
+          "palette": {"option_a": ["#CC0000", "#1A5C38", "#FFFFFF"], "option_luxury": ["#0D2818", "#C9A84C", "#F5F0E8"]},
+          "emotion": "warm_family_gifting_joy"
+        }
+      },
+      "commercial_moments": {
+        "sale_season": {"keywords": ["sale", "off", "discount", "offer", "deal"], "urgency": "HIGH", "palette_bias": "warm_red_orange"},
+        "product_launch": {"keywords": ["launch", "new", "introducing", "reveal"], "urgency": "HIGH", "aesthetic": "clean_hero_dominant"},
+        "anniversary": {"keywords": ["years", "anniversary", "celebrating"], "aesthetic": "premium_retrospective"},
+        "limited_edition": {"keywords": ["limited", "exclusive", "only X left"], "urgency": "EXTREME", "aesthetic": "scarcity_premium"}
+      }
+    },
+
+    "audience_psychographic_map": {
+      "achiever_urban_india": {
+        "age_range": [24, 38],
+        "values": ["success", "efficiency", "status_earned"],
+        "aesthetic_preference": "clean_modern_aspirational",
+        "copy_voice": "direct_confident",
+        "color_preference": "dark_premium_or_bold_accent",
+        "platforms": ["linkedin", "instagram", "youtube"]
+      },
+      "gen_z_india": {
+        "age_range": [18, 26],
+        "values": ["authenticity", "self_expression", "community", "anti_generic"],
+        "aesthetic_preference": "raw_or_extreme_polish_never_middle",
+        "copy_voice": "casual_witty_specific",
+        "color_preference": "electric_or_earthy_never_corporate",
+        "platforms": ["instagram", "tiktok", "youtube"]
+      },
+      "millennial_parent": {
+        "age_range": [28, 42],
+        "values": ["family", "value_for_money", "convenience", "trust"],
+        "aesthetic_preference": "warm_relatable_quality_signals",
+        "copy_voice": "helpful_warm_specific",
+        "color_preference": "warm_neutrals_with_trust_blue",
+        "platforms": ["facebook", "instagram", "youtube"]
+      },
+      "premium_buyer": {
+        "age_range": [30, 55],
+        "values": ["exclusivity", "quality", "status", "experience"],
+        "aesthetic_preference": "quiet_luxury_minimal_maximum_craft",
+        "copy_voice": "understated_precise_confident",
+        "color_preference": "black_white_gold_deep_jewel",
+        "platforms": ["instagram", "print", "email"]
+      },
+      "mass_market": {
+        "age_range": [20, 50],
+        "values": ["affordability", "reliability", "familiarity"],
+        "aesthetic_preference": "bright_clear_simple_friendly",
+        "copy_voice": "simple_benefit_driven",
+        "color_preference": "primary_colors_high_contrast",
+        "platforms": ["facebook", "youtube", "whatsapp_forward_potential"]
+      }
+    },
+
+    "triage_output_schema": {
+      "asset_type": "string",
+      "subtype": "string",
+      "platform": "string",
+      "dimensions": {"w": "int", "h": "int", "unit": "px|mm", "dpi": "int"},
+      "pipeline_mode": "fast_path|standard|premium|crisis",
+      "audience_segment": "string",
+      "emotion_target": "string",
+      "cultural_moment": "string|null",
+      "brand_locked": "boolean",
+      "urgency": "string",
+      "copy_generate": "boolean",
+      "copy_provided": "string|null"
+    }
+  },
+
+  "STAGE_2_BRAND_INTEL": {
+    "agent": "brand_intelligence_agent",
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.2,
+    "job": "Extract, build, or verify brand DNA. Lock palette and typography for pipeline.",
+
+    "extraction_modes": {
+      "from_provided_colors": "Expand hex → full palette system including tints, shades, and usage ratios",
+      "from_logo_image": "Extract dominant, secondary, accent colors. Identify typography family.",
+      "from_brand_name": "Use known brand equity database. Lock established brand colors.",
+      "inferred_from_category": "Use industry color conventions as baseline. Flag as inferred.",
+      "generated_fresh": "Create brand-ready palette from brief intent. Flag as generated."
+    },
+
+    "palette_system_output": {
+      "primary": {"hex": "", "rgb": [], "cmyk": [], "pantone": "", "usage": "60_percent_dominant", "psychological_signal": ""},
+      "secondary": {"hex": "", "usage": "30_percent_supporting"},
+      "accent": {"hex": "", "usage": "10_percent_cta_focal_only"},
+      "neutral_light": {"hex": "", "usage": "backgrounds_breathing_room"},
+      "neutral_dark": {"hex": "", "usage": "text_depth"},
+      "forbidden_combinations": [],
+      "contrast_approved_pairs": [],
+      "festival_injection": {
+        "active": "boolean",
+        "occasion": "string",
+        "integration_rule": "brand_primary_plus_festival_accent_NEVER_brand_replaced",
+        "supplementary_colors": []
+      }
+    },
+
+    "typography_system_output": {
+      "display": {"family": "", "weight": "", "case": "CAPS|sentence|mixed", "tracking": "tight|-0.03em", "size_min_px": 48},
+      "headline": {"family": "", "weight": "", "case": "", "tracking": ""},
+      "body": {"family": "", "weight": "400", "line_height": "1.6", "size_range": "14-18px"},
+      "cta": {"family": "", "weight": "700", "case": "CAPS|title", "size_min_px": 14},
+      "caption": {"family": "", "weight": "400", "size_max_px": 12},
+      "max_typefaces": 2,
+      "max_weights": 3
+    },
+
+    "brand_personality_lock": {
+      "voice": "authoritative|warm|rebellious|playful|premium|casual|technical",
+      "visual_personality": "bold|quiet|energetic|refined|raw|polished",
+      "equity_must_include": [],
+      "equity_must_never": [],
+      "competitor_differentiation": ""
+    }
+  },
+
+  "STAGE_3_CREATIVE_DIRECTION": {
+    "agent": "senior_creative_director",
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.82,
+    "job": "Set the concept. The single idea that everything serves. Non-negotiable.",
+
+    "concept_development_framework": {
+      "insight_formula": "[Audience] secretly feel/believe [X] but never say it because [tension]. This visual makes them feel [understood|challenged|inspired].",
+      "concept_formula": "CULTURAL_TRUTH × BRAND_PERMISSION × VISUAL_METAPHOR",
+      "three_directions": {
+        "direction_A_safe": "Strong execution of the expected angle. Predictable but excellent.",
+        "direction_B_bold": "Unexpected angle on a familiar truth. Surprising. May polarize.",
+        "direction_C_future": "Where this category is going. 3 years ahead. Cultural leadership."
+      }
+    },
+
+    "aesthetic_zeitgeist_2025_2026": {
+      "brutalism_luxury": {
+        "description": "Raw typography on polished surfaces. Expensive materials shown unfinished.",
+        "signal": "So confident it doesnt need to try",
+        "keywords_for_models": "raw concrete texture, brutal typography, expensive material contrast, architectural negative space, editorial quality"
+      },
+      "quiet_luxury": {
+        "description": "Extreme restraint. Whitespace as status. Minimum decoration. Maximum craft.",
+        "signal": "The logo is the smallest element and still the most powerful",
+        "keywords_for_models": "minimalist luxury, generous white space, subtle texture, premium materials, understated elegance"
+      },
+      "bio_organic_premium": {
+        "description": "Shapes that feel grown not designed. Natural geometry. Living-system forms.",
+        "signal": "Premium sustainable inevitable",
+        "keywords_for_models": "organic flowing shapes, natural material textures, botanical reference, handcrafted quality, soft irregular edges"
+      },
+      "retro_future": {
+        "description": "Y2K chrome, 70s sci-fi color, 90s rave remixed with today precision.",
+        "signal": "Nostalgic for a future that never happened",
+        "keywords_for_models": "Y2K aesthetic, chrome metallic surfaces, holographic sheen, retro-futuristic, vintage digital"
+      },
+      "cultural_maximalism_india": {
+        "description": "Layered visual density that reads as richness not clutter. Heritage in modern grid.",
+        "signal": "I know who I am. Come with me.",
+        "keywords_for_models": "rich layered composition, jewel tone palette, geometric heritage motifs, festive density, South Asian luxury"
+      },
+      "ai_native_aesthetic": {
+        "description": "Procedural textures, parametric forms, data-as-design language.",
+        "signal": "I understand the tools of the future",
+        "keywords_for_models": "procedural texture, generative pattern, mathematical geometry, grid logic visible, parametric design"
+      },
+      "post_ironic_sincerity": {
+        "description": "Earnest in a world trained to be cynical. Simple words. Direct emotion.",
+        "signal": "We actually mean this",
+        "keywords_for_models": "authentic documentary style, natural light, real moment captured, unposed, genuine emotion"
+      }
+    },
+
+    "emotion_to_visual_map": {
+      "urgency": {"color": "warm_red_orange", "composition": "dynamic_diagonal", "typography": "condensed_bold_caps", "space": "tight_dense", "glow": "none", "motion_quality": "fast_snap"},
+      "desire": {"color": "warm_rich_deep", "composition": "hero_dominant_intimate", "typography": "elegant_light_weight", "space": "intimate_close", "glow": "subtle_warm", "motion_quality": "slow_reveal"},
+      "trust": {"color": "cool_blue_neutral", "composition": "editorial_split_balanced", "typography": "clean_sans_medium", "space": "generous_structured", "glow": "none", "motion_quality": "steady_confident"},
+      "awe": {"color": "deep_dramatic_with_light_accent", "composition": "hero_dominant_vast", "typography": "minimal_whisper_scale", "space": "vast_breathing", "glow": "dramatic_singular_source", "motion_quality": "slow_cinematic"},
+      "joy": {"color": "bright_warm_saturated", "composition": "maximalist_density_or_clean_burst", "typography": "bold_rounded_playful", "space": "active_filled", "glow": "diffuse_warm", "motion_quality": "bouncy_energetic"},
+      "pride": {"color": "gold_deep_jewel", "composition": "hero_dominant_tall", "typography": "serif_editorial_heavy", "space": "dignified_structured", "glow": "golden_warm", "motion_quality": "rising_reveal"},
+      "curiosity": {"color": "unexpected_combination", "composition": "asymmetric_tension", "typography": "question_visual_break", "space": "deliberate_mystery_void", "glow": "hint_of_light_source", "motion_quality": "pause_then_reveal"},
+      "exclusivity": {"color": "black_or_deep_mono_gold_accent", "composition": "minimal_40_elements", "typography": "condensed_tight_precision", "space": "maximum_breathing", "glow": "none_or_single_precision", "motion_quality": "ultra_slow_confident"}
+    },
+
+    "cd_output_schema": {
+      "concept_title": "3-5 word title",
+      "concept_statement": "One paragraph. The idea, tension, and why it works.",
+      "insight": "The hidden truth",
+      "emotion_primary": "single word",
+      "emotion_secondary": "single word",
+      "visual_metaphor": {"description": "", "shows": "", "means": "", "why_works": ""},
+      "headline_direction": {"tone": "", "style": "", "examples": [], "forbidden": []},
+      "composition_law": {"archetype": "", "dominant_element": "", "hierarchy": [], "whitespace": ""},
+      "aesthetic_register": {"style": "", "references": [], "anti_references": []},
+      "color_direction": {"mood": "", "restriction": ""},
+      "recommended_direction": "A|B|C",
+      "what_success_looks_like": "",
+      "what_failure_looks_like": ""
+    }
+  },
+
+  "STAGE_4_DESIGN_DIRECTION": {
+    "agent": "senior_design_director",
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.5,
+    "job": "Translate CD concept into precise visual law. Set the system every designer must follow.",
+
+    "composition_archetypes": {
+      "HERO_DOMINANT": {
+        "visual_weight": "80_image_20_type",
+        "use_when": "product_or_subject_IS_the_story",
+        "grid": "image_bleeds_to_edges_type_floats_in_clear_zones",
+        "energy": "still_confident_self_evident",
+        "space_character": "generous_breathing",
+        "platform_fit": ["instagram_feed", "print_poster", "billboard"]
+      },
+      "TYPOGRAPHIC_LED": {
+        "visual_weight": "70_type_30_image_texture",
+        "use_when": "idea_more_powerful_than_product_visual",
+        "grid": "type_as_architecture_image_as_texture",
+        "energy": "bold_declarative_impossible_to_ignore",
+        "space_character": "tight_intentional",
+        "platform_fit": ["poster", "social_quote", "billboard_2_words"]
+      },
+      "EDITORIAL_SPLIT": {
+        "visual_weight": "50_50_or_60_40",
+        "use_when": "two_elements_equal_narrative_weight",
+        "grid": "hard_vertical_divide",
+        "energy": "controlled_contrast_journalistic",
+        "space_character": "structured_balanced",
+        "platform_fit": ["print_ad", "linkedin", "desktop_banner"]
+      },
+      "DYNAMIC_DIAGONAL": {
+        "visual_weight": "full_bleed_diagonal_axis",
+        "use_when": "energy_movement_disruption_speed",
+        "grid": "45_or_30_degree_composition_axis",
+        "energy": "kinetic_urgent_forward_moving",
+        "space_character": "active_sliced",
+        "platform_fit": ["sports_ad", "gaming", "automotive", "story_ad"]
+      },
+      "ASYMMETRIC_TENSION": {
+        "visual_weight": "intentionally_off_center",
+        "use_when": "anxiety_disruption_avant_garde",
+        "grid": "negative_space_IS_the_design",
+        "energy": "uncomfortable_right",
+        "space_character": "deliberate_void",
+        "platform_fit": ["fashion_ad", "luxury_brand", "art_poster"]
+      },
+      "MAXIMALIST_DENSITY": {
+        "visual_weight": "100_percent_canvas_coverage",
+        "use_when": "festival_celebration_cultural_richness",
+        "grid": "hidden_grid_beneath_apparent_chaos",
+        "energy": "joyful_overwhelm_richness",
+        "space_character": "active_everywhere",
+        "platform_fit": ["festival_poster", "music_event", "indian_celebration"]
+      },
+      "THUMBNAIL_HALVES": {
+        "visual_weight": "subject_50_text_50",
+        "use_when": "youtube_or_blog_thumbnail",
+        "grid": "subject_left_or_right_text_opposite_side",
+        "energy": "hook_emotion_information",
+        "space_character": "efficient_every_pixel_works",
+        "platform_fit": ["youtube_thumbnail", "blog_header", "email_hero"]
+      }
+    },
+
+    "visual_hierarchy_law": {
+      "level_1_primary": {
+        "rule": "EXACTLY ONE element. The eye anchor. Nothing competes.",
+        "method": "largest OR brightest OR most isolated OR most contrasting",
+        "test": "Cover everything except level 1. Viewer should know what to do."
+      },
+      "level_2_secondary": {
+        "rule": "Supports level 1. Cannot compete.",
+        "method": "60_percent_weight_of_level_1",
+        "test": "Does removing level 2 lose important information? Yes = correct weight."
+      },
+      "level_3_tertiary": {
+        "rule": "Info, brand, legal, fine print.",
+        "method": "30_percent_weight_of_level_1",
+        "test": "Does removing level 3 break the design? If yes: level 3 is too heavy."
+      }
+    },
+
+    "space_glow_depth_system": {
+      "whitespace_types": {
+        "premium_silence": {"usage": "luxury_brands_quiet_authority", "margin_multiplier": 2.0, "density": "low_20_percent_filled"},
+        "editorial_breathing": {"usage": "magazine_style_trusted_brands", "margin_multiplier": 1.5, "density": "medium_40_percent_filled"},
+        "active_structured": {"usage": "tech_efficiency_brands", "margin_multiplier": 1.0, "density": "60_percent_filled"},
+        "festival_rich": {"usage": "celebration_indian_maximalism", "margin_multiplier": 0.5, "density": "80_to_90_percent_filled"},
+        "scroll_stop": {"usage": "social_feed_ad_thumbnail", "margin_multiplier": 0.75, "density": "high_contrast_50_percent_dense"}
+      },
+      "glow_systems": {
+        "no_glow": {"use_for": "premium_quiet_luxury_editorial_clean_tech"},
+        "warm_diya_glow": {
+          "use_for": "diwali_festival_warmth_celebration",
+          "color": "rgba(244,166,42,0.4)",
+          "spread": "40_to_80px",
+          "position": "light_source_location",
+          "prompt_keywords": "warm amber glow, diya illumination, golden light halo, warm bokeh"
+        },
+        "cool_neon_glow": {
+          "use_for": "tech_gaming_futuristic_youthful",
+          "color": "rgba(0,255,200,0.3)_or_rgba(180,0,255,0.3)",
+          "spread": "20_to_60px",
+          "prompt_keywords": "neon glow, cyberpunk ambient light, electric haze, luminous edge"
+        },
+        "soft_product_glow": {
+          "use_for": "premium_product_photography_beauty_jewellery",
+          "color": "rgba(255,255,255,0.15)",
+          "spread": "10_to_30px",
+          "position": "rim_light_or_ambient",
+          "prompt_keywords": "soft rim light, product glow, ethereal luminosity, glass reflection"
+        },
+        "dramatic_cinematic_light": {
+          "use_for": "fashion_film_luxury_editorial",
+          "prompt_keywords": "single dramatic light source, deep shadow contrast, chiaroscuro lighting, film noir quality"
+        },
+        "golden_hour_natural": {
+          "use_for": "lifestyle_aspirational_warmth_brand",
+          "prompt_keywords": "golden hour sunlight, warm 3200K, long shadows, natural backlight, sun flare subtle"
+        }
+      },
+      "depth_system": {
+        "foreground": "sharp_warm_saturated_large",
+        "midground": "medium_detail_slightly_desaturated",
+        "background": "soft_blur_cool_smaller",
+        "depth_creation_methods": ["bokeh_blur", "atmospheric_haze", "size_perspective", "color_temperature_shift", "focus_gradient"]
+      }
+    },
+
+    "typography_execution_laws": {
+      "max_typefaces": 2,
+      "max_weights": 3,
+      "max_sizes": 4,
+      "kerning_mandate": "ALL display type manually kerned. Tighten until uncomfortable, back off 10%.",
+      "tracking_rules": {
+        "display_48px_plus": "-0.03em to -0.05em tight",
+        "headline_24_48px": "-0.02em to -0.03em",
+        "body": "0em default",
+        "ALL_CAPS": "+0.05em to +0.1em open"
+      },
+      "weight_contrast": "pairing Black weight headline with Light weight subhead = sophistication",
+      "case_psychology": {
+        "ALL_CAPS": "power urgency declaration",
+        "sentence_case": "warmth approachability storytelling",
+        "Title_Case": "formal corporate trustworthy (use sparingly)",
+        "Mixed_intentional": "modern editorial playful"
+      },
+      "text_on_image_treatments": {
+        "overlay_dark": "rgba(0,0,0,0.5) behind text — universal legibility",
+        "color_block": "solid brand color rectangle under headline — bold editorial",
+        "shadow": "0 2px 20px rgba(0,0,0,0.8) on text — subtle depth",
+        "blur_behind": "backdrop-filter blur(20px) — modern glass effect",
+        "outlined": "text-stroke 2px white/black — maintains image visibility",
+        "knockout_white": "white text on dark image areas — high contrast clean"
+      }
+    },
+
+    "color_execution_rules": {
+      "max_colors_per_asset": 4,
+      "festival_exception_max": 6,
+      "ratio_law": "60_dominant_30_secondary_10_accent",
+      "contrast_minimum": "4.5_to_1_WCAG_AA_for_text_aim_7_to_1",
+      "vibration_prohibition": "NEVER high_saturation_complementaries_adjacent",
+      "physics_law": {
+        "dark_saturated": "sinks_to_bottom_feels_heavy",
+        "light_pale": "rises_to_top_feels_airy",
+        "warm": "advances_toward_viewer",
+        "cool": "recedes_away"
+      }
+    },
+
+    "decree_output_schema": {
+      "composition_archetype": "",
+      "reading_path": "Z_PATTERN|F_PATTERN|RADIAL|GOLDEN_RATIO|SCROLL_STOP",
+      "hierarchy": {"level_1": "", "level_2": "", "level_3": ""},
+      "grid": {"columns": 12, "gutter": "10px", "margins": "60px_all_sides"},
+      "typography_law": {"face_1": {}, "face_2": {}, "on_image_treatment": ""},
+      "color_execution": {"background": "", "primary_text": "", "accent": "", "forbidden": []},
+      "space_character": "premium_silence|editorial_breathing|active_structured|festival_rich|scroll_stop",
+      "glow_system": "no_glow|warm_diya|cool_neon|soft_product|dramatic_cinematic|golden_hour",
+      "depth_notes": "",
+      "platform_safe_zones": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+      "designer_mandates": {"must_include": [], "must_exclude": []},
+      "variant_A_instruction": "precision execution of decree",
+      "variant_B_instruction": "push one element to extreme — which and how",
+      "variant_C_instruction": "the surprising direction that serves the concept"
+    }
+  },
+
+  "STAGE_5_COPY": {
+    "agent": "senior_copywriter",
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.85,
+    "count": 2,
+
+    "copy_generation_engine": {
+      "headline_styles": {
+        "PROVOCATION": {"formula": "challenges the audiences comfortable belief", "example": "Cheap coffee is expensive."},
+        "CONTRAST": {"formula": "two opposing ideas in tension", "example": "Less noise. More impact."},
+        "IDENTITY": {"formula": "tells audience who they become", "example": "Built for builders."},
+        "SPECIFIC_CLAIM": {"formula": "precision beats vagueness always", "example": "3 hours saved. Every day."},
+        "CULTURAL_ECHO": {"formula": "familiar reference then twist", "example": "Not your mothers savings account."},
+        "WHISPER": {"formula": "quiet confidence declarative", "example": "Some things dont need improving."}
+      },
+      "platform_character_limits": {
+        "youtube_thumbnail": {"words_max": 6, "chars_max": 32, "style": "CAPS_preferred", "power_words": ["NEVER", "SECRET", "WHY", "ACTUALLY", "numbers"]},
+        "instagram_feed": {"headline_chars": 40, "body_ideal": 125, "body_max": 2200},
+        "instagram_story": {"text_on_screen_words_max": 8, "tone": "conversational_friend"},
+        "tiktok": {"caption_chars": 150, "tone": "action_word_or_question_first"},
+        "linkedin": {"headline_chars": 50, "tone": "insight_driven_authority"},
+        "facebook_ad": {"primary_text": 125, "headline": 27, "description": 27},
+        "google_display": {"headline": 30, "long_headline": 90, "description": 90, "rule": "each_must_work_alone"},
+        "billboard": {"words_max": 7, "ideal": "3_to_5", "no_urls_no_phones": true},
+        "print_magazine": {"headline_can_be_long": true, "body_words": "50_to_150", "tone": "sophisticated_nuanced"}
+      },
+      "cta_library": {
+        "ecommerce_high_urgency": ["Shop before midnight", "Only X left", "Sale ends Sunday"],
+        "ecommerce_medium": ["Get yours today", "Add to cart", "Explore the collection"],
+        "saas_strong": ["Start free", "Try it free", "Get started its free"],
+        "saas_soft": ["See how it works", "Watch the demo"],
+        "service_direct": ["Book a call", "Get a quote", "Free consultation"],
+        "content_engagement": ["Save this for later", "Tag someone who needs this"],
+        "content_growth": ["Follow for more", "Subscribe for weekly X"]
+      }
+    },
+
+    "copy_output_schema": {
+      "headline_A": {"text": "", "style": "", "char_count": 0, "emotion_hit": ""},
+      "headline_B": {"text": "", "style": "", "char_count": 0, "emotion_hit": ""},
+      "headline_C": {"text": "", "style": "", "char_count": 0, "emotion_hit": ""},
+      "recommended_headline": "A|B|C",
+      "subheadline": "",
+      "body_copy": "string|null",
+      "cta_primary": "",
+      "cta_alternatives": [],
+      "for_prompt_engineer": {
+        "text_to_render_in_image": "exact string if ideogram — null if overlay",
+        "text_overlay_string": "exact string for post-processing overlay",
+        "text_style_direction": "ALL_CAPS|mixed|sentence",
+        "text_placement_note": "top_center|bottom_left|etc"
+      }
+    }
+  },
+
+  "STAGE_6_PRE_GENERATION_DECISION": {
+    "agent": "generation_strategy_agent",
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.2,
+    "job": "THIS IS THE MOST CRITICAL DECISION IN THE PIPELINE. Decide HOW the image will be created before ANY generation happens.",
+    "authority": "FINAL. No downstream agent changes this decision.",
+
+    "THE_CENTRAL_QUESTION": "Should text be BAKED INTO the generated image, OR should we generate a clean background/scene and add text as a separate layer?",
+
+    "decision_tree": {
+      "ROUTE_A_TEXT_IN_IMAGE": {
+        "description": "Generate image WITH text rendered inside it by the model",
+        "use_when": {
+          "conditions": [
+            "Text is a design element itself (neon sign, billboard in scene, chalk on board)",
+            "Text is very short — 1 to 4 words maximum",
+            "Text style is decorative and must match the scene atmosphere",
+            "Poster where typography IS the visual (typographic-led composition)",
+            "Festival greeting where text is part of the celebration visual",
+            "Brand name as visual element in lifestyle scene"
+          ],
+          "model_required": "ideogram_turbo (primary) or recraft_v4 (for design/vector)",
+          "NOT_for_flux": "FLUX models fail at precise text rendering — never use for text-in-image"
+        },
+        "prompt_construction": "Describe scene + explicit quoted text string + font style + position + color",
+        "example_use_cases": ["Diwali poster with HAPPY DIWALI rendered in glowing gold", "Neon sign in cyberpunk background", "Chalkboard menu design", "Logo + tagline as single design asset"]
+      },
+      "ROUTE_B_CLEAN_BACKGROUND_PLUS_OVERLAY": {
+        "description": "Generate clean visual scene/background WITHOUT text, then add text as a separate design layer",
+        "use_when": {
+          "conditions": [
+            "More than 4 words of text needed",
+            "Precise font control required (brand typography)",
+            "Multiple text elements at different sizes (headline + subhead + CTA)",
+            "Text placement needs to be pixel-perfect for the platform",
+            "A/B testing different copy on the same visual",
+            "Legal fine print or small body copy needed",
+            "Any ad requiring exact brand-compliant typography"
+          ],
+          "advantage": "Perfect typography control. No AI text rendering artifacts. Brand font compliance.",
+          "generation_instruction": "Generate image with CLEAN ZONES for text placement — do NOT generate without any text space consideration"
+        },
+        "clean_zone_engineering": {
+          "definition": "Areas in the generated image that are visually quiet enough for text to sit on",
+          "types": {
+            "dark_overlay_zone": "Generate dark area in composition where white text will go — specify in prompt",
+            "light_sky_zone": "Open sky or pale background area for dark text",
+            "color_block_zone": "Solid color area in composition for text overlay",
+            "blur_bg_zone": "Out-of-focus background area that text will sit above",
+            "product_free_zone": "Clear canvas area adjacent to product — text goes here"
+          },
+          "prompt_engineering_for_clean_zones": "Include in prompt: 'Leave [top|bottom|left|right] third of composition as [dark gradient|open sky|blurred background|solid color zone] for text overlay'",
+          "example_prompts": {
+            "bottom_text_zone": "...cinematic product shot, lower third of frame intentionally darker gradient fading to near-black for headline text placement, upper two-thirds sharp detailed...",
+            "left_text_zone": "...subject positioned right side of frame, left half soft blurred background with subtle color gradient, natural clean space for text overlay...",
+            "full_overlay_ready": "...full bleed lifestyle photography, slightly underexposed overall allowing light text to read, subject in right third, generous negative space left side..."
+          }
+        },
+        "example_use_cases": ["Instagram ad: product shot + brand headline + CTA button", "YouTube thumbnail: face + text overlay", "Business card: photo background + name/title/contact", "Google display ad: visual + headline + CTA"]
+      },
+      "ROUTE_C_PURE_GRAPHIC_NO_PHOTO": {
+        "description": "Generate entirely graphic/design-based asset — no photography",
+        "use_when": {
+          "conditions": [
+            "Flat design illustration needed",
+            "Icon or logo creation",
+            "Pattern or texture background",
+            "Infographic illustration elements",
+            "Brand mascot or character",
+            "Abstract visual identity element"
+          ],
+          "model_required": "recraft_v4 or recraft_v4_svg"
+        },
+        "then_overlay": "Add all text as design layer after generation"
+      },
+      "ROUTE_D_PHOTO_PLUS_GRAPHIC_COMPOSITE": {
+        "description": "Generate photo scene PLUS generate graphic elements SEPARATELY then composite",
+        "use_when": {
+          "conditions": [
+            "Poster needing photorealistic hero + decorative graphic frame",
+            "Festival poster: real product photo + festive graphic elements",
+            "Business card: portrait photo background + vector design overlay"
+          ],
+          "generation_count": 2,
+          "model_1": "FLUX_2_pro for photography layer",
+          "model_2": "recraft_v4 or ideogram for graphic elements",
+          "composite_in": "design_tool_post_generation"
+        }
+      }
+    },
+
+    "asset_type_to_route_map": {
+      "poster_festival": "ROUTE_A for simple greeting / ROUTE_B for complex poster with multiple copy elements",
+      "poster_event": "ROUTE_B — event posters need precise date/time/venue text",
+      "poster_product": "ROUTE_B — product + headline + subhead + CTA",
+      "ad_digital_social": "ROUTE_B always — ads need exact brand typography",
+      "youtube_thumbnail": "ROUTE_B — thumbnail text must be pixel-perfect large",
+      "business_card": "ROUTE_B or ROUTE_D — photo/texture background + text layer",
+      "billboard": "ROUTE_A if only 2-3 words / ROUTE_B if longer copy",
+      "logo": "ROUTE_C — recraft_v4_svg",
+      "brand_poster_typographic": "ROUTE_A via ideogram — when type IS the design",
+      "packaging_mockup": "ROUTE_D — product shot + label design composite",
+      "thumbnail_blog": "ROUTE_B — precise text over clean generated image"
+    },
+
+    "pre_generation_output_schema": {
+      "route": "A|B|C|D",
+      "route_rationale": "Why this route was chosen",
+      "generation_count": "1|2|3",
+      "generations": [
+        {
+          "generation_id": "1",
+          "purpose": "hero_visual|background_texture|graphic_element|etc",
+          "model_assigned": "",
+          "clean_zone_spec": "null or zone description",
+          "text_in_image": "boolean",
+          "text_string_if_applicable": ""
+        }
+      ],
+      "post_processing_plan": {
+        "overlay_text": "boolean",
+        "text_elements": [],
+        "composite_layers": [],
+        "color_grading_needed": "boolean",
+        "platform_resize_needed": "boolean"
+      }
+    }
+  },
+
+  "STAGE_7_PROMPT_ENGINEERING": {
+    "agent": "senior_prompt_engineer",
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.4,
+    "count": 2,
+    "job": "Translate ALL upstream intelligence into model-perfect prompts. Zero information lost in translation.",
+
+    "model_routing_decision_tree": {
+      "decision_1_text_in_image": "→ ideogram_turbo (primary) or recraft_v4 (vector/design)",
+      "decision_2_vector_logo_icon": "→ recraft_v4_svg",
+      "decision_3_illustration_design": "→ recraft_v4",
+      "decision_4_editing_existing": "→ flux_kontext or flux_kontext_max",
+      "decision_5_asian_aesthetic": "→ hunyuan_image",
+      "decision_6_fast_iteration": "→ flux_schnell_pixazo or flux_schnell_fal",
+      "decision_7_final_hero_photorealistic": "→ flux_2_pro or flux_2_max",
+      "decision_8_balanced_quality_speed": "→ flux_2_dev",
+      "default": "flux_2_dev"
+    },
+
+    "universal_prompt_rules": {
+      "rule_1_subject_first": "ALWAYS lead with the primary visual subject. Never start with mood or style.",
+      "rule_2_specificity": "Replace ALL vague adjectives with physical descriptions. 'Beautiful' → 'warm amber backlight casting long shadow'",
+      "rule_3_lighting_is_everything": "ALWAYS specify: source, direction, quality, color temperature",
+      "rule_4_camera_language": "Camera/lens reference is worth 50 other modifiers combined",
+      "rule_5_token_budget": "Front of prompt = highest CLIP weight. Bury key subject = lose it.",
+      "rule_6_negative_precision": "Generic negatives = noise. Model-specific artifact negatives = surgical.",
+      "rule_7_no_banned_words": ["hyperrealistic", "8K", "trending on artstation", "masterpiece", "best quality", "ultra detailed", "perfect", "gorgeous"]
+    },
+
+    "prompt_construction_template_by_model": {
+      "flux_2_pro": {
+        "structure": "[Subject with precise physical attributes], [environment with specific location context], [lighting: source + direction + quality + color temp], [camera body reference], [lens spec], [color grading], [style anchor], [one quality marker]",
+        "length": "80 to 150 words",
+        "lighting_examples": {
+          "studio_hero": "studio strobe key light 45° upper left f/8, silver reflector fill 1:2 ratio, hair light from behind, pure white seamless background",
+          "golden_hour": "golden hour sunlight 15° above horizon, warm 2800K, long shadow casting left, subtle lens flare, warm atmospheric haze",
+          "festival_glow": "warm amber diya glow 3000K, multiple small light sources at ground level, deep shadow between lights, atmospheric smoke particles",
+          "dramatic_fashion": "single key light 90° side, harsh shadow dividing face, cool 6500K, underexposed ambient, high contrast chiaroscuro"
+        },
+        "camera_references": {
+          "luxury_product": "Hasselblad H6D-400c, 120mm macro, f/11",
+          "portrait_editorial": "Leica M11, 90mm Summicron, f/2.8",
+          "fashion_hero": "Phase One IQ4 150MP, 110mm, f/5.6",
+          "street_lifestyle": "Leica Q3, 28mm, f/5.6, zone focus",
+          "cinematic": "ARRI Alexa 35, Zeiss Supreme Prime 50mm T1.5, anamorphic"
+        }
+      },
+      "flux_2_dev": {
+        "structure": "[Detailed subject description with context]. [Setting and atmosphere]. [Style reference, lighting, color mood]. [Camera or medium reference].",
+        "length": "60 to 100 words",
+        "note": "Same quality signal as pro but slightly shorter. Good for batch generation."
+      },
+      "flux_schnell": {
+        "structure": "[Subject], [key detail], [style], [mood], [one lighting cue]",
+        "length": "under 50 words",
+        "note": "Speed mode. Concept check only. Never final output."
+      },
+      "ideogram_turbo": {
+        "structure": "[Scene description, simple]. Text reading '[EXACT TEXT IN CAPS]' in [font style descriptor] at [position], [text color] on [background]. [Design style]. [Mood].",
+        "text_rule": "Text string MUST be in quotes. Use CAPITALS for importance/size.",
+        "font_descriptors": ["bold condensed sans-serif", "elegant serif", "handwritten script", "geometric display", "slab serif", "rounded playful"],
+        "effect_descriptors": ["glowing metallic gold", "3D extruded", "neon outline", "embossed", "outlined white with glow", "gradient fill", "shadow drop"],
+        "example": "'DIWALI SALE 50% OFF' in bold geometric sans-serif, glowing gold metallic effect, centered upper third, deep navy poster background, decorative geometric gold border frame, warm festival lighting"
+      },
+      "recraft_v4": {
+        "structure": "[Asset type], [subject], [design style movement reference], [color palette as hex or names], [visual treatment], [complexity level]",
+        "design_styles": ["flat design", "isometric illustration", "line art", "material design", "Memphis design", "Bauhaus-inspired", "Swiss International Style", "Art Deco geometric"],
+        "note": "Use design language. Reference design movements. Never photography language."
+      },
+      "recraft_v4_svg": {
+        "structure": "[Logo type: wordmark/abstract mark/pictorial], [concept], clean vector, [2 to 4 colors specified], simple geometric shapes, no gradients unless intentional, crisp edges, professional logo",
+        "hard_rules": ["max 5 colors", "specify no gradients unless wanted", "clean edges crisp lines", "never photorealistic language"]
+      },
+      "hunyuan_image": {
+        "structure_western": "[Subject], professional studio photography, [explicit lighting], natural skin tone, Western editorial style, [environment], [color grading]",
+        "structure_eastern": "[Subject], 写实风格, [lighting], [environment], soft color palette, delicate texture, [mood]",
+        "strengths": "portrait beauty fashion soft product nature"
+      }
+    },
+
+    "visual_element_translation_matrix": {
+      "emotion_to_lighting": {
+        "urgency": "harsh overhead lighting, high contrast, deep sharp shadows",
+        "desire": "warm 2800K backlight, soft diffused key, golden rim light, bokeh background",
+        "trust": "neutral 5600K, soft box light, even exposure, no dramatic shadows",
+        "awe": "single dramatic god-ray light source from above, atmospheric haze, deep shadows",
+        "joy": "bright diffused natural light, 5600K, cheerful overexposure slightly",
+        "pride": "warm golden side light 3200K, elevation angle, dignified shadow",
+        "exclusivity": "ultra-low key, single precision spotlight, 90% shadow, extreme contrast"
+      },
+      "color_palette_to_prompt_language": {
+        "#F4A62A": "warm amber gold like diya flame",
+        "#1A1035": "deep obsidian navy almost black with blue undertone",
+        "#E05B0E": "deep orange ember flame",
+        "#8B1A4A": "deep rani pink jewel-toned magenta-violet",
+        "#1D6B48": "deep mosque green",
+        "#C9A84C": "antique gold crescent",
+        "#E63946": "bold celebration red",
+        "black": "deep obsidian matte black",
+        "white": "pure clean white near 255,255,255",
+        "gold": "warm metallic 18-karat gold"
+      },
+      "composition_to_prompt": {
+        "HERO_DOMINANT": "subject centered full frame, minimal background detail, negative space around subject",
+        "TYPOGRAPHIC_LED": "use ideogram — not photography model for type-dominant",
+        "EDITORIAL_SPLIT": "subject positioned right third of frame, left two-thirds open clean background",
+        "DYNAMIC_DIAGONAL": "diagonal composition, subject angled 45 degrees, dynamic frame entry from lower left",
+        "ASYMMETRIC_TENSION": "intentionally off-center composition, large negative space upper left, subject lower right",
+        "MAXIMALIST_DENSITY": "richly layered composition, decorative elements filling frame, intricate detailed background"
+      },
+      "space_to_prompt": {
+        "premium_silence": "generous negative space, minimal elements, breathing room, luxury editorial",
+        "editorial_breathing": "balanced composition, purposeful negative space, magazine quality",
+        "active_structured": "grid-organized composition, efficient use of space, tech aesthetic",
+        "festival_rich": "richly detailed, layered decorative elements, celebratory density",
+        "scroll_stop": "high contrast bold composition, immediate visual impact, strong focal point"
+      },
+      "glow_to_prompt": {
+        "warm_diya_glow": "warm amber glow, diya illumination halo, golden light bokeh, festival warmth",
+        "cool_neon": "neon glow edges, cyberpunk ambient electric light, luminous rim",
+        "soft_product": "soft product glow, rim light halo, ethereal product luminosity",
+        "dramatic_cinematic": "chiaroscuro lighting, single dramatic source, cinematic shadow depth",
+        "golden_hour": "golden hour backlight, warm 2800K lens flare subtle, atmospheric warmth"
+      }
+    },
+
+    "negative_prompt_library": {
+      "flux_universal": "watermark, signature, text overlay, username, deformed anatomy, extra fingers, merged hands, floating elements, unnatural poses, plastic skin, overexposed",
+      "flux_portrait_specific": "smooth unnatural skin, plastic look, AI face, uncanny valley, overlit, flat lighting, stock photo feel, corporate smile",
+      "flux_product_specific": "distorted product, wrong proportions, floating, unrealistic reflections, wrong perspective, studio amateur quality",
+      "ideogram_specific": "misspelled text, garbled letters, illegible, wrong characters, blurry text, low contrast text",
+      "recraft_specific": "photorealistic, photography, noisy, blurry, complex background (for icons), gradients (if flat design)",
+      "fashion_specific": "unflattering pose, bad posture, corporate, stiff, unnatural expression, stock photo",
+      "festival_specific": "generic, western holiday, wrong cultural symbols, incorrect religious elements, stereotyped"
+    },
+
+    "prompt_output_schema": {
+      "schema": "single|multi|cd_integration|edit",
+      "model": "",
+      "prompt": "",
+      "negative_prompt": "",
+      "parameters": {
+        "aspect_ratio": "",
+        "steps": 0,
+        "guidance": 0.0,
+        "seed": null
+      },
+      "clean_zone_spec": "What space is left for text overlay — null if text in image",
+      "draft_variant": {
+        "model": "flux_schnell_pixazo",
+        "prompt": "shortened version for fast iteration",
+        "parameters": {"steps": 4, "guidance": 3.5}
+      },
+      "prompt_strategy_notes": "Min 3 key decisions explained. Why this model. Why this structure. What to change for variations.",
+      "post_processing_instructions": "Exactly what text, where, what font, what size, what color goes on top"
+    }
+  },
+
+  "STAGE_8_GENERATION": {
+    "agent": "generation_executor",
+    "job": "Execute prompts. Run in parallel where multiple generations needed. Return raw outputs.",
+
+    "execution_protocol": {
+      "parallel_execution": "Run ALL generations in parallel — never sequential unless dependency exists",
+      "seed_strategy": {
+        "first_run": "null (random) × 4 variants",
+        "refinement_run": "lock best seed, vary guidance scale ±0.5",
+        "final_run": "locked seed from refinement"
+      },
+      "quality_check_before_full_run": "Run flux_schnell draft first. Verify composition. Then run final model.",
+      "model_fallback_chain": {
+        "if_flux_2_pro_fails": "→ flux_2_dev",
+        "if_ideogram_fails_text": "→ try again with simpler text string",
+        "if_recraft_fails_svg": "→ recraft_v4 standard"
+      }
+    },
+
+    "generation_output_schema": {
+      "generation_id": "",
+      "model_used": "",
+      "prompt_used": "",
+      "seed_used": 0,
+      "output_url_or_base64": "",
+      "generation_time_ms": 0,
+      "artifacts_detected": [],
+      "clean_zone_achieved": "boolean",
+      "ready_for_post_processing": "boolean"
+    }
+  },
+
+  "STAGE_9_POST_PROCESSING": {
+    "agent": "post_processing_director",
+    "job": "Apply text overlays, color grades, compositing, platform crops. Transform raw generation into final asset.",
+
+    "text_overlay_system": {
+      "font_stack_priority": [
+        "Locked brand font (always first)",
+        "Bebas Neue (impact, headers, sports)",
+        "Playfair Display (editorial, luxury, premium)",
+        "Oswald (condensed, modern, efficiency)",
+        "Fraunces (distinctive, editorial, sophisticated)",
+        "Archivo Black (contemporary, bold, digital)",
+        "Anton (maximum impact, small spaces)"
+      ],
+      "text_placement_zones": {
+        "top_center": "brand name, event title, platform username",
+        "upper_left": "logo, brand mark",
+        "center_dominant": "typographic-led headline",
+        "lower_third": "headline + subhead stack (most common ad layout)",
+        "bottom_right": "CTA button",
+        "bottom_left": "website, small text",
+        "full_overlay": "gradient overlay bottom to transparent, text floats above"
+      },
+      "overlay_treatment_by_background": {
+        "busy_background": "semi-transparent dark rect behind text rgba(0,0,0,0.55)",
+        "dark_background": "white text no overlay needed",
+        "light_background": "dark text no overlay needed",
+        "gradient_background": "text in highest contrast zone",
+        "natural_photo_varied": "add gradient sweep then text on gradient"
+      }
+    },
+
+    "color_grading_presets": {
+      "luxury_editorial": "slight cyan in shadows, warm golden midtones, clean whites, -10 saturation overall, +subtle grain",
+      "vibrant_social": "+15 saturation, lifted shadows, punchy midtones, +10 clarity",
+      "festival_warm": "+20 orange warmth, deep shadows, +15 saturation reds and yellows",
+      "clean_tech": "neutral grading, cool highlights, balanced exposure, minimal grain",
+      "cinematic_dark": "crushed blacks, pulled shadows, slight blue-green shadows, warm highlights",
+      "documentary_real": "natural minimal grade, film curve subtle, slight desaturation"
+    },
+
+    "platform_finalization_checklist": {
+      "all_platforms": ["correct dimensions confirmed", "file size under platform limit", "safe zones respected", "logo visible", "text legible at platform display size"],
+      "youtube_thumbnail": ["readable at 120x68px (mobile playlist)", "face expression clear", "text max 6 words", "high contrast background"],
+      "instagram_feed": ["visually stops scroll in feed context", "CTA visible", "brand identifiable in 1.5 seconds"],
+      "print": ["300dpi confirmed", "CMYK color space", "bleed added 3mm all sides", "safe margin 10mm from trim"],
+      "billboard": ["max 7 words confirmed", "readable simulation at 300ft", "no fine print", "single message"]
+    }
+  },
+
+  "STAGE_10_QUALITY_GATE": {
+    "agent": "quality_critic_agent",
+    "model": "claude-sonnet-4-20250514",
+    "temperature": 0.1,
+    "authority": "VETO POWER. Nothing ships without approval. Scores below threshold → revision loop.",
+
+    "12_dimension_scoring": {
+      "dimensions": [
+        {"id": "concept_integrity", "weight": 1.2, "description": "Does execution honor the concept?"},
+        {"id": "emotional_precision", "weight": 1.3, "description": "Does it trigger the EXACT target emotion?"},
+        {"id": "visual_hierarchy", "weight": 1.1, "description": "Is the reading path effortless?"},
+        {"id": "typographic_excellence", "weight": 1.0, "description": "Does type serve the design?"},
+        {"id": "color_execution", "weight": 1.0, "description": "Is palette executed with precision?"},
+        {"id": "platform_fitness", "weight": 1.2, "description": "Was this made FOR where it lives?"},
+        {"id": "brand_coherence", "weight": 1.1, "description": "Recognizable as brand without logo?"},
+        {"id": "originality", "weight": 1.0, "description": "Have I seen this before?"},
+        {"id": "execution_quality", "weight": 1.1, "description": "Zero artifacts. Technical perfection."},
+        {"id": "audience_resonance", "weight": 1.2, "description": "Will TARGET audience respond as intended?"},
+        {"id": "cultural_intelligence", "weight": 1.3, "description": "Zero cultural errors. Full marks or escalate."},
+        {"id": "want_one_test", "weight": 1.2, "description": "Does a stranger want to own/share this?"}
+      ],
+      "minimum_to_ship": 8.5,
+      "auto_reject_below": 3.0,
+      "cultural_escalate_below": 6.0
+    },
+
+    "beast_standard_tests": {
+      "stranger_test": "Zero context stranger understands message in 1.5 seconds",
+      "scroll_stop_test": "In 100 post feed, this stops the thumb",
+      "remove_color_test": "Composition works in pure black and white",
+      "10_percent_size_test": "Design communicates at 10% of intended size",
+      "tomorrow_test": "Looks current, not dated in 6 months",
+      "brand_remove_test": "Remove logo — still feels like the brand",
+      "emotion_test": "Name the single emotion in 2 words",
+      "competitor_test": "Better than top 3 competitors similar assets",
+      "context_test": "Fits where it will actually live",
+      "memory_test": "24 hours later describable from memory"
+    },
+
+    "revision_routing": {
+      "concept_integrity_low": "→ creative_director",
+      "emotional_precision_low": "→ creative_director + design_director",
+      "visual_hierarchy_low": "→ design_director",
+      "typographic_excellence_low": "→ senior_designer",
+      "color_execution_low": "→ brand_intelligence + senior_designer",
+      "platform_fitness_low": "→ senior_designer + prompt_engineer",
+      "brand_coherence_low": "→ brand_intelligence → design_director",
+      "originality_low": "→ creative_director (go back to concept)",
+      "execution_quality_low": "→ prompt_engineer (fix prompts + regenerate)",
+      "audience_resonance_low": "→ creative_director + copywriter",
+      "cultural_intelligence_issue": "→ HUMAN_ESCALATION_REQUIRED",
+      "want_one_low": "→ creative_director (concept needs different entry point)"
+    },
+
+    "qc_output_schema": {
+      "verdict": "ELITE|APPROVED|CONDITIONAL|REVISE|MAJOR_REVISE|REJECT",
+      "overall_score": 0.0,
+      "dimension_scores": {},
+      "revision_instructions": [],
+      "what_is_working": [],
+      "do_not_change": [],
+      "cultural_flags": [],
+      "iteration_number": 1,
+      "max_iterations_before_escalate": 3
+    }
+  },
+
+  "STAGE_11_OUTPUT": {
+    "agent": "output_packager",
+    "job": "Package approved assets with full documentation for client delivery",
+
+    "delivery_package": {
+      "final_assets": {
+        "primary": {"file": "", "format": "jpg|png|svg|pdf", "dimensions": "", "dpi": 0},
+        "variants": [],
+        "raw_generation": "stored_for_editing"
+      },
+      "asset_documentation": {
+        "brief_summary": "",
+        "concept_statement": "",
+        "creative_rationale": "Why these visual choices were made",
+        "color_palette": [],
+        "fonts_used": [],
+        "models_used": [],
+        "prompts_used": []
+      },
+      "platform_export_kit": {
+        "instagram_feed": "",
+        "instagram_story": "",
+        "youtube_thumbnail": "",
+        "print_ready": ""
+      }
+    }
+  },
+
+  "LEARNING_ENGINE": {
+    "agent": "learning_engine",
+    "job": "Log every decision. Track performance. Improve every agent over time.",
+    "runs": "after_every_approved_output",
+
+    "what_gets_logged": {
+      "triage_accuracy": "Was asset type / platform correctly identified first try?",
+      "route_decision": "Which pre-generation route was chosen and why",
+      "model_performance": "Which model produced best result for this brief type",
+      "prompt_patterns": "Which prompt structures produced best outputs per model",
+      "revision_cycles": "How many QC iterations before approval",
+      "concept_direction_chosen": "Was A, B, or C selected?",
+      "execution_time_total": "End-to-end minutes"
+    },
+
+    "improvement_triggers": {
+      "after_10_same_asset_type": "Generate pattern report. Route improvements to relevant agents.",
+      "after_5_revisions_same_dimension": "That dimension's agent system prompt needs improvement",
+      "after_3_consecutive_cultural_flags": "Cultural intelligence module needs expansion",
+      "monthly": "Full system benchmark vs sample outputs from competitor tools"
+    },
+
+    "north_star_metric": "QC average score 8.5 today → 9.0 in 90 days → 9.3 in 180 days"
+  },
+
+  "CHEAP_TO_PREMIUM_MODEL_ROUTING": {
+    "description": "Route to the cheapest model that can achieve the required quality for the use case",
+    "tiers": {
+      "tier_1_draft_free": {
+        "models": ["flux_schnell_pixazo", "flux_schnell_fal"],
+        "cost": "lowest",
+        "use_for": "concept_checking composition_proof fast_client_preview",
+        "quality": "draft_only"
+      },
+      "tier_2_standard": {
+        "models": ["flux_2_dev", "recraft_v4", "ideogram_turbo"],
+        "cost": "medium",
+        "use_for": "social_feed_ads standard_posters most_thumbnails brand_graphics",
+        "quality": "production_ready_for_digital"
+      },
+      "tier_3_premium": {
+        "models": ["flux_2_pro", "flux_kontext_max", "hunyuan_image"],
+        "cost": "high",
+        "use_for": "hero_campaign_images luxury_product_shots key_visuals print_adjacent",
+        "quality": "premium_commercial"
+      },
+      "tier_4_maximum": {
+        "models": ["flux_2_max"],
+        "cost": "highest",
+        "use_for": "print_quality billboard_quality magazine_hero ultra_premium_campaign",
+        "quality": "maximum_fidelity"
+      }
+    },
+    "routing_rule": "Always start at tier appropriate to output use. Never use tier_4 for digital social. Never use tier_1 for final outputs.",
+    "smart_escalation": "If tier_2 QC score < 7.5, automatically escalate to tier_3 for that asset"
+  },
+
+  "ASSET_SPECIFIC_PLAYBOOKS": {
+    "youtube_thumbnail_playbook": {
+      "non_negotiables": ["face OR bold text OR both", "max 6 words on screen", "HIGH contrast background", "emotion visible"],
+      "composition": "THUMBNAIL_HALVES — subject one side, text other",
+      "color_strategy": "high contrast against YouTube white UI — dark or bright BG",
+      "text_treatment": "ROUTE_B always — generate clean scene, overlay large bold text",
+      "model_rec": "flux_2_dev for scene, text overlay in post",
+      "glow": "none or soft product if product thumbnail",
+      "final_check": "readable at 120x68px mobile"
+    },
+    "instagram_feed_ad_playbook": {
+      "non_negotiables": ["stops scroll in 1.5 seconds", "brand identifiable", "CTA visible"],
+      "composition": "HERO_DOMINANT or EDITORIAL_SPLIT",
+      "text_treatment": "ROUTE_B — clean zone lower third, text overlay with semi-transparent treatment",
+      "model_rec": "flux_2_dev or flux_2_pro",
+      "space": "editorial_breathing or scroll_stop",
+      "final_check": "works without audio, works without caption"
+    },
+    "business_card_playbook": {
+      "non_negotiables": ["name readable", "contact info clear", "brand personality visible"],
+      "composition": "depends on style — minimal|split|full_bleed_photo",
+      "text_treatment": "ROUTE_B or ROUTE_D always",
+      "model_rec": "ROUTE_B: flux_2_dev background + text overlay / ROUTE_D: photo + recraft pattern",
+      "print_spec": "85x55mm at 300dpi, 3mm bleed, CMYK export",
+      "styles": {
+        "minimal": "white card, name large, everything else small, single color accent",
+        "premium": "dark card, gold foil effect, embossed feel, minimal text",
+        "creative": "full bleed visual, name floats over, unconventional layout",
+        "tech": "grid background, monospace accents, code aesthetic"
+      }
+    },
+    "festival_poster_playbook": {
+      "non_negotiables": ["festival palette active", "cultural motifs present and correct", "emotion = joy or warmth or celebration"],
+      "composition": "MAXIMALIST_DENSITY for traditional / HERO_DOMINANT for modern",
+      "text_treatment": "ROUTE_A for simple greeting (ideogram) / ROUTE_B for complex poster",
+      "model_rec": "ideogram_turbo for text-heavy / flux_2_pro for scene-heavy / recraft for decorative elements",
+      "glow": "warm_diya for Diwali / diffuse_warm for Holi / golden for Eid",
+      "cultural_check": "MANDATORY before shipping — verify all symbols, colors, copy are culturally correct"
+    },
+    "billboard_playbook": {
+      "non_negotiables": ["MAX 7 words", "readable at 300ft", "ONE message only", "no fine print"],
+      "composition": "HERO_DOMINANT or TYPOGRAPHIC_LED",
+      "text_treatment": "ROUTE_A if 2-3 words (ideogram) / ROUTE_B if brand name + tagline",
+      "model_rec": "flux_2_max for hero image / ideogram for typographic-led",
+      "font_size": "300pt+ in source file for 300ft visibility",
+      "final_check": "show to someone for 2 seconds. what did they remember?"
+    },
+    "logo_playbook": {
+      "non_negotiables": ["works at 16x16px", "works on white AND dark background", "max 3 colors", "scalable"],
+      "route": "ROUTE_C always",
+      "model": "recraft_v4_svg",
+      "types": {
+        "wordmark": "brand name as typography",
+        "lettermark": "initials as mark",
+        "abstract_mark": "geometric symbol",
+        "pictorial_mark": "simplified recognizable icon",
+        "combination": "mark + wordmark together"
+      },
+      "prompt_rule": "Shape-first. Color count explicit. Clean edges. No gradients unless intentional."
+    }
+  }
+}

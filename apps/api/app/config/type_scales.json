@@ -1,0 +1,552 @@
+{
+  "_meta": {
+    "system": "BEAST Creative Studio — Typography Scales & Type System Intelligence",
+    "version": "2026-Q2",
+    "updated_at": "2026-04-07",
+    "philosophy": "Typography is not font selection. It's hierarchy, rhythm, tension, voice. Every size decision is a power decision.",
+    "scales_count": 5
+  },
+
+  "type_scales": {
+    "poster_impact": {
+      "scale_id": "poster_impact",
+      "scale_name": "POSTER IMPACT",
+      "use_case": "Event posters, social feed ads, scroll-stop visuals, bold declarations",
+
+      "philosophy": "Maximum contrast. Impossible to ignore. Type as architecture.",
+
+      "scale_px": {
+        "display_hero": {
+          "size_px": 96,
+          "size_rem": 6.0,
+          "line_height": 1.0,
+          "tracking_em": -0.05,
+          "weight": 900,
+          "case": "CAPS",
+          "role": "The declaration. Single word or 2-3 word power phrase.",
+          "max_chars": 15
+        },
+        "headline_primary": {
+          "size_px": 64,
+          "size_rem": 4.0,
+          "line_height": 1.1,
+          "tracking_em": -0.03,
+          "weight": 700,
+          "case": "CAPS or Title Case",
+          "role": "Main message. Brand name or event title.",
+          "max_chars": 30
+        },
+        "subheadline": {
+          "size_px": 32,
+          "size_rem": 2.0,
+          "line_height": 1.3,
+          "tracking_em": 0,
+          "weight": 600,
+          "case": "Sentence case",
+          "role": "Supporting message. Context or tagline.",
+          "max_chars": 50
+        },
+        "body_large": {
+          "size_px": 20,
+          "size_rem": 1.25,
+          "line_height": 1.5,
+          "tracking_em": 0,
+          "weight": 400,
+          "case": "Sentence case",
+          "role": "Body copy if needed. Event details.",
+          "max_chars": 100
+        },
+        "cta_button": {
+          "size_px": 18,
+          "size_rem": 1.125,
+          "line_height": 1.2,
+          "tracking_em": 0.05,
+          "weight": 700,
+          "case": "CAPS",
+          "role": "Call to action button text.",
+          "max_chars": 20
+        },
+        "caption_small": {
+          "size_px": 12,
+          "size_rem": 0.75,
+          "line_height": 1.4,
+          "tracking_em": 0,
+          "weight": 400,
+          "case": "Sentence case",
+          "role": "Fine print. Dates, legal, disclaimers.",
+          "max_chars": 200
+        }
+      },
+
+      "hierarchy_ratio": "8:5.33:2.67:1.67:1.5:1",
+      "contrast_strategy": "extreme_size_jumps_maximum_visual_hierarchy",
+
+      "typeface_recommendations": {
+        "display_hero": ["Anton", "Bebas Neue", "Archivo Black", "Oswald"],
+        "headline": ["Bebas Neue", "Montserrat Black", "Raleway Bold"],
+        "body": ["Raleway", "Montserrat", "Open Sans"],
+        "caption": ["Raleway Light", "Montserrat Regular"]
+      },
+
+      "platform_fit": ["instagram_feed", "facebook_post", "event_poster", "story_ad"]
+    },
+
+    "editorial_refined": {
+      "scale_id": "editorial_refined",
+      "scale_name": "EDITORIAL REFINED",
+      "use_case": "Print magazines, luxury brands, long-form content, sophisticated storytelling",
+
+      "philosophy": "Elegant restraint. Typographic craft visible. Every letter kerned with intention.",
+
+      "scale_px": {
+        "display_hero": {
+          "size_px": 72,
+          "size_rem": 4.5,
+          "line_height": 1.1,
+          "tracking_em": -0.03,
+          "weight": 300,
+          "case": "Title Case or Sentence",
+          "role": "Editorial headline. Elegant statement.",
+          "max_chars": 40
+        },
+        "headline_primary": {
+          "size_px": 48,
+          "size_rem": 3.0,
+          "line_height": 1.2,
+          "tracking_em": -0.02,
+          "weight": 400,
+          "case": "Title Case",
+          "role": "Article title or section header.",
+          "max_chars": 60
+        },
+        "subheadline": {
+          "size_px": 24,
+          "size_rem": 1.5,
+          "line_height": 1.4,
+          "tracking_em": 0,
+          "weight": 300,
+          "case": "Sentence case",
+          "role": "Deck copy. Supporting narrative.",
+          "max_chars": 100
+        },
+        "body_large": {
+          "size_px": 18,
+          "size_rem": 1.125,
+          "line_height": 1.6,
+          "tracking_em": 0,
+          "weight": 400,
+          "case": "Sentence case",
+          "role": "Intro paragraph. Pull quote.",
+          "max_chars": 200
+        },
+        "body_regular": {
+          "size_px": 16,
+          "size_rem": 1.0,
+          "line_height": 1.65,
+          "tracking_em": 0,
+          "weight": 400,
+          "case": "Sentence case",
+          "role": "Main body text. Readable at length.",
+          "max_chars": 500
+        },
+        "caption_small": {
+          "size_px": 12,
+          "size_rem": 0.75,
+          "line_height": 1.5,
+          "tracking_em": 0.02,
+          "weight": 300,
+          "case": "Sentence case",
+          "role": "Image captions. Footnotes.",
+          "max_chars": 150
+        }
+      },
+
+      "hierarchy_ratio": "4.5:3:1.5:1.125:1:0.75",
+      "contrast_strategy": "subtle_weight_contrast_refined_size_progression",
+
+      "typeface_recommendations": {
+        "display_hero": ["Playfair Display", "Fraunces", "Lora"],
+        "headline": ["Playfair Display", "Crimson Pro"],
+        "body": ["Lora", "Crimson Text", "Georgia"],
+        "caption": ["Lato Light", "Raleway Light"]
+      },
+
+      "platform_fit": ["print_magazine", "luxury_website", "email_newsletter", "linkedin_article"]
+    },
+
+    "digital_efficiency": {
+      "scale_id": "digital_efficiency",
+      "scale_name": "DIGITAL EFFICIENCY",
+      "use_case": "SaaS products, tech brands, dashboards, mobile apps, UI/UX",
+
+      "philosophy": "Clarity at all sizes. Functional beauty. Scalable across devices.",
+
+      "scale_px": {
+        "display_hero": {
+          "size_px": 56,
+          "size_rem": 3.5,
+          "line_height": 1.15,
+          "tracking_em": -0.02,
+          "weight": 700,
+          "case": "Title Case",
+          "role": "Page hero headline. Landing page H1.",
+          "max_chars": 50
+        },
+        "headline_primary": {
+          "size_px": 40,
+          "size_rem": 2.5,
+          "line_height": 1.2,
+          "tracking_em": -0.01,
+          "weight": 600,
+          "case": "Title Case",
+          "role": "Section headers. Feature titles.",
+          "max_chars": 60
+        },
+        "headline_secondary": {
+          "size_px": 28,
+          "size_rem": 1.75,
+          "line_height": 1.3,
+          "tracking_em": 0,
+          "weight": 600,
+          "case": "Title Case",
+          "role": "Subsection headers. Card titles.",
+          "max_chars": 70
+        },
+        "body_large": {
+          "size_px": 18,
+          "size_rem": 1.125,
+          "line_height": 1.5,
+          "tracking_em": 0,
+          "weight": 400,
+          "case": "Sentence case",
+          "role": "Intro text. Important copy.",
+          "max_chars": 150
+        },
+        "body_regular": {
+          "size_px": 16,
+          "size_rem": 1.0,
+          "line_height": 1.6,
+          "tracking_em": 0,
+          "weight": 400,
+          "case": "Sentence case",
+          "role": "Main UI text. Readable default.",
+          "max_chars": 300
+        },
+        "body_small": {
+          "size_px": 14,
+          "size_rem": 0.875,
+          "line_height": 1.5,
+          "tracking_em": 0,
+          "weight": 400,
+          "case": "Sentence case",
+          "role": "Secondary info. Metadata.",
+          "max_chars": 200
+        },
+        "caption_tiny": {
+          "size_px": 12,
+          "size_rem": 0.75,
+          "line_height": 1.4,
+          "tracking_em": 0.01,
+          "weight": 400,
+          "case": "Sentence case",
+          "role": "Tooltips. Legal. Timestamps.",
+          "max_chars": 100
+        }
+      },
+
+      "hierarchy_ratio": "3.5:2.5:1.75:1.125:1:0.875:0.75",
+      "contrast_strategy": "functional_clarity_subtle_weight_changes",
+
+      "typeface_recommendations": {
+        "display_hero": ["Inter", "SF Pro Display", "Manrope"],
+        "headline": ["Inter", "DM Sans", "Manrope"],
+        "body": ["Inter", "SF Pro Text", "System UI"],
+        "caption": ["Inter", "Roboto"]
+      },
+
+      "platform_fit": ["web_app", "mobile_app", "saas_landing", "dashboard_ui", "product_page"]
+    },
+
+    "billboard_distance": {
+      "scale_id": "billboard_distance",
+      "scale_name": "BILLBOARD DISTANCE",
+      "use_case": "Out-of-home advertising, billboards, bus shelters, airport displays, stadium signage",
+
+      "philosophy": "Readable at 300 feet. 2 seconds to understand. Maximum simplicity.",
+
+      "scale_px": {
+        "display_hero": {
+          "size_px": 300,
+          "size_pt_at_source": 300,
+          "line_height": 0.9,
+          "tracking_em": -0.04,
+          "weight": 900,
+          "case": "CAPS",
+          "role": "The entire message. 3-7 words max.",
+          "max_words": 7,
+          "readable_at": "300_feet_40mph"
+        },
+        "tagline_secondary": {
+          "size_px": 120,
+          "size_pt_at_source": 120,
+          "line_height": 1.0,
+          "tracking_em": 0,
+          "weight": 700,
+          "case": "Title Case",
+          "role": "Brand name or URL. Single line.",
+          "max_chars": 20,
+          "readable_at": "150_feet"
+        },
+        "legal_minimum": {
+          "size_px": 60,
+          "size_pt_at_source": 60,
+          "line_height": 1.2,
+          "tracking_em": 0.02,
+          "weight": 400,
+          "case": "Sentence case",
+          "role": "ONLY if legally required. Avoid if possible.",
+          "max_chars": 30,
+          "readable_at": "50_feet"
+        }
+      },
+
+      "hierarchy_ratio": "10:4:2",
+      "contrast_strategy": "extreme_single_message_dominance",
+
+      "typeface_recommendations": {
+        "display_hero": ["Anton", "Bebas Neue", "Archivo Black", "Impact"],
+        "tagline": ["Bebas Neue", "Oswald Bold"],
+        "legal": ["Arial Bold", "Helvetica Bold"]
+      },
+
+      "platform_fit": ["billboard_outdoor", "bus_shelter", "airport_display", "stadium_signage"],
+
+      "mandatory_rules": [
+        "MAX 7 words total on entire billboard",
+        "Font size minimum 300pt at source file for primary message",
+        "High contrast mandatory (black on yellow, white on dark)",
+        "No fine print except legal requirements",
+        "No URLs unless absolutely necessary (QR code preferred)",
+        "Readable in 2 seconds at 40mph test required"
+      ]
+    },
+
+    "mobile_thumb_zone": {
+      "scale_id": "mobile_thumb_zone",
+      "scale_name": "MOBILE THUMB ZONE",
+      "use_case": "Mobile-first social (TikTok, Instagram Stories, Snapchat), vertical video, app UI",
+
+      "philosophy": "Readable with one thumb. Tappable touch targets. Vertical optimization.",
+
+      "scale_px": {
+        "display_hero": {
+          "size_px": 80,
+          "size_rem": 5.0,
+          "line_height": 1.0,
+          "tracking_em": -0.04,
+          "weight": 900,
+          "case": "CAPS",
+          "role": "Story headline. Max 6 words.",
+          "max_words": 6,
+          "thumb_clearance": "safe_zone_top_250px_bottom_250px"
+        },
+        "headline_primary": {
+          "size_px": 56,
+          "size_rem": 3.5,
+          "line_height": 1.1,
+          "tracking_em": -0.02,
+          "weight": 700,
+          "case": "CAPS or Title",
+          "role": "Primary message. Instant read.",
+          "max_chars": 30
+        },
+        "body_large": {
+          "size_px": 28,
+          "size_rem": 1.75,
+          "line_height": 1.4,
+          "tracking_em": 0,
+          "weight": 600,
+          "case": "Sentence case",
+          "role": "Supporting text. Quick read.",
+          "max_chars": 50
+        },
+        "cta_button": {
+          "size_px": 20,
+          "size_rem": 1.25,
+          "line_height": 1.2,
+          "tracking_em": 0.05,
+          "weight": 700,
+          "case": "CAPS",
+          "role": "Swipe up. Tap here. Action.",
+          "max_chars": 15,
+          "min_touch_target_px": 44
+        },
+        "caption_small": {
+          "size_px": 16,
+          "size_rem": 1.0,
+          "line_height": 1.5,
+          "tracking_em": 0,
+          "weight": 400,
+          "case": "Sentence case",
+          "role": "Username. Timestamp. Metadata.",
+          "max_chars": 50
+        }
+      },
+
+      "hierarchy_ratio": "5:3.5:1.75:1.25:1",
+      "contrast_strategy": "thumb_friendly_clear_tap_zones_high_contrast",
+
+      "typeface_recommendations": {
+        "display_hero": ["Bebas Neue", "Anton", "Montserrat Black"],
+        "headline": ["Montserrat Bold", "Raleway Bold"],
+        "body": ["Montserrat", "Raleway"],
+        "cta": ["Montserrat Black", "Bebas Neue"]
+      },
+
+      "platform_fit": ["instagram_story", "tiktok", "snapchat", "mobile_app_vertical"],
+
+      "safe_zones": {
+        "top_px": 250,
+        "bottom_px": 250,
+        "note": "Avoid placing critical text in top 250px (profile pic) and bottom 250px (CTA buttons)",
+        "safe_zone_center": "pixels_250_to_1670_vertical"
+      }
+    }
+  },
+
+  "typography_execution_laws": {
+    "universal_rules": {
+      "max_typefaces_per_asset": 2,
+      "max_weights_per_typeface": 3,
+      "max_sizes_in_hierarchy": 6,
+      "kerning_mandate": "Display type (48px+) must be manually kerned or tight tracked",
+      "line_length_optimal_chars": 65,
+      "line_length_max_chars": 90,
+      "widows_orphans": "forbidden_in_print_and_premium_digital"
+    },
+
+    "tracking_rules": {
+      "display_48px_plus": {
+        "tracking_em": -0.03,
+        "description": "Tight tracking. Tighten until uncomfortable, back off 10%."
+      },
+      "headline_24_to_48px": {
+        "tracking_em": -0.02,
+        "description": "Slightly tight. Improves readability at large sizes."
+      },
+      "body_14_to_20px": {
+        "tracking_em": 0,
+        "description": "Default tracking. Let font breathe."
+      },
+      "ALL_CAPS": {
+        "tracking_em": 0.05,
+        "description": "Open tracking. CAPS need air to read well."
+      },
+      "small_text_12px_below": {
+        "tracking_em": 0.01,
+        "description": "Slightly open. Improves legibility at tiny sizes."
+      }
+    },
+
+    "weight_contrast_psychology": {
+      "Black_with_Light": "Maximum sophistication. Editorial luxury.",
+      "Bold_with_Regular": "Standard professional. Safe readable.",
+      "Black_with_Medium": "Tech modern. Clean confident.",
+      "Light_with_Light": "Ultra minimal. Risky but powerful if right context."
+    },
+
+    "case_psychology": {
+      "ALL_CAPS": {
+        "emotion": "power_urgency_declaration_authority",
+        "use_when": "headlines_cta_buttons_brand_names",
+        "tracking_adjustment": "+0.05em to +0.1em required"
+      },
+      "Title_Case": {
+        "emotion": "formal_corporate_trustworthy_traditional",
+        "use_when": "headlines_professional_contexts",
+        "caution": "Can feel dated if overused"
+      },
+      "Sentence_case": {
+        "emotion": "warmth_approachability_storytelling_modern",
+        "use_when": "body_copy_conversational_brands",
+        "best_for": "Gen Z millennial targeting"
+      },
+      "lowercase_only": {
+        "emotion": "casual_friendly_anti_corporate_modern",
+        "use_when": "youth_brands_tech_startups",
+        "caution": "Can harm legibility in small sizes"
+      }
+    },
+
+    "text_on_image_treatments": {
+      "overlay_dark": {
+        "css": "background: rgba(0,0,0,0.5); padding: 20px;",
+        "use_when": "Universal legibility needed. Safe bet.",
+        "platforms": ["all"]
+      },
+      "color_block": {
+        "css": "background: brand_color; padding: 15px 30px;",
+        "use_when": "Bold editorial. Brand color showcase.",
+        "platforms": ["instagram", "print"]
+      },
+      "text_shadow": {
+        "css": "text-shadow: 0 2px 20px rgba(0,0,0,0.8);",
+        "use_when": "Subtle depth. Maintains image visibility.",
+        "platforms": ["social", "web"]
+      },
+      "blur_behind": {
+        "css": "backdrop-filter: blur(20px); background: rgba(255,255,255,0.1);",
+        "use_when": "Modern glass effect. Premium feel.",
+        "platforms": ["web", "app_ui"]
+      },
+      "outlined_text": {
+        "css": "-webkit-text-stroke: 2px white; color: black;",
+        "use_when": "Maximum legibility on any background.",
+        "platforms": ["youtube_thumbnail", "tiktok"]
+      },
+      "knockout_contrast": {
+        "css": "White text on dark image zones OR black text on light zones",
+        "use_when": "Clean. High contrast. No overlay needed.",
+        "platforms": ["luxury_editorial", "minimal_brands"]
+      }
+    }
+  },
+
+  "scale_selection_rules": {
+    "by_platform": {
+      "instagram_feed": "poster_impact",
+      "instagram_story": "mobile_thumb_zone",
+      "youtube_thumbnail": "poster_impact",
+      "linkedin": "digital_efficiency",
+      "print_magazine": "editorial_refined",
+      "billboard": "billboard_distance",
+      "tiktok": "mobile_thumb_zone",
+      "web_app": "digital_efficiency",
+      "luxury_website": "editorial_refined"
+    },
+
+    "by_brand_personality": {
+      "bold_disruptive": "poster_impact",
+      "refined_luxury": "editorial_refined",
+      "tech_efficient": "digital_efficiency",
+      "mass_market_simple": "poster_impact",
+      "editorial_storytelling": "editorial_refined"
+    },
+
+    "by_viewing_distance": {
+      "300_feet_plus": "billboard_distance",
+      "10_to_30_feet": "poster_impact",
+      "arm_length_print": "editorial_refined",
+      "screen_desktop": "digital_efficiency",
+      "screen_mobile": "mobile_thumb_zone"
+    }
+  },
+
+  "notes": [
+    "Typography scale is the invisible grid — break it and design falls apart",
+    "Hierarchy ratio (e.g., 8:5.33:2.67) creates visual rhythm — random sizes = visual chaos",
+    "Tracking (letter-spacing) is as important as size — neglect it = amateur",
+    "Platform constrains scale choice — billboard needs billboard_distance, not editorial_refined",
+    "Learning Engine should track which scales convert best per platform + industry"
+  ]
+}

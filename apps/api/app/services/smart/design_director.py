@@ -23,6 +23,8 @@ import os
 import re
 from typing import Dict, List, Optional
 
+from app.config.loader import config as beast_config
+
 logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -175,22 +177,94 @@ class DesignDirector:
         # Get composition archetype from Creative Bible
         comp_archetype = creative_bible.get("composition_archetype", "hero_dominant")
 
-        # Deterministic decree for known archetypes
-        if comp_archetype in COMPOSITION_ARCHETYPES:
-            archetype_data = COMPOSITION_ARCHETYPES[comp_archetype]
+        # Load archetype from BeastConfig (with legacy fallback)
+        archetype_data = beast_config.get_composition_archetype(comp_archetype)
+        if not archetype_data:
+            # Fallback to legacy if not in BeastConfig
+            archetype_data = COMPOSITION_ARCHETYPES.get(comp_archetype)
 
-            # Select type scale based on industry + goal
-            type_scale_key = self._select_type_scale(industry, triage.get("goal", ""))
-            type_scale_data = TYPE_SCALES[type_scale_key]
+        # Deterministic decree for known archetypes
+        if archetype_data:
+            # Select type scale based on platform + brand personality
+            type_scale_key = beast_config.select_scale_by_platform(platform)
+            # Override with brand personality if available
+            if brand_palette.get("font_personality"):
+                type_scale_key = beast_config.select_scale_by_brand_personality(
+                    brand_palette.get("font_personality")
+                )
+
+            # Load type scale from BeastConfig (with legacy fallback)
+            type_scale_data = beast_config.get_type_scale(type_scale_key)
+            if not type_scale_data:
+                # Fallback to legacy if not in BeastConfig
+                type_scale_key_legacy = self._select_type_scale(industry, triage.get("goal", ""))
+                type_scale_data = TYPE_SCALES.get(type_scale_key_legacy, TYPE_SCALES["balanced"])
+
+            logger.info(f"[DesignDirector] BeastConfig: archetype={comp_archetype}, type_scale={type_scale_key}")
+
+            # Adapt to BeastConfig structure (composition_archetypes.json) or legacy
+            is_beast_config = "composition_rules" in archetype_data
+
+            if is_beast_config:
+                # BeastConfig structure
+                comp_rules = archetype_data.get("composition_rules", {})
+                space_char = archetype_data.get("space_character", {})
+                typo_treat = archetype_data.get("typography_treatment", {})
+
+                grid_type = comp_rules.get("grid", "12-column asymmetric")
+                description = archetype_data.get("visual_description", "Composition archetype")
+                hierarchy = typo_treat.get("acceptable_placements", ["top_center", "bottom_third"])
+                whitespace = space_char.get("type", "balanced")
+            else:
+                # Legacy structure
+                grid_type = archetype_data.get("grid", "12-column")
+                description = archetype_data.get("description", "Composition archetype")
+                hierarchy = archetype_data.get("hierarchy", ["hero_image", "headline", "cta"])
+                whitespace = archetype_data.get("whitespace", "balanced")
+
+            # Build type_scale structure (adapt to BeastConfig or legacy)
+            is_beast_type_scale = "scale_px" in type_scale_data
+
+            if is_beast_type_scale:
+                # BeastConfig type_scales.json structure
+                scale_px = type_scale_data.get("scale_px", {})
+                display = scale_px.get("display_hero", {})
+                h1 = scale_px.get("headline_primary", {})
+                h2 = scale_px.get("subheadline", {})
+                body = scale_px.get("body", {})
+                caption = scale_px.get("caption", {})
+
+                type_scale_decree = {
+                    "scale_name": type_scale_key,
+                    "hierarchy_ratio": type_scale_data.get("hierarchy_ratio", "8:5.33:2.67:1.67:1"),
+                    "display_hero_px": display.get("size_px", 96),
+                    "h1_px": h1.get("size_px", 64),
+                    "h2_px": h2.get("size_px", 32),
+                    "body_px": body.get("size_px", 16),
+                    "caption_px": caption.get("size_px", 12),
+                    "description": type_scale_data.get("use_case", "Professional type scale")
+                }
+            else:
+                # Legacy structure
+                type_scale_decree = {
+                    "scale_name": type_scale_key,
+                    "ratio": type_scale_data.get("ratio", "1.5"),
+                    "h1_canvas_pct": type_scale_data.get("h1", 12),
+                    "h2_canvas_pct": type_scale_data.get("h2", 8),
+                    "h3_canvas_pct": type_scale_data.get("h3", 5),
+                    "body_canvas_pct": type_scale_data.get("body", 3),
+                    "caption_canvas_pct": type_scale_data.get("caption", 2),
+                    "description": type_scale_data.get("description", "Type scale")
+                }
 
             # Build decree
             decree = {
                 "composition_law": comp_archetype,
-                "composition_description": archetype_data["description"],
+                "composition_description": description,
 
                 "grid_system": {
-                    "type": archetype_data["grid"],
-                    "columns": 12 if "12-column" in archetype_data["grid"] else 6,
+                    "type": grid_type,
+                    "columns": 12 if "12" in str(grid_type) else 6,
                     "gutter_px": 16,
                     "margins_pct": 5.0,
                     "safe_zones": {
@@ -200,16 +274,7 @@ class DesignDirector:
                     }
                 },
 
-                "type_scale": {
-                    "scale_name": type_scale_key,
-                    "ratio": type_scale_data["ratio"],
-                    "h1_canvas_pct": type_scale_data["h1"],  # 12% of canvas width
-                    "h2_canvas_pct": type_scale_data["h2"],
-                    "h3_canvas_pct": type_scale_data["h3"],
-                    "body_canvas_pct": type_scale_data["body"],
-                    "caption_canvas_pct": type_scale_data["caption"],
-                    "description": type_scale_data["description"]
-                },
+                "type_scale": type_scale_decree,
 
                 "color_usage_rules": {
                     "dominant_pct": 60,   # Primary color
@@ -222,9 +287,9 @@ class DesignDirector:
                     "accent_color": brand_palette.get("accent_color", "#FF6B00")
                 },
 
-                "hierarchy_enforcement": archetype_data["hierarchy"],
+                "hierarchy_enforcement": hierarchy,
 
-                "whitespace_philosophy": archetype_data["whitespace"],
+                "whitespace_philosophy": whitespace,
 
                 "forbidden_violations": [
                     "Centered everything (must use asymmetry unless full_bleed)",
@@ -238,7 +303,7 @@ class DesignDirector:
                 "platform_constraints": self._get_platform_constraints(platform),
 
                 "decree_confidence": 0.95,  # Deterministic decree
-                "decree_source": "archetype_library"
+                "decree_source": "beast_config" if is_beast_config else "legacy_library"
             }
 
             logger.info(f"[DesignDirector] Decree issued: {comp_archetype} + {type_scale_key} scale")

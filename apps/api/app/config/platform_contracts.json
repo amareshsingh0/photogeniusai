@@ -1,0 +1,661 @@
+{
+  "_meta": {
+    "system": "BEAST Creative Studio — Platform Contracts & Distribution Intelligence",
+    "version": "2026-Q2",
+    "updated_at": "2026-04-07",
+    "philosophy": "Each platform is a unique world with its own physics. Respect the contract or get ignored.",
+    "coverage": "15 major platforms — social, video, professional, messaging, search, outdoor"
+  },
+
+  "platforms": {
+    "instagram_feed": {
+      "platform_id": "instagram_feed",
+      "asset_type": "social_feed_post",
+      "active_users": "2B+ global",
+      "viewer_behavior": {
+        "attention_mode": "scroll_at_speed",
+        "attention_window_seconds": 1.5,
+        "decision_point": "thumb_stops_or_continues",
+        "sound_assumption": "no_sound_70_percent",
+        "caption_reads": "sometimes_if_hooked",
+        "swipe_tolerance": "zero_patience"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "CRITICAL",
+        "brand_identifiable_fast": "REQUIRED",
+        "emotion_readable_instant": "REQUIRED",
+        "composition_density": "medium_to_high",
+        "text_on_image_max": "8_words",
+        "face_preference": "yes_if_human_product"
+      },
+
+      "technical_specs": {
+        "dimensions": {
+          "square": {"w": 1080, "h": 1080, "aspect": "1:1"},
+          "portrait": {"w": 1080, "h": 1350, "aspect": "4:5"},
+          "landscape": {"w": 1080, "h": 566, "aspect": "1.91:1"}
+        },
+        "file_size_max_mb": 30,
+        "formats": ["jpg", "png"],
+        "dpi": 72,
+        "color_space": "sRGB"
+      },
+
+      "copy_limits": {
+        "caption_chars": 2200,
+        "caption_ideal_chars": 125,
+        "first_line_visible_chars": 125,
+        "hashtags_max": 30,
+        "hashtags_effective": "5_to_10"
+      },
+
+      "aesthetic_register": "editorial_to_lifestyle",
+      "cta_strength": "medium",
+      "safe_zones": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+
+      "platform_specific_rules": [
+        "First 1.5 seconds decide everything",
+        "Brand must be identifiable without reading caption",
+        "High contrast wins over subtlety",
+        "Face = 40% higher engagement IF relevant to product",
+        "Negative space is dangerous (thumb keeps scrolling)",
+        "Color psychology matters more than composition perfection"
+      ],
+
+      "quality_gates": {
+        "scroll_stop_test": "In feed of 100 posts, does thumb stop?",
+        "1_5_second_test": "Message clear in 1.5 seconds with no sound?",
+        "brand_remove_test": "Remove logo — still feels like brand?",
+        "10_percent_size_test": "Works at thumbnail size in Explore?"
+      }
+    },
+
+    "instagram_story": {
+      "platform_id": "instagram_story",
+      "asset_type": "ephemeral_vertical",
+      "viewer_behavior": {
+        "attention_mode": "rapid_fire_tap_through",
+        "attention_window_seconds": 3,
+        "decision_point": "instant_tap_away_or_watch",
+        "sound_assumption": "sound_on_60_percent",
+        "interaction_mode": "swipe_up_poll_sticker"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "EXTREME",
+        "text_on_screen_words_max": 8,
+        "composition_density": "low_one_message",
+        "face_preference": "yes_close_up_direct_gaze",
+        "motion_preference": "subtle_or_strong_no_middle"
+      },
+
+      "technical_specs": {
+        "dimensions": {"w": 1080, "h": 1920, "aspect": "9:16"},
+        "file_size_max_mb": 30,
+        "formats": ["jpg", "png", "mp4"],
+        "safe_zones": {
+          "top_px": 250,
+          "bottom_px": 250,
+          "note": "Profile pic and CTA cover top/bottom 250px"
+        }
+      },
+
+      "copy_limits": {
+        "text_on_screen_words": 8,
+        "tone": "conversational_friend_talk"
+      },
+
+      "aesthetic_register": "raw_authentic_or_polished_brand",
+      "cta_strength": "high_swipe_up",
+
+      "platform_specific_rules": [
+        "Text must be LARGE — min 72px font",
+        "Avoid crucial content in top 250px and bottom 250px",
+        "One clear action per story card",
+        "Face beats product 9 times out of 10",
+        "Sound ON assumption — design for it",
+        "3 seconds to hook or they're gone"
+      ]
+    },
+
+    "youtube_thumbnail": {
+      "platform_id": "youtube_thumbnail",
+      "asset_type": "video_gateway",
+      "viewer_behavior": {
+        "attention_mode": "scanning_for_relevance_emotion",
+        "attention_window_seconds": 0.8,
+        "decision_point": "click_or_scroll_past",
+        "competition": "20_other_thumbnails_visible"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "EXTREME",
+        "face_rule": "face_preferred_40_percent_minimum",
+        "emotion_rule": "visible_strong_emotion_required",
+        "text_rule": "max_6_words_min_72px",
+        "composition_archetype": "THUMBNAIL_HALVES",
+        "contrast_rule": "high_contrast_mandatory"
+      },
+
+      "technical_specs": {
+        "dimensions": {"w": 1280, "h": 720, "aspect": "16:9"},
+        "file_size_max_mb": 2,
+        "formats": ["jpg", "png"],
+        "readable_at_min_size": "120x68px mobile"
+      },
+
+      "copy_limits": {
+        "words_max": 6,
+        "chars_max": 32,
+        "style": "CAPS_preferred",
+        "power_words": ["NEVER", "SECRET", "WHY", "ACTUALLY", "HOW", "numbers", "YOU"]
+      },
+
+      "aesthetic_register": "emotion_shock_curiosity",
+      "color_strategy": "high_contrast_against_youtube_white_ui",
+
+      "platform_specific_rules": [
+        "Face with VISIBLE emotion > everything else",
+        "Text on one side, subject on other (HALVES composition)",
+        "Readable at 120x68px mobile size (critical test)",
+        "Contrast against white YouTube UI background",
+        "Emotion + Curiosity gap = click",
+        "Numbers in text increase CTR (\"5 Secrets\", \"$10K\")"
+      ],
+
+      "quality_gates": {
+        "mobile_readable_test": "Shrink to 120x68px — text still readable?",
+        "emotion_visible_test": "Emotion clear without reading text?",
+        "curiosity_gap_test": "Does it make you want to know more?",
+        "contrast_test": "Stands out in grid of 20 thumbnails?"
+      }
+    },
+
+    "tiktok": {
+      "platform_id": "tiktok",
+      "asset_type": "vertical_video_first_frame",
+      "viewer_behavior": {
+        "attention_mode": "instant_scroll_or_stay",
+        "attention_window_seconds": 0.5,
+        "decision_point": "millisecond_judgment",
+        "sound_assumption": "sound_on_95_percent",
+        "interaction_preference": "authentic_over_polished"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "NUCLEAR",
+        "hook_rule": "visible_action_in_first_frame",
+        "composition_density": "extreme_scroll_stop_priority",
+        "text_overlay_style": "bold_caps_kinetic",
+        "face_preference": "yes_direct_camera_authentic"
+      },
+
+      "technical_specs": {
+        "dimensions": {"w": 1080, "h": 1920, "aspect": "9:16"},
+        "file_size_max_mb": 287,
+        "formats": ["mp4", "mov"],
+        "safe_zones": {
+          "top_px": 100,
+          "bottom_px": 220,
+          "note": "Profile + description cover bottom"
+        }
+      },
+
+      "copy_limits": {
+        "caption_chars": 150,
+        "tone": "action_word_or_question_first",
+        "hashtags_max": 5
+      },
+
+      "aesthetic_register": "raw_authentic_or_extreme_polish_never_middle",
+      "cta_strength": "implicit_show_dont_tell",
+
+      "platform_specific_rules": [
+        "First 0.5 seconds = entire campaign",
+        "Movement in first frame mandatory",
+        "Raw/authentic beats polished corporate",
+        "Sound is 80% of the experience",
+        "Duet/Stitch potential = 2x reach",
+        "Trend participation > brand consistency"
+      ]
+    },
+
+    "linkedin": {
+      "platform_id": "linkedin",
+      "asset_type": "professional_content",
+      "viewer_behavior": {
+        "attention_mode": "professional_consideration_mode",
+        "attention_window_seconds": 3,
+        "decision_point": "value_signal_or_scroll",
+        "sound_assumption": "no_sound_workplace",
+        "interaction_preference": "insightful_over_salesy"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "medium",
+        "authority_signals": "REQUIRED",
+        "composition_density": "clean_structured",
+        "text_readability": "high_priority",
+        "corporate_polish": "expected_but_not_stuffy"
+      },
+
+      "technical_specs": {
+        "dimensions": {
+          "post": {"w": 1200, "h": 627, "aspect": "1.91:1"},
+          "square": {"w": 1080, "h": 1080, "aspect": "1:1"}
+        },
+        "file_size_max_mb": 5,
+        "formats": ["jpg", "png", "pdf"]
+      },
+
+      "copy_limits": {
+        "headline_chars": 50,
+        "body_ideal_chars": 150,
+        "tone": "insight_driven_authority"
+      },
+
+      "aesthetic_register": "clean_trustworthy_restrained",
+      "color_preference": "blue_trust_signals_corporate_palette",
+
+      "platform_specific_rules": [
+        "Data visualization > abstract concepts",
+        "Professional polish expected (not Instagram casual)",
+        "Text-heavy is OK if value-dense",
+        "Authority signals matter (charts, stats, credentials)",
+        "Corporate color palettes preferred",
+        "Thought leadership > direct selling"
+      ]
+    },
+
+    "facebook_feed": {
+      "platform_id": "facebook_feed",
+      "asset_type": "social_feed_older_demo",
+      "viewer_behavior": {
+        "attention_mode": "casual_browsing_slower_pace",
+        "attention_window_seconds": 2.5,
+        "sound_assumption": "no_sound_80_percent",
+        "demographic_skew": "older_35_plus"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "medium",
+        "clarity_over_subtlety": "REQUIRED",
+        "text_readability": "high_priority",
+        "family_safe": "MANDATORY"
+      },
+
+      "technical_specs": {
+        "dimensions": {
+          "feed": {"w": 1200, "h": 628, "aspect": "1.91:1"},
+          "square": {"w": 1080, "h": 1080, "aspect": "1:1"}
+        },
+        "file_size_max_mb": 30
+      },
+
+      "copy_limits": {
+        "primary_text_ideal": 125,
+        "headline": 27,
+        "description": 27
+      },
+
+      "aesthetic_register": "warm_relatable_friendly",
+      "platform_specific_rules": [
+        "Clarity beats cleverness",
+        "Older demographic — larger text, simpler message",
+        "Family-friendly mandatory",
+        "Video thumbnail needs strong hook"
+      ]
+    },
+
+    "twitter_x": {
+      "platform_id": "twitter_x",
+      "asset_type": "news_feed_fast",
+      "viewer_behavior": {
+        "attention_mode": "rapid_fire_scanning",
+        "attention_window_seconds": 1.2,
+        "sound_assumption": "no_sound"
+      },
+
+      "technical_specs": {
+        "dimensions": {
+          "card": {"w": 1200, "h": 675, "aspect": "16:9"},
+          "square": {"w": 1080, "h": 1080, "aspect": "1:1"}
+        }
+      },
+
+      "copy_limits": {
+        "text_chars": 280,
+        "ideal_with_image": 100
+      },
+
+      "aesthetic_register": "bold_declarative_news_worthy",
+      "platform_specific_rules": [
+        "High contrast wins",
+        "Text must be instant-readable",
+        "News/data visualization performs well"
+      ]
+    },
+
+    "pinterest": {
+      "platform_id": "pinterest",
+      "asset_type": "vertical_discovery",
+      "viewer_behavior": {
+        "attention_mode": "inspiration_hunting",
+        "attention_window_seconds": 2,
+        "intent": "save_for_later_aspirational"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "high",
+        "vertical_dominance": "tall_wins",
+        "text_overlay": "descriptive_helpful",
+        "aesthetic_beauty": "CRITICAL"
+      },
+
+      "technical_specs": {
+        "dimensions": {
+          "pin": {"w": 1000, "h": 1500, "aspect": "2:3"},
+          "long_pin": {"w": 1000, "h": 2100, "aspect": "1:2.1"}
+        }
+      },
+
+      "aesthetic_register": "aspirational_beautiful_curated",
+      "platform_specific_rules": [
+        "Vertical format mandatory",
+        "Beauty > edginess",
+        "Text overlay helps (recipe steps, how-to)",
+        "Lifestyle aspiration drives saves"
+      ]
+    },
+
+    "google_display": {
+      "platform_id": "google_display",
+      "asset_type": "banner_ads_multiple_sizes",
+      "viewer_behavior": {
+        "attention_mode": "banner_blindness_high",
+        "attention_window_seconds": 1,
+        "intent": "interruption_tolerance_low"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "must_overcome_banner_blindness",
+        "message_clarity": "EXTREME",
+        "cta_visibility": "CRITICAL",
+        "brand_lock": "logo_required"
+      },
+
+      "technical_specs": {
+        "sizes": {
+          "leaderboard": {"w": 728, "h": 90},
+          "medium_rectangle": {"w": 300, "h": 250},
+          "half_page": {"w": 300, "h": 600},
+          "billboard": {"w": 970, "h": 250}
+        },
+        "file_size_max_kb": 150
+      },
+
+      "copy_limits": {
+        "headline": 30,
+        "long_headline": 90,
+        "description": 90,
+        "rule": "each_must_work_alone"
+      },
+
+      "platform_specific_rules": [
+        "Extreme simplicity required",
+        "One message only",
+        "CTA button must be obvious",
+        "File size limit strict (150KB)"
+      ]
+    },
+
+    "billboard_ooh": {
+      "platform_id": "billboard_ooh",
+      "asset_type": "out_of_home_large_format",
+      "viewer_behavior": {
+        "attention_mode": "moving_at_speed_25_to_60_mph",
+        "attention_window_seconds": 2,
+        "viewing_distance": "100_to_300_feet",
+        "repeat_exposure": "daily_commute_advantage"
+      },
+
+      "visual_contract": {
+        "words_max": 7,
+        "words_ideal": "3_to_5",
+        "font_size_minimum": "readable_at_300ft",
+        "composition_archetype": "HERO_DOMINANT or TYPOGRAPHIC_LED",
+        "no_fine_print": "MANDATORY",
+        "no_urls_no_phones": true
+      },
+
+      "technical_specs": {
+        "dimensions": {
+          "standard": {"w": 1400, "h": 480, "dpi": 150},
+          "bus_shelter": {"w": 1200, "h": 1800, "dpi": 150}
+        },
+        "color_space": "CMYK",
+        "bleed": "3_inches_all_sides"
+      },
+
+      "aesthetic_register": "bold_instant_memorable",
+      "platform_specific_rules": [
+        "MAX 7 words total",
+        "Font size min 300pt at full size",
+        "High contrast mandatory",
+        "One idea only",
+        "No URLs, no phone numbers, no fine print",
+        "Readability at 300 feet test required"
+      ],
+
+      "quality_gates": {
+        "7_word_test": "More than 7 words? Cut it.",
+        "2_second_test": "Understood in 2 seconds at 40mph?",
+        "memory_test": "Can you recite it 5 minutes later?"
+      }
+    },
+
+    "print_magazine": {
+      "platform_id": "print_magazine",
+      "asset_type": "editorial_full_page",
+      "viewer_behavior": {
+        "attention_mode": "standing_still_reading_mode",
+        "attention_window_seconds": 15,
+        "tactile_experience": "paper_quality_matters",
+        "premium_context": "editorial_surrounded"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "medium_editorial_context",
+        "craft_detail": "MAXIMUM",
+        "texture_depth": "visible_tactile",
+        "typography_precision": "CRITICAL"
+      },
+
+      "technical_specs": {
+        "dimensions": {
+          "full_page": {"w": 8.5, "h": 11, "unit": "inches", "dpi": 300},
+          "bleed": "0.125_inch_all_sides"
+        },
+        "color_space": "CMYK",
+        "file_format": "PDF_X1a_or_TIFF"
+      },
+
+      "aesthetic_register": "craft_detail_texture_editorial",
+      "platform_specific_rules": [
+        "300 DPI mandatory",
+        "CMYK color space",
+        "Typography can be complex/sophisticated",
+        "Body copy 50-150 words acceptable",
+        "Texture and craft matter",
+        "Safe margins 0.5 inch from trim"
+      ]
+    },
+
+    "whatsapp_forward": {
+      "platform_id": "whatsapp_forward",
+      "asset_type": "peer_to_peer_share",
+      "viewer_behavior": {
+        "attention_mode": "friend_shared_this_trust",
+        "attention_window_seconds": 5,
+        "context": "personal_recommendation",
+        "action_intent": "forward_if_resonates"
+      },
+
+      "visual_contract": {
+        "shareability": "CRITICAL",
+        "clarity_over_cleverness": "REQUIRED",
+        "relatable_over_polished": "preferred",
+        "text_readability_mobile": "MANDATORY"
+      },
+
+      "technical_specs": {
+        "dimensions": {"w": 1080, "h": 1080, "aspect": "1:1"},
+        "file_size_max_mb": 16,
+        "compression": "whatsapp_auto_compresses"
+      },
+
+      "aesthetic_register": "relatable_friendly_shareable",
+      "platform_specific_rules": [
+        "Square format best for mobile chat",
+        "Text must be large (WhatsApp compresses)",
+        "Relatable > Corporate",
+        "Forwarding potential = campaign success",
+        "Emoji-friendly tone"
+      ]
+    },
+
+    "email_header": {
+      "platform_id": "email_header",
+      "asset_type": "email_hero_image",
+      "viewer_behavior": {
+        "attention_mode": "inbox_scan_mode",
+        "attention_window_seconds": 2,
+        "device_context": "mobile_60_percent"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "medium",
+        "message_clarity": "high",
+        "brand_recognition": "instant",
+        "mobile_readability": "CRITICAL"
+      },
+
+      "technical_specs": {
+        "dimensions": {"w": 600, "h": 200},
+        "safe_zone": "500x150_center",
+        "file_size_max_kb": 200
+      },
+
+      "platform_specific_rules": [
+        "Mobile preview is everything",
+        "Safe zone 500x150px center",
+        "File size under 200KB (load speed)",
+        "Brand + message must be instant"
+      ]
+    },
+
+    "app_icon": {
+      "platform_id": "app_icon",
+      "asset_type": "app_store_identity",
+      "viewer_behavior": {
+        "attention_mode": "app_store_browsing",
+        "attention_window_seconds": 0.5,
+        "decision_impact": "download_decision_factor"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "high",
+        "instant_recognition": "CRITICAL",
+        "works_at_tiny_size": "MANDATORY",
+        "no_text": "strongly_discouraged",
+        "shape_simplicity": "REQUIRED"
+      },
+
+      "technical_specs": {
+        "ios": {"w": 1024, "h": 1024, "format": "PNG"},
+        "android": {"w": 512, "h": 512, "format": "PNG"}
+      },
+
+      "platform_specific_rules": [
+        "Must work at 16x16px size",
+        "No text (illegible at small size)",
+        "Simple iconic shape",
+        "High contrast",
+        "Unique silhouette"
+      ]
+    },
+
+    "business_card": {
+      "platform_id": "business_card",
+      "asset_type": "print_identity_physical",
+      "viewer_behavior": {
+        "attention_mode": "in_hand_tactile",
+        "attention_window_seconds": 10,
+        "context": "networking_handshake",
+        "tactile_experience": "paper_stock_finish_matters"
+      },
+
+      "visual_contract": {
+        "scroll_stop_power": "medium",
+        "brand_personality": "CRITICAL",
+        "contact_clarity": "MANDATORY",
+        "premium_signals": "paper_finish_emboss"
+      },
+
+      "technical_specs": {
+        "standard_mm": {"w": 85, "h": 55},
+        "standard_px_300dpi": {"w": 1004, "h": 649},
+        "bleed": "3mm_all_sides",
+        "color_space": "CMYK"
+      },
+
+      "aesthetic_register": "brand_personality_physical",
+      "platform_specific_rules": [
+        "Name must be largest element",
+        "Contact info must be readable",
+        "Premium stock = premium brand signal",
+        "300 DPI mandatory",
+        "3mm bleed all sides"
+      ]
+    }
+  },
+
+  "cross_platform_intelligence": {
+    "aspect_ratio_strategy": {
+      "1:1_square": ["instagram_feed", "facebook_feed", "linkedin", "whatsapp"],
+      "4:5_portrait": ["instagram_feed"],
+      "9:16_vertical": ["instagram_story", "tiktok", "pinterest"],
+      "16:9_landscape": ["youtube_thumbnail", "twitter", "linkedin_article"],
+      "custom_banner": ["google_display", "email_header", "billboard"]
+    },
+
+    "text_density_by_platform": {
+      "text_heavy_ok": ["linkedin", "print_magazine", "email"],
+      "text_medium": ["instagram_feed", "facebook", "twitter"],
+      "text_minimal": ["instagram_story", "tiktok", "youtube_thumbnail"],
+      "text_forbidden": ["app_icon"]
+    },
+
+    "sound_assumption": {
+      "sound_on": ["tiktok", "instagram_story"],
+      "sound_off": ["instagram_feed", "facebook", "linkedin", "twitter", "all_display"]
+    }
+  },
+
+  "platform_evolution_tracker": {
+    "algorithm_changes_2026_q2": {
+      "instagram": "Prioritizing Reels over static posts. Story stickers boost reach.",
+      "tiktok": "Longer videos (3-10min) now favored. Educational content rising.",
+      "youtube": "Shorts competing with TikTok. Thumbnail CTR > watch time for new channels.",
+      "linkedin": "Carousels outperforming single images. Video posts 2x engagement."
+    }
+  },
+
+  "notes": [
+    "Platform contracts change quarterly — update based on algorithm shifts",
+    "New platforms (Threads, Bluesky) add when adoption > 100M users",
+    "Safe zones change with UI updates — validate against latest platform specs",
+    "Learning Engine should track which platform contracts convert best per industry"
+  ]
+}
