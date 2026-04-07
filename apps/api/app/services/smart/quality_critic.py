@@ -460,13 +460,17 @@ class QualityCritic:
             client = self._get_gemini_client()
             from google.genai import types
 
+            # Fetch image first to catch download errors
+            image_b64 = await self._fetch_image_base64(image_url)
+            logger.info(f"[quality_critic] Image fetched, size: {len(image_b64)} bytes")
+
             # Single call with all 12 dimensions
             response = await client.aio.models.generate_content(
                 model=self.gemini_model,
                 contents=[
                     {"role": "user", "parts": [
                         {"text": user_prompt},
-                        {"inline_data": {"mime_type": "image/jpeg", "data": await self._fetch_image_base64(image_url)}}
+                        {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}}
                     ]}
                 ],
                 config=types.GenerateContentConfig(
@@ -477,6 +481,9 @@ class QualityCritic:
             )
 
             raw_text = response.text or "{}"
+            logger.info(f"[quality_critic] Gemini response length: {len(raw_text)} chars")
+            if len(raw_text) < 100:
+                logger.warning(f"[quality_critic] Short response: {raw_text[:200]}")
             scores_json = self._extract_json(raw_text)
 
             # Parse and validate scores
@@ -498,7 +505,7 @@ class QualityCritic:
             return dimension_scores
 
         except Exception as e:
-            logger.warning("[quality_critic] Dimension scoring failed: %s", e)
+            logger.error("[quality_critic] Dimension scoring failed: %s", e, exc_info=True)
             # Fallback: return neutral scores
             return {
                 dim: {"score": 7.0, "reasoning": f"Error: {e}", "weight": cfg["weight"], "floor": cfg["floor"], "below_floor": False}
@@ -578,12 +585,15 @@ CRITICAL REMINDER:
             client = self._get_gemini_client()
             from google.genai import types
 
+            # Fetch image (already cached from dimensions call)
+            image_b64 = await self._fetch_image_base64(image_url)
+
             response = await client.aio.models.generate_content(
                 model=self.gemini_model,
                 contents=[
                     {"role": "user", "parts": [
                         {"text": user_prompt},
-                        {"inline_data": {"mime_type": "image/jpeg", "data": await self._fetch_image_base64(image_url)}}
+                        {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}}
                     ]}
                 ],
                 config=types.GenerateContentConfig(
@@ -594,6 +604,7 @@ CRITICAL REMINDER:
             )
 
             raw_text = response.text or "{}"
+            logger.info(f"[quality_critic] Beast gates response length: {len(raw_text)} chars")
             gates_json = self._extract_json(raw_text)
 
             # Parse and validate gates
@@ -615,7 +626,7 @@ CRITICAL REMINDER:
             return beast_gates
 
         except Exception as e:
-            logger.warning("[quality_critic] Beast gates validation failed: %s", e)
+            logger.error("[quality_critic] Beast gates validation failed: %s", e, exc_info=True)
             # Fallback: all gates fail
             return {
                 gate_id: {
