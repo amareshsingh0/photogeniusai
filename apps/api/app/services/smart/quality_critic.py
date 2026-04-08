@@ -557,9 +557,9 @@ class QualityCritic:
                     for dim in batch_dims
                 ])
 
-                prompt = f"Score each 0-10. Return JSON: {{\"dim_name\": {{\"score\": 8.0, \"reasoning\": \"brief text\"}}}}\n\n{dims_spec}"
+                prompt = f"Score each 0-10. Return ONLY valid JSON: {{\"dim_name\": {{\"score\": 8.0, \"reasoning\": \"brief text\"}}}}\n\nIMPORTANT: Keep reasoning under 50 chars. Use double quotes only, escape any quotes in text.\n\n{dims_spec}"
 
-                raw_text = await self._call_vision_model(system_base, prompt, image_b64, max_tokens=1500)
+                raw_text = await self._call_vision_model(system_base, prompt, image_b64, max_tokens=2000)
                 logger.info(f"[quality_critic] Batch {batch_num+1}/{len(batches)}: {len(raw_text)} chars")
                 return self._extract_json(raw_text)
 
@@ -876,7 +876,7 @@ Score 0-10 for each gate. Be CRITICAL — these are the world's highest standard
             raise
 
     def _extract_json(self, text: str) -> Dict:
-        """Extract JSON from Gemini response (handles markdown fences)."""
+        """Extract JSON from Gemini response (handles markdown fences, partial JSON, common issues)."""
         import re
         text = text.strip()
 
@@ -887,22 +887,49 @@ Score 0-10 for each gate. Be CRITICAL — these are the world's highest standard
         else:
             logger.info(f"[quality_critic] Raw response (first 500): {text[:500]}")
 
+        # Remove markdown code fences
         text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
+
+        # Try direct parse first
         try:
             parsed = json.loads(text)
             logger.info(f"[quality_critic] Successfully parsed JSON with {len(parsed)} keys")
             return parsed
         except json.JSONDecodeError as e:
             logger.warning(f"[quality_critic] Initial JSON parse failed: {e}")
-            # Try to find {...} in text
+
+            # Try to find and extract {...} block
             match = re.search(r"\{[\s\S]*\}", text)
             if match:
+                json_text = match.group()
+
+                # Fix common issues:
+                # 1. Trailing comma before closing brace
+                json_text = re.sub(r',(\s*[}\]])', r'\1', json_text)
+                # 2. Incomplete JSON - add closing brace if missing
+                if json_text.count('{') > json_text.count('}'):
+                    json_text += '}'
+                # 3. Unescaped quotes in strings (rough fix)
+                # json_text = re.sub(r'(?<!\\)"([^"]*)"([^"]*)"', r'"\1\"\2"', json_text)
+
                 try:
-                    parsed = json.loads(match.group())
-                    logger.info(f"[quality_critic] Extracted JSON from regex match with {len(parsed)} keys")
+                    parsed = json.loads(json_text)
+                    logger.info(f"[quality_critic] Extracted and fixed JSON with {len(parsed)} keys")
                     return parsed
                 except Exception as e2:
-                    logger.error(f"[quality_critic] Regex match JSON parse also failed: {e2}", exc_info=True)
+                    logger.error(f"[quality_critic] Fixed JSON parse also failed: {e2}")
+                    # Last resort - try to salvage partial data
+                    try:
+                        # Extract individual key-value pairs
+                        partial = {}
+                        pairs = re.findall(r'"(\w+)":\s*\{[^}]*"score":\s*([\d.]+)[^}]*\}', json_text)
+                        for key, score in pairs:
+                            partial[key] = {"score": float(score), "reasoning": "Partial parse"}
+                        if partial:
+                            logger.warning(f"[quality_critic] Salvaged {len(partial)} partial scores")
+                            return partial
+                    except:
+                        pass
 
         logger.error(f"[quality_critic] JSON parse failed completely. Text was: {text[:1000]}")
         return {}

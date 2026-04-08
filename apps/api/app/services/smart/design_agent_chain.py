@@ -553,81 +553,40 @@ def _build_native_text_instructions(
         len(headline.strip()), max_headline_len, size_mod, color_prediction["text_color"]
     )
 
-    # STEP 4: Collect text elements with intelligence
+    # STEP 4: SIMPLIFIED - ALWAYS include ALL text elements user provided
+    # No conditional skipping! Trust Ideogram to render ALL text properly.
     text_elements = []
 
-    # Detect if headline has numbers (numbers need prominence)
+    # Headline (required)
     has_numbers = bool(re.search(r'\d+', headline_managed))
     if has_numbers:
-        text_elements.append(
-            f"headline '{headline_managed}' with EXTRA-LARGE BOLD NUMBERS for maximum impact, "
-            f"{color_prediction['text_color']} for optimal contrast"
-        )
+        text_elements.append(f"headline '{headline_managed}' with EXTRA-LARGE BOLD NUMBERS")
     else:
-        # Apply size modifier if needed
-        if "reduce" in size_mod:
-            text_elements.append(
-                f"headline '{headline_managed}', {size_mod}, "
-                f"{color_prediction['text_color']} for optimal contrast"
-            )
-        else:
-            text_elements.append(
-                f"headline '{headline_managed}', "
-                f"{color_prediction['text_color']} for optimal contrast"
-            )
+        text_elements.append(f"headline '{headline_managed}'")
 
-    # Add supporting elements based on text_amount from strategy
-    text_amount = strategy["text_amount"]
+    # Subheadline (if provided by user)
+    if subheadline and subheadline.strip():
+        sub_managed, _ = _smart_text_length_manager(subheadline.strip(), 60, "subtitle")
+        text_elements.append(f"subheadline '{sub_managed}'")
 
-    if text_amount == "minimal_elements":
-        # TEXT-PRIMARY: Just headline, nothing else
-        pass
+    # CTA (if provided by user)
+    if cta and cta.strip():
+        cta_managed, _ = _smart_text_length_manager(cta.strip(), 30, "cta")
+        text_elements.append(f"call-to-action '{cta_managed}'")
 
-    elif text_amount == "minimal":
-        # PRODUCT/LUXURY: Brand + maybe small subtitle
-        if brand_name and brand_name.strip():
-            text_elements.append(f"brand '{brand_name.strip()[:30]}'")
+    # Brand (if provided by user)
+    if brand_name and brand_name.strip():
+        brand_managed, _ = _smart_text_length_manager(brand_name.strip(), 35, "brand")
+        text_elements.append(f"brand '{brand_managed}'")
 
-    elif text_amount == "minimal_to_medium":
-        # COMPLEX SCENE: Headline + brand only
-        if brand_name and brand_name.strip():
-            brand_managed, _ = _smart_text_length_manager(brand_name.strip(), 25, "brand")
-            text_elements.append(f"brand '{brand_managed}'")
-        if subheadline and subheadline.strip() and len(subheadline.strip()) < 30:
-            sub_managed, _ = _smart_text_length_manager(subheadline.strip(), 30, "subtitle")
-            text_elements.append(f"brief subtitle '{sub_managed}'")
-
-    elif text_amount == "medium":
-        # BALANCED: Headline + subtitle + maybe CTA
-        if subheadline and subheadline.strip():
-            sub_managed, sub_mod = _smart_text_length_manager(subheadline.strip(), 45, "subtitle")
-            text_elements.append(f"subtitle '{sub_managed}'")
-        if cta and cta.strip() and focus != "product":  # No CTA on product-focused
-            cta_managed, _ = _smart_text_length_manager(cta.strip(), 25, "cta")
-            text_elements.append(f"call-to-action '{cta_managed}'")
-        if brand_name and brand_name.strip():
-            brand_managed, _ = _smart_text_length_manager(brand_name.strip(), 30, "brand")
-            text_elements.append(f"brand '{brand_managed}'")
-
-    elif text_amount == "medium_to_high":
-        # PROMO: All elements
-        if subheadline and subheadline.strip():
-            text_elements.append(f"value proposition '{subheadline.strip()[:55]}'")
-        if cta and cta.strip():
-            text_elements.append(f"strong CTA '{cta.strip()[:28]}'")
-        if brand_name and brand_name.strip():
-            text_elements.append(f"brand '{brand_name.strip()[:30]}'")
-
-    # STEP 4: Build intelligent composition prompt
+    # Build final prompt - SIMPLE, let Ideogram AI decide placement/styling/prominence
     text_list = ", ".join(text_elements)
-
-    # Build final prompt with composition intelligence
-    composition_desc = strategy["composition"]
-    size_guidance = strategy["size"]
 
     return (
         f"Professional advertising poster with {text_list}. "
-        f"{size_guidance} typography. {composition_desc}. "
+        f"{color_prediction['text_color']} for optimal contrast. "
+        f"{strategy['size']} impactful typography. "
+        f"{strategy['composition']}. "
         f"Text and image integrated as unified composition, not overlay"
     )
 _TEXT_NEGATIVE_TERMS = [
@@ -3809,15 +3768,25 @@ async def _agent_image_prompter(
         "\n"
         "🎯 BEAST-LEVEL BUILD PROCESS (MANDATORY — 11 STEPS):\n"
         "\n"
-        "STEP 0: GENRE DETECTION & SCENE DECISION (NEW — CRITICAL)\n"
-        "  → FIRST, detect genre using GENRE INTELLIGENCE section from KB\n"
-        "  → Is this: Tech Launch Event? Fashion Editorial? Product Hero? Promo/Sale? Quote? Food?\n"
-        "  → Based on genre, decide scene complexity: Spectacular (150-200w) / Complex (120-150w) / Medium (80-120w) / Simple (60-80w)\n"
-        "  → Apply genre-specific scene requirements from KB\n"
-        "  → Example: 'tech launch' → MUST include venue + stage + crowd + presenter + LED walls\n"
-        "  → Example: 'fashion collection' → MUST include elegant location + model + architectural detail + natural light\n"
-        "  → Example: 'luxury watch' (no event) → Product hero setup with premium surface\n"
-        "  → NEVER skip this step! Genre determines entire scene structure.\n"
+        "STEP 0: GENRE DETECTION & SCENE DECISION (TRUST YOUR TRAINING!)\n"
+        "  🧠 CRITICAL: The GENRE KB provides EXAMPLES and PATTERNS, NOT hardcoded rules!\n"
+        "  → You've been trained on BILLIONS of advertising images - USE THAT KNOWLEDGE\n"
+        "  → Genre examples show you WHAT'S POSSIBLE, but YOU DECIDE what makes sense here\n"
+        "  → Think: 'Restaurant promotion' could be food closeup OR restaurant ambiance OR both\n"
+        "  → Think: 'Tech launch' could be full event OR product focus depending on context\n"
+        "  → DON'T blindly follow genre templates - THINK about THIS specific brief\n"
+        "\n"
+        "  → FIRST, detect genre using GENRE INTELLIGENCE KB as REFERENCE (not rules)\n"
+        "  → Is this: Tech Launch Event? Fashion? Product? Restaurant? Promo? Quote? Food?\n"
+        "  → Decide scene complexity based on what would make THIS image spectacular\n"
+        "  → Use genre examples as INSPIRATION, then think creatively about THIS case\n"
+        "  → Example: 'restaurant GRAND OPENING' → Think: What shows grand opening better?\n"
+        "    - Just food closeup? ❌ Boring, doesn't show 'opening' or 'restaurant'\n"
+        "    - Restaurant interior with decor, tables, food display, welcoming ambiance? ✅ Shows full story\n"
+        "  → Example: 'tech product launch' → Think: Is this showing the launch EVENT or just product?\n"
+        "    - Context clues tell you: 'launch', 'unveil', 'event' → Full venue scene\n"
+        "    - Just 'new product' → Product focus is fine\n"
+        "  → USE YOUR TRAINING - You know what great advertising looks like!\n"
         "\n"
         "STEP 1: SUBJECT CORE\n"
         "  → Extract main subject from brief. 2-3 sentences with HYPER-SPECIFIC physical attributes.\n"
