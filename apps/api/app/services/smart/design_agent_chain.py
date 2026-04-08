@@ -2133,20 +2133,32 @@ async def _acall_gemini(
         try:
             client = _get_gemini_client()
 
-            resp = await client.aio.models.generate_content(
-                model=_GEMINI_MODEL,
-                contents=[{"role": "user", "parts": [{"text": user}]}],
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    temperature=temperature,
-                    max_output_tokens=max_tokens,
+            # Add 60 second timeout to prevent infinite hanging
+            resp = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=_GEMINI_MODEL,
+                    contents=[{"role": "user", "parts": [{"text": user}]}],
+                    config=types.GenerateContentConfig(
+                        system_instruction=system,
+                        temperature=temperature,
+                        max_output_tokens=max_tokens,
+                    ),
                 ),
+                timeout=60.0
             )
             result = resp.text or "{}"
             elapsed_ms = int((time.time() - t0) * 1000)
             logger.info("[design_chain][%s] %dms attempt=%d response_length=%d chars",
                        agent_name, elapsed_ms, attempt + 1, len(result))
             return result
+
+        except asyncio.TimeoutError:
+            elapsed_ms = int((time.time() - t0) * 1000)
+            logger.error("[design_chain][%s] TIMEOUT after 60s (attempt %d/%d)", agent_name, attempt + 1, _retries)
+            if attempt < _retries - 1:
+                await asyncio.sleep(1.0)
+                continue
+            return "{}"
 
         except RuntimeError as e:
             # GEMINI_API_KEY not set — no point retrying
@@ -3205,6 +3217,7 @@ async def _enforce_char_limits(copy_blocks: Dict, platform: str) -> Dict:
     Checks each copy field against platform character limits.
     Only calls Gemini when a field is actually over limit.
     """
+    logger.info("[char_guard] Entered function, checking limits for platform=%s", platform)
     limits = _PLATFORM_CHAR_LIMITS.get(platform, _PLATFORM_CHAR_LIMITS["default"])
     fields_over = {}
     for field in ("headline", "subheadline", "cta", "body"):
@@ -3214,7 +3227,10 @@ async def _enforce_char_limits(copy_blocks: Dict, platform: str) -> Dict:
             fields_over[field] = (val, limit)
 
     if not fields_over:
+        logger.info("[char_guard] All fields within limits, returning")
         return copy_blocks  # nothing to fix
+
+    logger.info("[char_guard] Found %d fields over limit: %s", len(fields_over), list(fields_over.keys()))
 
     # Build a single micro-call to trim all over-limit fields
     over_desc = "\n".join(
@@ -3229,7 +3245,9 @@ async def _enforce_char_limits(copy_blocks: Dict, platform: str) -> Dict:
         f"Platform: {platform}. Rewrite these fields to fit their character limits:\n{over_desc}\n\n"
         f"Return JSON with keys: {list(fields_over.keys())}"
     )
+    logger.info("[char_guard] Calling Gemini to trim fields...")
     raw = await _acall_gemini(system, user, temperature=0.2, agent_name="copy_writer")
+    logger.info("[char_guard] Gemini returned, extracting JSON...")
     r = _extract_json(raw)
 
     result = dict(copy_blocks)
@@ -4339,18 +4357,32 @@ class DesignAgentChain:
             agent_times["copy_writer"] = round(time.time() - t, 2)
 
             # ── Stage 3b: Character limit guard (fires only when over limit) ─
+            logger.info("[design_chain] Starting char_guard for platform=%s", triage.get("platform", "instagram"))
             t = time.time()
-            copy = await _enforce_char_limits(copy, triage.get("platform", "instagram"))
-            agent_times["char_guard"] = round(time.time() - t, 3)
+            try:
+                copy = await asyncio.wait_for(
+                    _enforce_char_limits(copy, triage.get("platform", "instagram")),
+                    timeout=30.0  # 30 second timeout
+                )
+                agent_times["char_guard"] = round(time.time() - t, 3)
+                logger.info("[design_chain] char_guard completed in %.2fs", time.time() - t)
+            except asyncio.TimeoutError:
+                logger.error("[design_chain] char_guard TIMEOUT after 30s, skipping")
+                agent_times["char_guard"] = 30.0
+                # Continue with original copy, don't crash
 
             # ── Stage 3c: Structured design room + backdrop taste scorer ───
+            logger.info("[design_chain] Building design room...")
             t = time.time()
             design_room = _build_design_room(triage, brand, creative, copy)
             agent_times["design_room"] = round(time.time() - t, 3)
+            logger.info("[design_chain] Design room built in %.3fs, winner: %s", time.time() - t, design_room.get("winner", {}).get("backdrop_type", "unknown"))
 
+            logger.info("[design_chain] Building typography direction...")
             t = time.time()
             typography_direction = _build_typography_direction(triage, brand, creative, copy, design_room)
             agent_times["typography_director"] = round(time.time() - t, 3)
+            logger.info("[design_chain] Typography direction built in %.3fs", time.time() - t)
 
             # ── Stage 4: Image Prompter + Layout Planner (PARALLEL or MULTI-VARIANT) ────────
             # Multi-variant logic: Generate 3 layout variants for PREMIUM+ tiers
