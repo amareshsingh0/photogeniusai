@@ -592,70 +592,67 @@ class MultiProviderClient:
     async def _call_google(self, model_id: str, prompt: str, negative_prompt: str,
                            num_images: int, image_size: str, num_inference_steps: int,
                            guidance_scale: float, seed, **kwargs) -> Dict:
-        """Google AI Studio — Imagen 3 ($0.02/image). Uses google-generativeai SDK."""
+        """Google Imagen 3 — via Google AI Studio REST API ($0.02/image)."""
         import asyncio
         start = time.time()
-        try:
-            import google.generativeai as genai
-        except ImportError:
-            return self._error(model_id, "google-generativeai not installed", 0.0)
 
         api_key = self._keys.get("google", "")
         if not api_key:
+            logger.error("[google] GEMINI_API_KEY not set")
             return self._error(model_id, "GEMINI_API_KEY not set", 0.0)
 
-        genai.configure(api_key=api_key)
-
-        # Map image_size to dimensions
-        size_map = {
-            "square_hd": {"width": 1024, "height": 1024},
-            "landscape_16_9": {"width": 1344, "height": 768},
-            "portrait_9_16": {"width": 768, "height": 1344},
-            "landscape_4_3": {"width": 1152, "height": 896},
+        # Map image_size to aspect ratio
+        aspect_map = {
+            "square_hd": "1:1",
+            "landscape_16_9": "16:9",
+            "portrait_9_16": "9:16",
+            "landscape_4_3": "4:3",
         }
-        dims = size_map.get(image_size, {"width": 1024, "height": 1024})
+        aspect_ratio = aspect_map.get(image_size, "1:1")
+
+        # Add negative prompt to the main prompt if provided
+        if negative_prompt:
+            full_prompt = f"{prompt}. Avoid: {negative_prompt}"
+        else:
+            full_prompt = prompt
 
         try:
-            # Imagen 3 API call
-            model = genai.ImageGenerationModel(model_id)
+            # Google AI Studio REST API endpoint for Imagen 3
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateImages?key={api_key}"
 
-            # Build generation config
-            config = {
-                "number_of_images": num_images,
-                "safety_filter_level": "block_only_high",  # Less restrictive
-                "person_generation": "allow_adult",  # Allow human generation
+            payload = {
+                "prompt": full_prompt,
+                "number_of_images": min(num_images, 4),  # Max 4 per API call
+                "aspect_ratio": aspect_ratio,
+                "safety_filter_level": "BLOCK_ONLY_HIGH",
+                "person_generation": "ALLOW_ADULT",
             }
 
-            # Add negative prompt if provided
-            if negative_prompt:
-                full_prompt = f"{prompt}. Avoid: {negative_prompt}"
-            else:
-                full_prompt = prompt
+            client = self._get_client("google")
+            resp = await client.post(url, json=payload, timeout=120.0)
+            resp.raise_for_status()
+            data = resp.json()
 
-            # Generate images (sync call, wrap in asyncio)
-            response = await asyncio.to_thread(
-                model.generate_images,
-                prompt=full_prompt,
-                **config
-            )
-
-            # Extract URLs
+            # Extract image URLs or base64 data
             urls = []
-            if hasattr(response, 'images'):
-                for img in response.images:
-                    if hasattr(img, 'url'):
-                        urls.append(img.url)
-                    elif hasattr(img, '_image_bytes'):
-                        # If bytes, need to upload somewhere - for now just log
-                        logger.warning("[google] Got image bytes, need URL upload endpoint")
+            if "generatedImages" in data:
+                for img_data in data["generatedImages"]:
+                    # Imagen 3 returns base64 encoded images, not URLs
+                    if "image" in img_data:
+                        b64_data = img_data["image"].get("imageBytes", "")
+                        if b64_data:
+                            # Convert base64 to data URI for immediate use
+                            data_uri = f"data:image/png;base64,{b64_data}"
+                            urls.append(data_uri)
+                            logger.info("[google] Got base64 image (%d chars)", len(b64_data))
 
             if not urls:
-                raise ValueError(f"No URLs from Imagen 3: {response}")
+                raise ValueError(f"No images from Imagen 3: {list(data.keys())}")
 
             return self._ok(urls, model_id, "google.ai", time.time() - start)
 
         except Exception as e:
-            logger.error("[google] Imagen 3 error: %s", e)
+            logger.error("[google] Imagen 3 API error: %s", e)
             return self._error(model_id, str(e), time.time() - start)
 
     async def _call_bfl(self, model_id: str, prompt: str, negative_prompt: str,
