@@ -1430,6 +1430,442 @@ def _build_typography_direction(
 # Injected into _agent_image_prompter so Gemini has per-model prompt strategies.
 # Distilled from full model-profiles.md — keeps token cost low but covers all models.
 _IMAGE_PROMPT_ENGINEER_KB = """
+## GENRE INTELLIGENCE & SCENE CONSTRUCTION (BEAST v2 — Apr 8, 2026)
+
+### CRITICAL: You Must THINK STEP-BY-STEP About Scene Construction
+
+Before writing ANY prompt, you MUST:
+1. **Detect Genre** — What type of image is this? (Tech launch vs Fashion editorial vs Product hero vs Quote poster)
+2. **Decide Scene Complexity** — Does this need a FULL EVENT SCENE or a simple setup?
+3. **Build Scene Layers** — If complex: venue + people + staging + atmosphere + details
+4. **Expand Creatively** — Think "What would make this WOW? What's missing? What adds to the story?"
+
+### GENRE PROFILES (Mandatory Detection)
+
+#### GENRE 1: TECH/PRODUCT LAUNCH EVENT
+**Triggers**: "launch", "reveal", "unveil", "announce", "event", "future is here", "introducing" + tech product
+**User Intent**: Announce major product/technology with IMPACT and SCALE
+**Scene Requirements**:
+  - VENUE: Large conference hall / tech event space / innovation hub (2000+ capacity)
+  - MAIN STAGE: Elevated circular platform 8m diameter, LED floor panels with brand animations
+  - PRESENTER: Professional in futuristic attire, confident gesture toward product/hologram
+  - PRODUCT: On hydraulic riser or holographic display at chest height, hero lit
+  - CROWD: 500-2000 attendees visible, phones raised capturing moment, excited reactions
+  - BACKGROUND: 3-story curved LED walls with dynamic brand visuals, product specs, animations
+  - LIGHTING: 12+ moving spotlights, dramatic crisscross beams, atmospheric haze, rim lighting on presenter
+  - FOREGROUND: Professional photographers with DSLRs in left third, camera flashes
+  - ATMOSPHERE: High-energy, cutting-edge, professional event photography
+  - CAMERA: Wide angle 24mm to capture scale, Hasselblad X2D or Sony VENICE 2 for commercial quality
+
+**Example Expansion**:
+  User prompt: "futuristic tech product launch THE FUTURE IS HERE"
+
+  DON'T write: "product on dark pedestal, circular light ring, minimal"
+
+  DO write: "Massive tech product launch event inside 2000-capacity innovation hub. Central elevated circular stage 8m diameter with embedded LED floor panels pulsing in brand cyan and magenta. Professional presenter in sleek black turtleneck and augmented reality glasses, standing center stage, right arm extended gesturing toward levitating product display at chest height surrounded by holographic interface rings. Sleek black device hovering via magnetic suspension, hero lit by precise spotlight from above creating dramatic rim light. Behind presenter, towering 3-story curved LED wall displays dynamic brand animations, product wireframes, and scrolling tech specs in electric blue. Crowd of 800+ tech professionals and media in foreground and mid-ground, faces illuminated by phone screens raised to capture moment, mixture of excitement and awe. Professional event photographers with Canon 1DX cameras positioned left third, camera flashes creating starburst effects. 12 moving spotlights from ceiling rig create dramatic crisscross beams through atmospheric haze. Overhead architectural lighting fixtures visible. Floor is glossy black reflective surface mirroring stage lights. Shot on Sony VENICE 2 cinema camera, 24mm wide angle lens to capture full scale of event, professional event cinematography, published in WIRED magazine launch coverage, dramatic high-contrast lighting, f/2.8 for environmental depth."
+
+#### GENRE 2: FASHION EDITORIAL
+**Triggers**: "collection", "fashion", "style", "wear", "outfit", "new arrivals" + apparel
+**User Intent**: Show fashion in aspirational lifestyle context with ELEGANCE
+**Scene Requirements**:
+  - VENUE: Elegant architectural space (Mediterranean villa corridor / luxury boutique / heritage building / urban rooftop)
+  - MODEL: Single model (or 2-3 max), professional fashion pose (mid-stride / leaning / gazing), sophisticated styling
+  - ENVIRONMENT DETAIL: Rich architectural elements (arches, columns, marble floors, large windows)
+  - NATURAL INTEGRATION: Model naturally interacting with space (walking through corridor, sitting on stairs, window light)
+  - BACKGROUND DEPTH: Visible through windows/doorways - lush garden, city skyline, courtyard with plants
+  - LIGHTING: Natural window light (soft, diffused) OR golden hour sunlight (warm, directional), never harsh flash
+  - INTERIOR ELEMENTS: Plants in terracotta pots, vintage furniture pieces, textured walls (stone, plaster)
+  - COLOR PALETTE: Sophisticated (cream, beige, sage green, terracotta, soft pastels)
+  - ATMOSPHERE: Refined, aspirational, editorial lifestyle quality
+  - CAMERA: Medium format editorial, 85mm f/1.4 shallow DoF, Phase One IQ4 or Hasselblad X2D, fashion photography
+
+**Example Expansion**:
+  User prompt: "luxury fashion NEW COLLECTION SPRING 2026"
+
+  DON'T write: "model in dress, white background, studio lighting"
+
+  DO write: "Elegant fashion editorial in sun-drenched Mediterranean villa corridor. Model, South Asian woman late 20s, walking mid-stride through spacious hallway with floor-to-ceiling arched windows on left. She wears flowing sage green pleated midi dress with cream beige tailored blazer, gold bangle bracelets, holding small cream leather handbag, cream strappy heels. Natural confident expression, hair in loose waves catching backlight. Architectural details: beige limestone walls, white painted columns, honey-toned marble floor with subtle veining reflecting window light. Through large windows, lush courtyard garden visible - cascading purple wisteria, white roses, manicured hedges in soft focus. Interior right side: mature olive tree in large terracotta pot, decorative ceramic vase, sunlight creating dappled shadows on floor. Lighting: natural diffused sunlight streaming through windows from left, warm 5600K color temperature, soft shadows, gentle backlight creating hair glow, window frame casting subtle linear shadow pattern on floor. Shot on Phase One IQ4 150MP, 85mm f/1.4 lens for shallow depth of field, fashion editorial photography, published in Vogue, sophisticated spring campaign aesthetic, soft desaturated color grading with emphasis on earth tones, editorial lifestyle quality, f/1.4 background bokeh."
+
+#### GENRE 3: PRODUCT HERO (Luxury/Premium)
+**Triggers**: "product" + "premium/luxury/watch/bottle/gadget" (no "launch/event" words)
+**User Intent**: Show product as HERO with premium feel, not event context
+**Scene Requirements**:
+  - PRODUCT: Center frame, hero position, pristine condition
+  - LIGHTING: Precise studio lighting (disciplined, controlled) OR lifestyle natural light
+  - SURFACE: Premium material (black marble, dark slate, polished wood, leather pad)
+  - BACKGROUND: Clean gradient OR lifestyle context appropriate to product (watch → executive desk, perfume → vanity)
+  - MINIMAL ELEMENTS: 1-2 complementary props max (watch → cufflinks, perfume → flower petals)
+  - COPY-SAFE SPACE: Built into composition (usually bottom third or side)
+  - ATMOSPHERE: Premium, focused, clean, professional product photography
+  - CAMERA: Macro for details (100mm macro 1:1) OR medium format (Hasselblad H6D), product photography lighting
+
+**Example Expansion**:
+  User prompt: "luxury watch on dark surface"
+
+  DON'T write: "watch on table, simple"
+
+  DO write: "Luxury mechanical watch product hero shot on pristine black marble surface with subtle white veining. Swiss automatic chronograph with deep navy blue dial, rose gold case and bracelet, visible tourbillon mechanism at 6 o'clock position, sapphire crystal exhibition caseback facing up showing decorated movement. Single key light from upper right 45° angle creating precise highlight on polished case, graduated shadow extending bottom-left. Soft fill light from left at 1:3 ratio preventing dead blacks. Small spotlight on dial creating micro-reflections on applied hour markers. Background: seamless dark charcoal gradient fading to pure black in bottom third (copy-safe zone). Minimal props: single rose gold cufflink in soft focus upper left, rich brown leather watch box edge barely visible right side. Surface shows subtle mist of condensation droplets near watch adding premium tactile quality. Shot on Hasselblad H6D-400c, 100mm macro lens at f/5.6 for optimal detail retention across dial and case, professional luxury product photography, published in Robb Report, precise controlled studio lighting, color graded for warm rose gold emphasis, shadows to pure black for text overlay space."
+
+#### GENRE 4: PROMOTIONAL SALE/OFFER
+**Triggers**: "sale", "off", "discount", "offer", "limited time", "deal"
+**User Intent**: Grab attention, create URGENCY, text-dominant design
+**Scene Requirements**:
+  - BACKGROUND: Simple gradient OR store environment OR product context
+  - ENERGY: Vibrant, high-contrast, bold colors
+  - PRODUCT (if any): Secondary to text, small to medium size
+  - LIGHTING: Bright, energetic, high-key lighting
+  - EFFECTS: Optional dynamic elements (confetti, light rays, sparkles) if appropriate
+  - COMPOSITION: Text-dominant, product as supporting element
+  - ATMOSPHERE: Urgent, exciting, attention-grabbing retail energy
+  - CAMERA: Straightforward, clear, bold commercial photography
+
+#### GENRE 5: QUOTE/MOTIVATIONAL
+**Triggers**: "quote", "motivation", "inspiration", "believe", "dream", "achieve" (no product)
+**User Intent**: Inspire with EMOTIONAL imagery, text is primary
+**Scene Requirements**:
+  - BACKGROUND: Inspirational setting (mountain peak, sunrise, ocean, minimal abstract)
+  - PEOPLE (optional): Silhouette or distant figure, never face-focused
+  - MOOD: Emotional, powerful, cinematic
+  - LIGHTING: Dramatic (golden hour, rim light, volumetric rays)
+  - COMPOSITION: Typography-dominant, image supports mood
+  - ATMOSPHERE: Inspiring, epic, emotional resonance
+  - CAMERA: Cinematic wide angle, atmospheric, ARRI Alexa or RED
+
+#### GENRE 6: FOOD HERO
+**Triggers**: "food", "restaurant", "menu", "delicious", "recipe", "dish"
+**User Intent**: Make food look IRRESISTIBLE and appetizing
+**Scene Requirements**:
+  - FOOD: Hero close-up, garnish details, texture visible, fresh glistening appearance
+  - SURFACE: Rustic wood table OR modern plate OR chef's counter
+  - LIGHTING: Warm natural light OR controlled restaurant lighting (soft, directional)
+  - STEAM (if hot food): Subtle rising steam for freshness cue
+  - PROPS: Complementary ingredients, utensils, rustic elements (never crowded)
+  - BACKGROUND: Soft bokeh of restaurant interior OR ingredients in soft focus
+  - COLOR: Warm, appetizing, vibrant but natural
+  - ATMOSPHERE: Inviting, fresh, appetite-appealing
+  - CAMERA: Macro hero shot 100mm, shallow DoF f/2.8, food photography lighting
+
+**Example Expansion**:
+  User prompt: "delicious biryani FEAST TIME restaurant ad"
+
+  DON'T write: "biryani on plate, restaurant background"
+
+  DO write: "Mouth-watering biryani hero shot on rustic wooden table in upscale Indian restaurant. Large brass handi pot center frame, lid slightly lifted revealing aromatic basmati rice layered with saffron strands, tender chicken pieces, caramelized onions. Steam rising elegantly from pot, visible in dramatic side lighting. Garnished with fresh mint leaves, fried onions, boiled egg halves arranged artistically. Surrounding props: small copper bowls with raita and salan curry, fresh naan bread torn to show texture, brass spoon catching light. Background: soft bokeh of restaurant interior with warm amber pendant lights, terracotta walls, diners slightly out of focus. Lighting: warm tungsten key light from 45° left creating appetizing golden glow on rice, soft fill from right, hair light on rising steam. Surface shows rustic wood grain texture, traditional brass thali plate edge visible bottom frame. Shot on Canon EOS R5, 100mm macro lens f/2.8 for shallow depth, professional food photography, warm color grading emphasizing golden saffron and rich browns, published in food magazine."
+
+#### GENRE 7: REAL ESTATE/PROPERTY
+**Triggers**: "property", "villa", "apartment", "house", "real estate", "home", "penthouse", "residence"
+**User Intent**: Showcase property with LUXURY and SPACE, make viewers want to live there
+**Scene Requirements**:
+  - PROPERTY TYPE: Specify architecture style (modern villa, colonial bungalow, contemporary apartment, heritage haveli)
+  - EXTERIOR VIEW: Full facade OR dramatic angle showing scale, architectural details (glass, stone, wood, arches)
+  - INTERIOR (if applicable): Spacious room with high ceilings, large windows, luxurious furnishings
+  - ENVIRONMENT: Lush landscaping, pool/garden/terrace visible, city skyline OR natural setting
+  - TIME OF DAY: Golden hour (warm, inviting) OR twilight (luxury, dramatic) OR bright day (spacious, airy)
+  - LIGHTING: Natural window light flooding interior OR dramatic exterior lighting, warm interior glow at dusk
+  - LIFESTYLE ELEMENTS: Optional people (family silhouettes, couple on terrace) for aspiration
+  - ATMOSPHERE: Luxurious, spacious, aspirational, inviting
+  - CAMERA: Wide angle 24mm to show space, architectural photography, Hasselblad X2D or Phase One XT
+
+**Example Expansion**:
+  User prompt: "luxury villa DREAM HOME Mumbai property"
+
+  DON'T write: "modern house, nice view, sunset"
+
+  DO write: "Stunning contemporary luxury villa in Mumbai Malabar Hill at golden hour. Three-story modern architecture with floor-to-ceiling glass panels, white minimalist facade with teak wood accents, cantilevered upper floor creating dramatic overhang. Foreground: manicured tropical garden with coconut palms, frangipani trees in bloom, infinity edge pool reflecting golden sky, natural stone pathway. Main view: open-concept living room visible through glass walls, double-height ceiling, Italian marble flooring, designer furniture in warm neutrals, contemporary chandelier. Right side: expansive terrace with lounge seating, glass railing showing unobstructed Arabian Sea view. Background: Mumbai skyline in soft focus, sunset sky with warm orange and pink gradient, few clouds catching light. Lifestyle element: silhouette of couple on terrace with wine glasses, suggesting aspirational living. Lighting: golden hour sunlight at 15° angle creating warm glow on white facade, interior lights just turned on creating inviting warm ambiance, pool lights beginning to activate creating blue glow. Architectural details visible: floating wooden stairs through glass, green wall with vertical garden left side, covered parking with luxury vehicles partially visible. Shot on Phase One XT, 24mm tilt-shift lens for architectural accuracy, professional luxury real estate photography, published in Architectural Digest India, warm color grading emphasizing golden hour magic, HDR-style balanced exposure showing both exterior and interior detail."
+
+#### GENRE 8: BEAUTY/COSMETICS APPLICATION
+**Triggers**: "makeup", "cosmetics", "beauty", "skincare", "lipstick", "foundation", "mascara", "glow", "radiant skin"
+**User Intent**: Show TRANSFORMATION and beauty application in action, not just product
+**Scene Requirements**:
+  - MODEL: Close-up or medium shot, professional makeup application in progress OR finished look
+  - MAKEUP ARTIST (optional): Hands applying product, professional tools visible (brushes, sponges)
+  - LIGHTING: Soft beauty lighting (ring light reflection in eyes) OR natural window light, flawless skin rendering
+  - MIRROR/VANITY: Hollywood vanity mirror with bulbs OR elegant dressing table setting
+  - PRODUCTS: Visible in scene (open compacts, brushes, palettes) arranged aesthetically
+  - BACKGROUND: Luxury boutique interior OR minimal studio OR elegant bedroom vanity
+  - FOCUS: Skin texture, product application, glossy lips, shimmer on eyes, natural glow
+  - ATMOSPHERE: Glamorous, transformative, aspirational beauty moment
+  - CAMERA: 85mm f/1.4 portrait lens for skin flattery, beauty photography, soft focus background
+
+**Example Expansion**:
+  User prompt: "lipstick application BOLD RED beauty cosmetics"
+
+  DON'T write: "woman applying lipstick, mirror, makeup"
+
+  DO write: "Glamorous beauty moment in luxury vanity setting. Close-up shot of South Asian woman mid-20s applying bold crimson red lipstick, three-quarter angle showing right side of face. Model has flawless dewy skin with subtle highlighter catching light on cheekbones, perfectly defined winged eyeliner, natural lashes with mascara. Right hand holding gold-cased lipstick bullet applying to bottom lip with precision, top lip already coated in rich pigment showing satin finish. Left hand gently supporting chin, rose gold rings catching light. Background: Hollywood vanity mirror with 12 warm-white bulbs creating soft halo glow, gentle bokeh of light orbs. Vanity surface visible bottom frame: open makeup palette showing reds and nudes, professional kabuki brush, beauty blender, small crystal perfume bottle, rose gold compact mirror. Setting: elegant cream-colored vanity in boutique beauty salon, soft pink upholstered chair edge visible, fresh white roses in vase soft focus background right. Lighting: key beauty ring light from front creating signature catchlight circle in eyes, soft diffused quality eliminating harsh shadows, warm 5000K color temperature for natural skin tone, subtle fill from ambient room lighting. Expression: confident, focused on application, lips slightly parted. Makeup details: nude eyeshadow with subtle shimmer in inner corner, bronzer creating gentle contour, clear lip liner preventing feathering. Shot on Sony A7R V, 85mm f/1.4 lens for beautiful skin rendering and background bokeh, professional beauty photography, color graded for warm luxurious feel emphasizing gold and cream tones, skin retouching maintaining natural texture, published in beauty editorial magazine."
+
+#### GENRE 9: AUTOMOTIVE
+**Triggers**: "car", "vehicle", "automobile", "drive", "showroom", "launch" + car brand names
+**User Intent**: Show vehicle with POWER, LUXURY, and DESIRE - make it covetable
+**Scene Requirements**:
+  - VEHICLE: Hero position, 3/4 front angle OR dramatic side profile, pristine condition, reflections visible
+  - SETTING: Luxury showroom with dramatic lighting OR scenic road/location OR urban backdrop at night
+  - LIGHTING: Dramatic studio lighting highlighting curves OR cinematic natural light OR urban neon reflections
+  - REFLECTIONS: On glossy paint showing environment, ground reflection for premium feel
+  - ENVIRONMENT DETAIL: Showroom (glass, modern architecture, brand elements) OR location (mountain road, city skyline, desert)
+  - HUMAN ELEMENT (optional): Model leaning against car OR driver visible through window OR valet in background
+  - ATMOSPHERE: Powerful, luxurious, aspirational, dynamic
+  - CAMERA: Low angle to emphasize presence, 35mm or 50mm, automotive photography, motion blur if driving scene
+
+**Example Expansion**:
+  User prompt: "luxury SUV launch UNSTOPPABLE"
+
+  DON'T write: "black SUV in showroom, lights, clean"
+
+  DO write: "Dramatic luxury SUV reveal in ultra-modern showroom at night. Metallic black premium SUV positioned center frame in 3/4 front angle, aggressive front grille chrome catching dramatic spotlight, LED matrix headlights illuminated creating signature light pattern. Vehicle: Large luxury SUV with muscular proportions, 22-inch alloy wheels with low-profile performance tires, roof rails, tinted windows showing hints of premium tan leather interior, chrome accents along body line. Showroom setting: Floor-to-ceiling glass walls showing city skyline at twilight, polished black granite floor creating perfect vehicle reflection, modern industrial ceiling with exposed beams and track lighting. Dramatic lighting: Main spotlight from upper front-left creating highlight on hood and roof, emphasizing sculpted body lines and casting graduated shadow behind vehicle, secondary lights from sides preventing dead blacks, subtle blue accent lighting from floor creating glow under chassis, ambient showroom lighting creating warm reflections in glass panels. Background elements: Brand's glowing logo on wall 8 meters behind vehicle, modern furniture (leather chairs, glass coffee table) in soft focus right side, other vehicles barely visible in background darkness creating depth, cityscape through windows with twinkling lights. Foreground: Glossy floor showing perfect reflection of front quarter of vehicle, subtle mist effect at floor level adding atmosphere. Technical details: Visible: adaptive cruise radar behind grille, 360° camera modules, power tailgate chrome strip, brake calipers behind wheel spokes. Shot on RED V-RAPTOR cinema camera, 35mm lens at low angle (60cm height) to emphasize vehicle's commanding presence, automotive commercial photography, cinematic color grading with teal shadows and warm highlights, dramatic contrast emphasizing metallic paint depth, professional automotive advertising quality."
+
+#### GENRE 10: ENTERTAINMENT (Movies/Music/Shows)
+**Triggers**: "movie", "film", "poster", "album", "music", "concert", "show", "series", "streaming", "premiere"
+**User Intent**: Create DRAMATIC, CINEMATIC impact - must be memorable and distinctive
+**Scene Requirements**:
+  - CHARACTER/ARTIST: Hero positioning, dramatic pose, strong silhouette OR iconic stance
+  - COMPOSITION: Cinematic framing (rule of thirds, symmetry, leading lines), negative space for title text
+  - LIGHTING: Dramatic contrast (chiaroscuro), colored gels (genre-specific), rim lighting, atmospheric
+  - BACKGROUND: Genre-appropriate (dystopian cityscape, concert stage, abstract patterns, textured wall)
+  - COLOR PALETTE: Bold, distinctive (noir blacks, neon cyberpunk, warm sepia, monochrome with color accent)
+  - MOOD: Genre-driven (thriller=dark suspense, comedy=bright energy, action=dynamic intensity)
+  - EFFECTS: Optional fog/smoke, lens flares, light rays, particle effects for atmosphere
+  - ATMOSPHERE: Cinematic, dramatic, instantly recognizable genre
+  - CAMERA: Anamorphic lens characteristics, ARRI Alexa or RED cinema quality, theatrical poster style
+
+**Example Expansion**:
+  User prompt: "action movie poster BREAKOUT thriller"
+
+  DON'T write: "man with gun, dark background, dramatic"
+
+  DO write: "Cinematic action thriller poster composition. Central figure: Male protagonist in tactical black outfit, three-quarter angle facing camera, muscular build, determined expression with subtle cut on cheekbone suggesting recent combat. Standing in powerful stance with feet shoulder-width, holding tactical pistol pointed down right side, left hand clenched fist. Clothing details: Black tactical vest with visible gear (radio, magazine pouches), torn long-sleeve shirt underneath showing defined forearm, military watch, tactical boots, subtle blood spatter on vest. Background: Explosive urban environment - abandoned warehouse with structural beams creating diagonal leading lines, shattered glass falling in mid-air frozen in motion, orange and blue fire explosion blooming behind left shoulder creating dramatic rim light on figure's silhouette, concrete debris suspended in air from blast, smoke and atmospheric haze creating depth layers. Lighting: Massive dramatic contrast - key light from front-right at 45° creating strong cheekbone definition and shadow on left face, orange fire creating warm rim light outlining right shoulder and arm, practical light sources (sparks, fire) creating orange and yellow color temperature, deep shadows in background (70% of frame), cool blue accent light from left creating color contrast against warm fire tones. Atmospheric effects: Volumetric light rays cutting through smoke from fire, floating embers in foreground creating depth, motion blur on falling debris suggesting explosive movement, subtle lens flare from fire creating anamorphic horizontal streak. Composition: Subject positioned in lower third of frame leaving massive negative space in top two-thirds for title text, rule of thirds intersection on protagonist's eyes, diagonal composition from bottom-left to top-right creating dynamic tension. Color palette: Dominant deep blacks and dark grays (60%), warm orange fire glow (25%), cool blue accents (15%), desaturated overall except for fire creating focal point. Shot on ARRI Alexa 35 with anamorphic lens creating 2.39:1 widescreen aspect, shallow depth of field f/2.8 keeping subject sharp while background has cinematic blur, theatrical action poster cinematography, color graded with orange and teal contrast, high contrast ratio 8:1, professional Hollywood poster quality, inspired by Michael Bay cinematography style."
+
+#### GENRE 11: TRAVEL/TOURISM
+**Triggers**: "travel", "destination", "hotel", "resort", "vacation", "tourism", "explore", "visit"
+**User Intent**: Show destination as IRRESISTIBLE escape - make viewers want to book now
+**Scene Requirements**:
+  - LOCATION: Iconic landmark OR pristine beach OR luxury resort OR cultural heritage site OR mountain vista
+  - DEPTH LAYERS: Foreground interest + middle subject + background vista creating sense of place
+  - PEOPLE (optional): Travelers experiencing moment (silhouette on cliff, couple on beach, family exploring) never posed
+  - TIME OF DAY: Golden hour (warm, inviting) OR blue hour (serene, magical) for emotional impact
+  - LOCAL ELEMENTS: Cultural markers (architecture, traditional boats, local flora) for authenticity
+  - ATMOSPHERE: Aspirational, peaceful, adventurous, escape-worthy
+  - CAMERA: Wide angle 24-35mm for expansive vistas, travel photography, natural balanced lighting
+
+**Example**: "Goa beach resort ESCAPE" → Beach scene with palm-fringed white sand, turquoise Arabian Sea, luxury resort with infinity pool on cliff, couple walking at water's edge, golden hour glow, traditional fishing boats in mid-ground, shot wide angle dramatic sky.
+
+#### GENRE 12: SPORTS/FITNESS
+**Triggers**: "athlete", "sports", "fitness", "gym", "training", "workout", "match", "championship"
+**User Intent**: Show POWER, DETERMINATION, peak human performance
+**Scene Requirements**:
+  - ATHLETE: Mid-action OR post-workout peak moment, defined muscles, intense expression, athletic wear
+  - ACTION: Dynamic movement (running, jumping, lifting) with motion blur OR powerful static pose
+  - ENVIRONMENT: Gym (industrial aesthetic, equipment visible) OR stadium (crowd energy) OR outdoor (urban, nature)
+  - LIGHTING: Dramatic side/rim lighting emphasizing muscle definition, high contrast, backlit for hero silhouette
+  - ENERGY: Sweat droplets visible, intensity in eyes, determination in posture
+  - ATMOSPHERE: Powerful, motivational, peak performance
+  - CAMERA: Fast shutter for frozen action OR slow shutter for motion blur, 70-200mm telephoto for compression
+
+**Example**: "gym workout POWER" → Athletic Indian man deadlifting heavy barbell, muscles tensed, veins visible, sweat droplets frozen mid-air, dramatic side lighting creating definition, industrial gym with concrete walls, chalk dust, other athletes blurred background, low angle shot emphasizing power.
+
+#### GENRE 13: INTERIOR DESIGN/HOME DECOR
+**Triggers**: "interior", "home decor", "furniture", "living room", "bedroom", "design", "decoration"
+**User Intent**: Show space as ASPIRATIONAL, livable, styled - make viewers want that home
+**Scene Requirements**:
+  - ROOM TYPE: Specify (living room, bedroom, kitchen, bathroom) with clear function
+  - FURNITURE: Hero pieces clearly visible with design details, styled arrangement showing flow
+  - STYLING: Layered (pillows, throws, plants, books, art, decorative objects) but not cluttered
+  - LIGHTING: Natural window light + warm interior lighting, layered light sources (table lamps, pendants, floor lamps)
+  - COLOR PALETTE: Cohesive (modern neutrals OR bohemian warm OR minimalist whites OR maximalist bold)
+  - DETAILS: Textures visible (linen, wood grain, woven baskets, ceramic, brass fixtures)
+  - ATMOSPHERE: Inviting, lived-in but styled, aspirational comfort
+  - CAMERA: Wide angle 24mm for room scope, straight-on architectural photography, soft natural light
+
+**Example**: "modern living room COMFORT" → Scandinavian-style living room, cream L-shaped sofa with textured pillows, walnut coffee table with books and ceramic vase, large monstera plant in woven basket, sheer curtains filtering afternoon light, oak floors, gallery wall with abstract art, brass floor lamp, layered rugs, clean but lived-in.
+
+#### GENRE 14: HEALTHCARE/WELLNESS
+**Triggers**: "clinic", "hospital", "doctor", "medical", "wellness", "health", "therapy", "consultation"
+**User Intent**: Show CARE, PROFESSIONALISM, trust and cleanliness
+**Scene Requirements**:
+  - SETTING: Modern clinic interior OR wellness center OR medical facility with clean aesthetic
+  - PROFESSIONALS: Doctor/therapist in professional attire, warm reassuring expression, interacting with patient
+  - EQUIPMENT: Visible but not intimidating (stethoscope, laptop, wellness products, clean surfaces)
+  - COLOR PALETTE: Clean whites + calming blues/greens OR warm woods for wellness centers
+  - LIGHTING: Bright natural window light + soft medical lighting, clean and inviting not clinical
+  - ATMOSPHERE: Professional, caring, trustworthy, clean, reassuring
+  - CAMERA: Medium shot 50mm showing interaction, professional medical photography, soft flattering light
+
+**Example**: "wellness center HEALING" → Modern wellness clinic, female doctor in white coat consulting with patient, warm smile, natural light from large window, indoor plants creating calming environment, clean minimalist desk with laptop, wellness brochures, comfortable chairs, soft color palette of whites and sage greens, professional but welcoming atmosphere.
+
+#### GENRE 15: EDUCATION/LEARNING
+**Triggers**: "education", "course", "learning", "school", "training", "class", "workshop", "online course"
+**User Intent**: Show TRANSFORMATION through learning, accessibility, engagement
+**Scene Requirements**:
+  - LEARNING ENVIRONMENT: Modern classroom OR online setup OR workshop space OR library
+  - PEOPLE: Engaged students/learners (diverse ages), instructor/teacher if relevant, natural interaction
+  - TECHNOLOGY: Laptops, tablets, smartboards visible (modern education), OR books/materials (traditional)
+  - ATMOSPHERE: Bright, energetic, collaborative OR focused and studious depending on context
+  - LIGHTING: Natural bright light creating positive energy, warm and inviting
+  - ENVIRONMENT: Clean, organized, inspiring (motivational posters, plants, organized materials)
+  - CAMERA: Environmental shot showing activity, warm natural photography
+
+**Example**: "online course MASTER" → Modern home office setup, young professional at desk with laptop showing video call with instructor, notebook with notes, coffee cup, bookshelf background with relevant books, large window with natural light, indoor plant, clean organized workspace, warm inviting atmosphere showing accessible learning.
+
+#### GENRE 16: PERSONAL EVENTS (Wedding/Party/Celebration)
+**Triggers**: "wedding", "birthday", "party", "celebration", "anniversary", "event" (without "launch" or corporate context)
+**User Intent**: Capture EMOTION, JOY, special moment - make it memorable
+**Scene Requirements**:
+  - EVENT TYPE: Wedding (ceremony/reception) OR birthday (cake/celebration) OR party (gathering/dance)
+  - PEOPLE: Real emotional moments (laughter, tears, dancing, embracing) never stiff or posed
+  - VENUE: Decorated space (fairy lights, florals, draping, themed decor) showing celebration environment
+  - LIGHTING: Warm emotional lighting (string lights, candles, golden hour) OR dramatic party lighting
+  - ATMOSPHERE: Joyful, emotional, celebratory, intimate OR energetic depending on moment
+  - DETAILS: Decor elements (flowers, cake, decorations) showing special occasion
+  - CAMERA: 85mm for portraits, 35mm for environmental shots, natural emotional photography
+
+**Example**: "wedding celebration FOREVER" → Indian wedding reception venue, bride and groom on decorated stage with floral backdrop of roses and marigolds, traditional attire (red lehengas, sherwani), fairy lights strung across venue, guests dancing in foreground, warm golden lighting creating romantic atmosphere, mehendi-decorated hands, emotional moment of couple laughing together, professional wedding photography.
+
+#### GENRE 17: ADAPTIVE/FLEXIBLE (Universal Master - EVERYTHING Possible)
+**Triggers**: ANY prompt not matching genres 1-16 — Including:
+  - **Temporal**: Historical (ancient, medieval, vintage), Futuristic (cyberpunk, space age, year 3000), Present
+  - **Fictional**: Sci-Fi (aliens, spaceships, cyborgs), Fantasy (dragons, magic, mythical), Horror (zombies, supernatural)
+  - **Nature**: Wildlife (animals in habitat), Plants (botanical, gardens), Landscapes (mountains, forests, oceans)
+  - **Scientific**: Biology (cells, DNA, microscopic), Chemistry (reactions, lab), Physics (abstract concepts), Math (geometric, equations visualized)
+  - **Abstract**: Conceptual art, surrealism, emotions visualized, philosophical ideas, pure abstraction
+  - **Intelligence/Spy**: Espionage scenes, surveillance, secret agent moments, conspiracy thriller aesthetics
+  - **Creatures**: Any beings (aliens, monsters, mythical creatures, robots, cyborgs, hybrids)
+  - **Specialized**: Archaeology, Space exploration, Underwater, Aerial, Micro/Macro photography
+  - **ANYTHING ELSE**: If it can be imagined, this genre handles it
+
+**User Intent**: ANYTHING creative - this is your BEAST-LEVEL intelligence test
+**How to Handle (10-Step Master Process)**:
+  1. **IDENTIFY CATEGORY**: What type? (Sci-fi? Historical? Nature? Abstract? Scientific? Conceptual?)
+  2. **ANALYZE CONTEXT**: What's the goal? Commercial? Editorial? Conceptual? Entertainment?
+  3. **FIND REFERENCE GENRE**: Which of genres 1-16 is structurally similar? (Event? Editorial? Hero shot?)
+  4. **DETERMINE TIME PERIOD**: Past (era-specific details)? Present? Future (tech, aesthetics)?
+  5. **DECIDE REALISM LEVEL**: Photorealistic? Stylized? Abstract? Surreal? Hyper-detailed?
+  6. **THINK STEP-BY-STEP** - The 5 Critical Questions:
+     - WHERE is this? (Alien planet? Victorian London? Underwater? Laboratory? Abstract void?)
+     - WHO/WHAT is present? (Humans? Aliens? Animals? Creatures? Objects? Pure concepts?)
+     - WHAT creates WOW? (Scale? Impossible physics? Surreal juxtaposition? Ultra detail?)
+     - HOW is it lit? (Even for abstract - describe luminosity, glow, shadows, color temp)
+     - WHAT's the MOOD? (Wonder? Fear? Awe? Curiosity? Tranquility? Chaos?)
+  7. **BUILD LAYERED SCENE**: Foreground + Mid-ground + Background + Atmospheric elements
+  8. **ADD IMPOSSIBLE/UNIQUE ELEMENTS**: What makes this genre special? (Holograms? Time distortion? Bioluminescence? Geometric impossibility?)
+  9. **SPECIFY STYLE**: Photography? Digital art? Concept art? 3D render? Painting aesthetic?
+  10. **BE MAXIMALLY CURIOUS**: Think "How would the BEST concept artist approach this?" not just "what's adequate?"
+
+**Critical Rule**: NO LIMITS. If user asks for it, build it with full creative expansion.
+
+**Example Pattern Combinations (Standard Commercial)**:
+  - "Art gallery opening" = GENRE 1 (Tech Launch structure) + GENRE 3 (Product Hero for art) + elegant cultural setting
+  - "Coffee shop morning" = GENRE 6 (Food Hero) + GENRE 13 (Interior Design) + lifestyle human element
+  - "Yoga retreat" = GENRE 11 (Travel) + GENRE 14 (Wellness) + GENRE 12 (Fitness) merged
+  - "Book launch" = GENRE 1 (Event structure) + GENRE 15 (Education) + intimate intellectual atmosphere
+  - "Pet adoption" = GENRE 16 (Personal Events emotion) + outdoor park setting + family interaction
+
+**BEAST Examples (Wild/Imaginative Scenarios)**:
+
+**Sci-Fi/Futuristic**:
+User: "cyborg awakening THE FUTURE OF HUMANITY"
+→ Build: "Cyberpunk laboratory in year 2157. Central subject: Female cyborg emerging from cryogenic pod, half-human half-machine, left side face shows flawless human skin, right side reveals intricate chrome and titanium facial structure with glowing blue circuit patterns visible beneath translucent bio-synthetic skin. Eyes: left natural brown iris, right cybernetic with HUD display rings. Body: Advanced prosthetic right arm with articulated fingers showing servo motors and fiber-optic cabling, left arm human. Setting: Massive underground bio-tech facility with rows of occupied cryopods in background (50+ visible), holographic medical displays floating in air showing vital signs and neural mapping, glass tubes with bioluminescent liquid creating blue-green atmospheric glow. Lighting: Harsh clinical overhead fluorescent creating strong shadows, blue underglow from pods, warm orange emergency lights in background creating depth, steam/mist rolling across floor from cryogenic systems. Foreground: Medical equipment on sterile steel surfaces, cables and tubes, broken cryopod glass. Scientists in white hazmat suits in soft focus mid-ground observing. Atmosphere: Tense, sci-fi thriller, awakening moment. Shot on RED V-RAPTOR for cinema quality, 50mm lens, shallow DoF on subject, cyberpunk color grading with teal shadows and orange highlights, hyper-detailed 8K textures on mechanical parts, professional concept art photography quality, Blade Runner 2049 aesthetic."
+
+**Historical/Past**:
+User: "ancient Egypt pharaoh POWER AND GLORY"
+→ Build: "Majestic ancient Egyptian throne room, 1250 BCE, Pharaoh Ramesses II era. Central figure: Pharaoh seated on ornate golden throne elevated on dais, wearing traditional nemes headdress with cobra uraeus, false beard, usekh collar of gold and lapis lazuli, white linen shendyt kilt with golden belt. Holding was scepter and ankh symbol. Setting: Grand pillared hall with massive lotus-capital sandstone columns (12 columns visible, 8m tall), walls covered in colorful hieroglyphic reliefs telling conquest stories, gold leaf details catching light. Background: Massive carved stone walls with painted scenes of gods and pharaoh's victories, colors of red ochre, blue lapis, green malachite pigments. Court officials and priests standing in rows on both sides (30+ figures), heads bowed in respect, wearing white linen robes, some with leopard skin mantles. Lighting: Dramatic shafts of golden sunlight streaming through high clerestory windows creating visible light beams through incense smoke, warm 3200K color temperature, dust particles visible in light rays, deep shadows in columns creating drama. Foreground: Polished limestone floor reflecting light, offerings of gold, frankincense, and flowers. Atmospheric elements: Incense smoke creating haze, adding mystery and reverence. Shot on ARRI Alexa with anamorphic lens for epic scope, low angle looking up at pharaoh emphasizing power, warm color grading with gold emphasis, historically accurate details researched from archaeology, dramatic contrast ratio, cinematic historical epic quality like Gladiator."
+
+**Nature/Wildlife**:
+User: "majestic tiger WILD SPIRIT wildlife"
+→ Build: "Bengal tiger in natural habitat, Ranthambore National Forest, India, golden hour. Hero subject: Adult male Bengal tiger in powerful stride through shallow stream, muscles rippling beneath orange-and-black striped fur, water splashing dramatically from paws mid-step frozen in motion, intense amber eyes locked on prey ahead, ears forward showing alertness. Physical details: Wet fur creating texture and weight, individual whiskers visible, fangs partially visible, powerful shoulder muscles defined, tail extended behind for balance. Environment: Dense sal forest surroundings, dappled golden sunlight filtering through tree canopy creating patches of light and shadow across scene, bamboo and lantana undergrowth, moss-covered rocks in stream, fallen teak leaves floating in water. Background depth: More forest visible with atmospheric haze creating layers, hint of other wildlife (deer) fleeing in far background barely visible, creating narrative. Foreground: Water splashes captured mid-air with fast shutter, pebbles visible underwater, reflection of tiger on water surface. Lighting: Golden hour backlight from 30° angle creating rim light along tiger's back and head, highlighting fur texture, warm 3800K color temperature, soft fill light from reflected sunlight preventing harsh shadows on face. Atmospheric: Light morning mist in low areas, dust particles in sunlight shafts. Shot on Sony A1 with 400mm f/2.8 telephoto lens, fast shutter 1/2000s freezing motion, wildlife photography, shallow DoF f/4 for background separation, warm natural color grading emphasizing golden hour magic, National Geographic quality, professional wildlife photography."
+
+**Abstract/Conceptual**:
+User: "TIME concept abstract visualization"
+→ Build: "Surreal conceptual visualization of Time as physical dimension. Central element: Massive antique brass pocket watch suspended in void, face showing Roman numerals, multiple overlapping clock hands spinning at different speeds creating motion blur trails. Watch is broken/deconstructed with gears, springs, and mechanisms floating outward in explosion-like pattern but frozen mid-motion. Physics: Objects exist in multiple temporal states simultaneously - left side shows items in pristine new condition, center shows present state, right side shows aged rusted decay, same objects at different time periods. Floating elements: Calendar pages disintegrating into butterflies, hourglasses with sand flowing upward defying gravity, old photographs fading from color to sepia, future digital holograms, calendar dates spiraling in helix pattern. Color story: Left (future) cool blues and whites with digital glow, center (present) natural balanced colors, right (past) warm sepias and aged yellows. Environment: Abstract dimensional void, not black but deep cosmic purple-blue gradient, subtle geometric grid lines suggesting space-time fabric distorting around watch. Lighting: Multiple impossible light sources - harsh white future light from left, warm tungsten nostalgia light from right, neutral present light from above, creating complex interplay of shadows. Particles: Time particles (visualized as glowing golden dust) flowing in streams around objects showing temporal currents. Atmosphere: Philosophical, mind-bending, infinite. Shot on Phase One with tilt-shift for selective focus controlling what's sharp across temporal zones, f/1.4 for dreamy bokeh, conceptual art photography, color graded with split toning (cool highlights warm shadows), professional surreal photography, Salvador Dali meets modern photo-manipulation aesthetic, deep focus stacking for impossible depth of field."
+
+**Scientific/Biology**:
+User: "DNA structure LIFE CODE microscopic"
+→ Build: "Extreme macro scientific visualization of DNA double helix, microscopic cellular environment. Central subject: Perfectly formed DNA double helix molecule 3nm width, visible base pairs (adenine-thymine, guanine-cytosine) in color-coded system - adenine green, thymine red, guanine blue, cytosine yellow, sugar-phosphate backbone in translucent white-silver. Molecular detail: Individual hydrogen bonds visible as faint glowing connections between base pairs, helix twist following B-form DNA right-handed spiral (one complete turn every 10.4 base pairs), minor and major grooves visible. Environment: Inside cell nucleus, chromatin fiber visible in background soft focus, histone proteins shown as spherical complexes that DNA wraps around, nuclear membrane with pores visible in far background creating depth. Surrounding: RNA polymerase enzyme complex attached to DNA strand appearing to transcribe genetic code, multiple smaller protein molecules floating in nucleoplasm, ATP energy molecules glowing with bioluminescence. Lighting: Impossible sci-fi lighting making molecular structures visible - blue-white laboratory lighting simulating electron microscope visualization but with dramatic cinematic quality, internal glow from molecular bonds, subtle rim lighting on helix creating depth. Color palette: Scientific accuracy with artistic enhancement - glowing neon colors against deep blue-black cellular background, slight chromatic aberration on edges suggesting microscopic optics. Particles: Floating nucleotides, enzymes, water molecules creating sense of active biological environment. Scale indicators: Subtle nano-meter scale markers in corner. Shot on specialized macro setup with simulated focus stacking, depth of field suggesting 40,000x magnification, scientific photography meets concept art, color graded for educational clarity with dramatic flair, IMAX documentary science visualization quality, published in Nature/Science journal cover aesthetic."
+
+**Adaptive Thinking Framework**:
+```
+1. IDENTIFY core subject (what's the hero?)
+2. DETERMINE complexity need (simple product? full event? lifestyle scene?)
+3. SELECT base genre (which of 16 is closest match?)
+4. BORROW structure elements from that genre
+5. ADAPT details to fit this specific context
+6. ADD creative expansion (what makes it special?)
+7. BUILD complete scene with 5 W's (where, who, what, how lit, what wow)
+```
+
+**Critical Rule for Adaptive**:
+  - NEVER write generic scenes
+  - ALWAYS add specific environmental detail
+  - ALWAYS specify lighting precisely
+  - ALWAYS think about people/scale if appropriate
+  - ALWAYS aim for 100-150 word complexity unless clearly simple product shot
+
+**Example Adaptive Handling**:
+
+User: "art gallery exhibition NEW MASTERS"
+→ Closest genre: GENRE 1 (Event) + GENRE 13 (Interior)
+→ Adaptive build: "Contemporary art gallery exhibition opening night. Large white-walled gallery space with high exposed beam ceilings, polished concrete floors reflecting gallery lighting. Featured artwork: massive abstract canvas 3m×4m in bold reds and blacks, dramatically lit by adjustable track spotlights from 45° angle. Gallery visitors: 40-50 art collectors and enthusiasts in evening wear, wine glasses in hand, engaged in conversation, viewing artworks. Left wall: series of smaller framed pieces creating visual rhythm. Right side: gallery curator in black discussing piece with small group of 4 collectors. Atmosphere: sophisticated cultural event, mixture of focused art viewing and social networking. Lighting: Precise gallery track lighting on each artwork (5500K color temp for color accuracy), subtle ambient uplighting creating warm glow on walls, natural evening light filtering through large street-facing windows creating depth. Foreground: Sculpture on white pedestal catching dramatic light. Background: Additional gallery rooms visible through archway showing more exhibition. Shot on Hasselblad X2D, 35mm lens to capture environmental context, architectural photography style, color graded for gallery neutrality with slight warm lift, professional cultural event photography."
+
+### SCENE COMPLEXITY DECISION TREE
+
+**Question 1**: Does prompt mention "launch" OR "event" OR "reveal" OR "unveiling"?
+  → YES: Build FULL EVENT SCENE (venue + stage + crowd + presenter)
+  → NO: Continue to Q2
+
+**Question 2**: Is this fashion/apparel with lifestyle context?
+  → YES: Build EDITORIAL LIFESTYLE SCENE (elegant location + model + environmental detail)
+  → NO: Continue to Q3
+
+**Question 3**: Is this a product shot with NO event/lifestyle context?
+  → YES: Build PRODUCT HERO SCENE (clean setup, focused lighting, premium surface)
+  → NO: Continue to Q4
+
+**Question 4**: Is this promotional/sale focused?
+  → YES: Build SIMPLE PROMOTIONAL SCENE (gradient/context + energy + text-dominant)
+  → NO: Build appropriate scene based on industry
+
+### CREATIVE EXPANSION RULES (Mandatory Curious Thinking)
+
+For EVERY prompt, ask yourself:
+1. **WHERE is this happening?** (Specific venue, not "studio" or "outdoor")
+2. **WHO is present?** (Presenter? Model? Crowd? How many? What are they doing?)
+3. **WHAT'S in the environment?** (Architectural details, props, background elements)
+4. **HOW is it lit?** (Specific light sources, direction, quality, color temperature)
+5. **WHAT adds WOW factor?** (Scale? Crowd? Dramatic lighting? Atmospheric effects?)
+
+**NEVER write**:
+  - "product on pedestal, dark background" ❌
+  - "model in studio, white background" ❌
+  - "simple scene with lighting" ❌
+
+**ALWAYS write**:
+  - Full venue description with specific architectural details ✅
+  - Specific number of people and what they're doing ✅
+  - Precise lighting setup (source, direction, temperature, quality) ✅
+  - Environmental richness (background elements, props, atmosphere) ✅
+  - Camera and lens specs for quality signal ✅
+
+### COMPLEXITY LEVELS & WORD COUNT
+
+- **SPECTACULAR** (150-200 words): Tech launch, major events, campaign hero shots
+- **COMPLEX** (120-150 words): Fashion editorial, multi-element scenes
+- **MEDIUM** (80-120 words): Product hero with context, lifestyle shots
+- **SIMPLE** (60-80 words): Clean product shots, gradients, minimalist
+- **MINIMAL** (40-60 words): Drafts, fast iteration only
+
+### EXAMPLE TRANSFORMATIONS
+
+**User**: "smartphone launch event"
+**DON'T**: "smartphone on table, dark background, spotlight"
+**DO**: "Technology product launch at 1500-capacity innovation center. Central stage 10m diameter with LED floor, presenter in black turtleneck gesturing to levitating smartphone hologram. Crowd 700+ with phones raised, LED wall behind showing UI interface, moving spotlights, atmospheric haze, wide angle shot Sony VENICE."
+
+**User**: "summer dress collection"
+**DON'T**: "model wearing dress, outdoor, natural light"
+**DO**: "Fashion editorial on sun-drenched terrace overlooking Amalfi coast. Model in flowing yellow sundress, walking past white stucco wall with trailing bougainvillea, terra cotta pots, Mediterranean sea visible through archway, golden hour backlight, shot on Hasselblad X2D 85mm f/1.4."
+
+**User**: "luxury perfume bottle"
+**DON'T**: "perfume bottle, clean background"
+**DO**: "Luxury perfume hero on black marble vanity, precision spotlight from upper right, crystal stopper catching light, silk fabric draped left, white orchid petals soft focus, gradient to black bottom third, shot Hasselblad H6D 100mm macro, editorial product photography."
+
 ## MODEL SELECTION
 - flux_schnell   → drafts, simple scenes. Under 80 words, ONE lead subject, skip complex lighting. Steps=4, guidance=3.5
 - flux_dev       → quality/speed balance, portraits, fashion, landscapes. 2-part prose: scene + style. Steps=24, guidance=3.5
@@ -3371,45 +3807,84 @@ async def _agent_image_prompter(
         f"{_IMAGE_PROMPT_ENGINEER_KB}\n"
         "== END KNOWLEDGE BASE ==\n"
         "\n"
-        "🎯 9-STEP BUILD PROCESS (MANDATORY):\n"
+        "🎯 BEAST-LEVEL BUILD PROCESS (MANDATORY — 11 STEPS):\n"
+        "\n"
+        "STEP 0: GENRE DETECTION & SCENE DECISION (NEW — CRITICAL)\n"
+        "  → FIRST, detect genre using GENRE INTELLIGENCE section from KB\n"
+        "  → Is this: Tech Launch Event? Fashion Editorial? Product Hero? Promo/Sale? Quote? Food?\n"
+        "  → Based on genre, decide scene complexity: Spectacular (150-200w) / Complex (120-150w) / Medium (80-120w) / Simple (60-80w)\n"
+        "  → Apply genre-specific scene requirements from KB\n"
+        "  → Example: 'tech launch' → MUST include venue + stage + crowd + presenter + LED walls\n"
+        "  → Example: 'fashion collection' → MUST include elegant location + model + architectural detail + natural light\n"
+        "  → Example: 'luxury watch' (no event) → Product hero setup with premium surface\n"
+        "  → NEVER skip this step! Genre determines entire scene structure.\n"
         "\n"
         "STEP 1: SUBJECT CORE\n"
         "  → Extract main subject from brief. 2-3 sentences with HYPER-SPECIFIC physical attributes.\n"
-        "  → Example: 'Indian woman, 28 years old, sari in deep magenta silk, carrying woven basket'\n"
+        "  → If genre=Tech Launch: Include presenter + product + their interaction\n"
+        "  → If genre=Fashion: Include model pose, garment details, accessories\n"
+        "  → If genre=Product Hero: Include product condition, surface, angle\n"
         "\n"
-        "STEP 2: ENVIRONMENT/SETTING\n"
-        "  → NOT 'outdoors' — 'narrow street in Mumbai Colaba market, monsoon-wet cobblestones reflecting orange streetlight'\n"
+        "STEP 2: ENVIRONMENT/SETTING (Genre-Driven)\n"
+        "  → NOT generic 'studio' or 'outdoor'\n"
+        "  → Tech Launch: 'Massive 2000-capacity innovation center, elevated circular stage 8m diameter with LED floor panels'\n"
+        "  → Fashion: 'Sun-drenched Mediterranean villa corridor, arched windows, marble floors, lush garden visible'\n"
+        "  → Product: 'Black marble surface with subtle veining' OR lifestyle context appropriate to product\n"
+        "  → Build FULL VENUE with specific architectural details\n"
         "\n"
-        "STEP 3: LIGHTING (MOST CRITICAL)\n"
-        "  → Source: sun/studio/neon/natural\n"
-        "  → Direction: from upper-left/backlit/frontal/below\n"
-        "  → Quality: hard/soft/diffused/harsh\n"
-        "  → Color temp: warm 3200K/neutral 5600K/cool 8000K\n"
-        "  → Shadows: deep/subtle/absent\n"
+        "STEP 3: PEOPLE & SCALE (If Applicable)\n"
+        "  → Tech Launch: Specify crowd size (500-2000), what they're doing (phones raised, excited), presenter pose\n"
+        "  → Fashion: Model count (usually 1), specific pose (mid-stride, leaning, gazing), styling details\n"
+        "  → Product: Usually none, or lifestyle model interacting naturally\n"
+        "  → Quote/Motivational: Optional silhouette, never face-focused\n"
         "\n"
-        "STEP 4: CAMERA/LENS (Worth 50 other modifiers!)\n"
-        "  → 'Shot on [camera from KB] + [lens spec from KB]'\n"
-        "  → Pick based on industry: Portrait→Hasselblad X2D, Product→Phase One XT, etc.\n"
+        "STEP 4: STAGING & PROPS (Environmental Richness)\n"
+        "  → Tech Launch: LED walls 3-story high, holographic displays, moving spotlights, photographers in foreground\n"
+        "  → Fashion: Plants in terracotta pots, vintage furniture, architectural elements (arches, columns)\n"
+        "  → Product: 1-2 complementary props (watch→cufflinks, perfume→flower petals)\n"
+        "  → Add details that create WOW factor and depth\n"
         "\n"
-        "STEP 5: COMPOSITION\n"
-        "  → Translate CD archetype: hero-dominant→'subject centered, full-frame', diagonal→'subject angled 45°'\n"
+        "STEP 5: LIGHTING (MOST CRITICAL — Genre-Specific)\n"
+        "  → Tech Launch: 12+ moving spotlights, dramatic crisscross beams, atmospheric haze, rim lighting\n"
+        "  → Fashion: Natural window light (soft, diffused) OR golden hour (warm, directional), never harsh flash\n"
+        "  → Product: Precision studio lighting (key from 45°, fill 1:3 ratio, hair light) OR lifestyle natural\n"
+        "  → Always specify: Source + Direction + Quality + Color temp + Shadow quality\n"
         "\n"
-        "STEP 6: COLOR PALETTE TRANSLATION\n"
+        "STEP 6: CAMERA/LENS (Worth 50 other modifiers!)\n"
+        "  → Tech Launch: Wide angle 24mm Sony VENICE 2 / ARRI Alexa to capture scale\n"
+        "  → Fashion: 85mm f/1.4 shallow DoF, Phase One IQ4 / Hasselblad X2D\n"
+        "  → Product: 100mm macro Hasselblad H6D / Phase One XT\n"
+        "  → Pick based on genre + industry from KB camera library\n"
+        "\n"
+        "STEP 7: COMPOSITION\n"
+        "  → Translate CD archetype to camera language\n"
+        "  → Consider genre: Tech launch needs wide to show scale, Fashion needs medium for model focus\n"
+        "\n"
+        "STEP 8: COLOR PALETTE TRANSLATION\n"
         "  → Convert hex to descriptive: #F4A62A→'warm amber gold accent, like diya flame illumination'\n"
+        "  → Consider genre mood: Tech=cool blues/cyans, Fashion=sophisticated earth tones, etc.\n"
         "\n"
-        "STEP 7: STYLE REGISTER\n"
+        "STEP 9: STYLE REGISTER\n"
         "  → Map CD aesthetic to model vocab: 'brutalism×luxury'→'raw concrete, architectural negative space, expensive materials'\n"
+        "  → Add genre-appropriate quality signals\n"
         "\n"
-        "STEP 8: QUALITY STACK\n"
+        "STEP 10: QUALITY STACK\n"
         "  → Add 3-5 APPROVED quality signals (NOT generic 'hyperrealistic/8K' noise)\n"
-        "  → Use: 'medium format photography', '[photographer name] style', 'published in Vogue'\n"
+        "  → Tech: 'professional event photography', 'published in WIRED'\n"
+        "  → Fashion: 'published in Vogue', 'editorial photography', '[photographer name] style'\n"
+        "  → Product: 'luxury product photography', 'published in Robb Report'\n"
         "\n"
-        "STEP 9: FINAL ASSEMBLY & VALIDATION\n"
-        "  → Combine all elements per model template\n"
-        "  → Validate: subject first, bottom 50% dark, zero text keywords, model-appropriate length\n"
+        "STEP 11: FINAL ASSEMBLY & VALIDATION\n"
+        "  → Combine all elements per model template AND genre requirements\n"
+        "  → Validate word count matches complexity level (Spectacular 150-200w, Complex 120-150w, Medium 80-120w)\n"
+        "  → Validate: subject first, bottom 50% dark, zero text keywords, all genre requirements met\n"
         "  → Draft variant: ≤60 words flux_schnell version\n"
         "\n"
         "CRITICAL RULES:\n"
+        "  - GENRE DETECTION IS MANDATORY — determines entire scene structure\n"
+        "  - Tech/Product Launch → MUST include full event scene (venue + crowd + presenter + staging)\n"
+        "  - Fashion → MUST include elegant location + architectural detail + natural light\n"
+        "  - NEVER write simple scenes when genre demands complexity\n"
         "  - Subject ALWAYS first (not mood words)\n"
         "  - Specificity > adjectives ('worn leather, brass buttons' NOT 'detailed jacket')\n"
         "  - Use Camera/Lens references from KB (massive quality boost)\n"
@@ -3421,6 +3896,9 @@ async def _agent_image_prompter(
         f"{festival_hint}{attention_hint}{dna_hint}\n"
         "\n"
         "VALIDATION BEFORE RETURNING:\n"
+        "- Genre detected and appropriate scene structure applied\n"
+        "- Word count matches complexity level (tech launch = 150-200w, fashion = 120-150w)\n"
+        "- All genre-specific requirements met (crowd for events, architectural detail for fashion, etc.)\n"
         "- prompt must START with the subject (not a mood word)\n"
         "- negative_prompt must be model-specific (not generic)\n"
         "- steps must be within model's optimal range\n"
