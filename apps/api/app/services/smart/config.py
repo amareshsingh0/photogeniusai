@@ -667,13 +667,13 @@ BUCKET_MODEL_MAP: Dict[str, Dict[str, Dict]] = {
         "ultra":    {"model": "flux_2_max",    "provider": "multi", "num_images": 3},
     },
     # ── Typography / Text in image / Posters / Ads ───────────────────────────
-    # Google Imagen 3 for ALL tiers — best text rendering accuracy
-    # ($0.02/image, better than Ideogram's $0.09). Ultra gets 2 candidates for best pick.
+    # Flux 2 Pro for ALL tiers — BEST text rendering accuracy in industry
+    # ($0.025/image via kie.ai, much cheaper + better than Ideogram's $0.09)
     "typography": {
-        "fast":     {"model": "imagen_3", "provider": "multi"},
-        "standard": {"model": "imagen_3", "provider": "multi"},
-        "premium":  {"model": "imagen_3", "provider": "multi"},
-        "ultra":    {"model": "imagen_3", "provider": "multi", "num_images": 2},
+        "fast":     {"model": "flux_2_pro", "provider": "multi"},
+        "standard": {"model": "flux_2_pro", "provider": "multi"},
+        "premium":  {"model": "flux_2_pro", "provider": "multi"},
+        "ultra":    {"model": "flux_2_pro", "provider": "multi", "num_images": 2},
     },
     # ── Artistic / Cinematic / Creative ───────────────────────────────────────
     "artistic": {
