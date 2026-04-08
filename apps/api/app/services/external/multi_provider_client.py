@@ -63,6 +63,7 @@ _PROVIDER_KEYS = {
     "bfl":       "BFL_API_KEY",          # api.bfl.ai — flux-2-max official
     "kie":       "KIE_API_KEY",          # kie.ai — Flux 2 Pro cheapest ($0.025)
     "pixazo":    "PIXAZO_API_KEY",       # pixazo.ai — Flux Schnell cheapest ($0.0012)
+    "google":    "GEMINI_API_KEY",       # Google AI Studio — Imagen 3
 }
 
 # ── Model routing table — ordered by cheapest provider ────────────────────────
@@ -130,6 +131,10 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
     # ── Hunyuan Image — anime/Asian styles — fal.ai
     "hunyuan_image": [
         ("fal",      "fal-ai/hunyuan/image",           0.030),
+    ],
+    # ── Google Imagen 3 — Google AI Studio (best text rendering)
+    "imagen_3": [
+        ("google",   "imagen-3.0-generate-001",        0.020),  # $0.02/image (1024x1024)
     ],
     # ── Real-ESRGAN upscale — fal.ai
     "real_esrgan": [
@@ -341,6 +346,8 @@ class MultiProviderClient:
             return await self._call_kie(model_id, **kwargs)
         elif provider == "pixazo":
             return await self._call_pixazo(model_id, **kwargs)
+        elif provider == "google":
+            return await self._call_google(model_id, **kwargs)
         return self._error(model_id, f"Unknown provider: {provider}", 0.0)
 
     async def _call_fal(self, model_id: str, prompt: str, negative_prompt: str,
@@ -581,6 +588,75 @@ class MultiProviderClient:
             return self._error(model_id, str(e), time.time() - start)
         finally:
             await client.aclose()
+
+    async def _call_google(self, model_id: str, prompt: str, negative_prompt: str,
+                           num_images: int, image_size: str, num_inference_steps: int,
+                           guidance_scale: float, seed, **kwargs) -> Dict:
+        """Google AI Studio — Imagen 3 ($0.02/image). Uses google-generativeai SDK."""
+        import asyncio
+        start = time.time()
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            return self._error(model_id, "google-generativeai not installed", 0.0)
+
+        api_key = self._keys.get("google", "")
+        if not api_key:
+            return self._error(model_id, "GEMINI_API_KEY not set", 0.0)
+
+        genai.configure(api_key=api_key)
+
+        # Map image_size to dimensions
+        size_map = {
+            "square_hd": {"width": 1024, "height": 1024},
+            "landscape_16_9": {"width": 1344, "height": 768},
+            "portrait_9_16": {"width": 768, "height": 1344},
+            "landscape_4_3": {"width": 1152, "height": 896},
+        }
+        dims = size_map.get(image_size, {"width": 1024, "height": 1024})
+
+        try:
+            # Imagen 3 API call
+            model = genai.ImageGenerationModel(model_id)
+
+            # Build generation config
+            config = {
+                "number_of_images": num_images,
+                "safety_filter_level": "block_only_high",  # Less restrictive
+                "person_generation": "allow_adult",  # Allow human generation
+            }
+
+            # Add negative prompt if provided
+            if negative_prompt:
+                full_prompt = f"{prompt}. Avoid: {negative_prompt}"
+            else:
+                full_prompt = prompt
+
+            # Generate images (sync call, wrap in asyncio)
+            response = await asyncio.to_thread(
+                model.generate_images,
+                prompt=full_prompt,
+                **config
+            )
+
+            # Extract URLs
+            urls = []
+            if hasattr(response, 'images'):
+                for img in response.images:
+                    if hasattr(img, 'url'):
+                        urls.append(img.url)
+                    elif hasattr(img, '_image_bytes'):
+                        # If bytes, need to upload somewhere - for now just log
+                        logger.warning("[google] Got image bytes, need URL upload endpoint")
+
+            if not urls:
+                raise ValueError(f"No URLs from Imagen 3: {response}")
+
+            return self._ok(urls, model_id, "google.ai", time.time() - start)
+
+        except Exception as e:
+            logger.error("[google] Imagen 3 error: %s", e)
+            return self._error(model_id, str(e), time.time() - start)
 
     async def _call_bfl(self, model_id: str, prompt: str, negative_prompt: str,
                         num_images: int, image_size: str, num_inference_steps: int,

@@ -667,13 +667,13 @@ BUCKET_MODEL_MAP: Dict[str, Dict[str, Dict]] = {
         "ultra":    {"model": "flux_2_max",    "provider": "multi", "num_images": 3},
     },
     # ── Typography / Text in image / Posters / Ads ───────────────────────────
-    # Ideogram v3 Quality for ALL tiers — fast removed (not worth it for ads,
-    # poor text quality degrades the whole poster). Standard/premium/ultra all
-    # get quality rendering; ultra gets 2 candidates for best pick.
+    # Google Imagen 3 for ALL tiers — best text rendering accuracy
+    # ($0.02/image, better than Ideogram's $0.09). Ultra gets 2 candidates for best pick.
     "typography": {
-        "standard": {"model": "ideogram_quality", "provider": "multi"},
-        "premium":  {"model": "ideogram_quality", "provider": "multi"},
-        "ultra":    {"model": "ideogram_quality", "provider": "multi", "num_images": 2},
+        "fast":     {"model": "imagen_3", "provider": "multi"},
+        "standard": {"model": "imagen_3", "provider": "multi"},
+        "premium":  {"model": "imagen_3", "provider": "multi"},
+        "ultra":    {"model": "imagen_3", "provider": "multi", "num_images": 2},
     },
     # ── Artistic / Cinematic / Creative ───────────────────────────────────────
     "artistic": {
