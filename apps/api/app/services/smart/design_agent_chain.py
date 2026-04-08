@@ -30,12 +30,21 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 from typing import Dict, List, Optional
 
 from app.config.loader import config as beast_config
 
 logger = logging.getLogger(__name__)
+
+# FORCE logging to stdout (Uvicorn might override basicConfig)
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter('[%(name)s] %(message)s'))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 # Import enhanced Brand Intelligence Agent
 try:
