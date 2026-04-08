@@ -235,10 +235,10 @@ _GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 _AGENT_MAX_TOKENS = {
     "triage":           1000,
     "brand_intel":      1200,
-    "creative_director":2500,  # KB + bible JSON needs room
-    "copy_writer":      2500,
-    "image_prompter":   2500,  # cd_integration schema is large
-    "layout_planner":   1800,
+    "creative_director":4000,  # KB + bible JSON needs LOTS of room (was 2500, caused truncation)
+    "copy_writer":      3000,  # Restaurant ads need expanded copy (name, dates, hours, etc)
+    "image_prompter":   3500,  # cd_integration schema is large + restaurant scene complexity
+    "layout_planner":   2500,  # More elements for restaurant ads (name, dates, address, etc)
     "reconcile":        400,
     "char_guard":       600,
 }
@@ -2000,6 +2000,14 @@ def _extract_json(text: str) -> Dict:
         candidate = match.group()
         # Apply same double-quote key fix on the candidate
         candidate = re.sub(r'""([a-zA-Z_][a-zA-Z0-9_]*)"\s*:', r'"\1":', candidate)
+
+        # Fix common truncation issues BEFORE parsing:
+        # 1. Trailing comma before closing brace
+        candidate = re.sub(r',(\s*[}\]])', r'\1', candidate)
+        # 2. Missing closing brace (count mismatch)
+        if candidate.count('{') > candidate.count('}'):
+            candidate += '}'
+
         try:
             return json.loads(candidate)
         except json.JSONDecodeError:
@@ -2933,6 +2941,67 @@ async def _agent_copy_writer(
     audience_intel = triage.get("audience_intelligence", {})
     psychographic = audience_intel.get("psychographic", "general")
 
+    # ══════════════════════════════════════════════════════════════════════════════
+    # CASE-BASED LEARNING: Learn from real mistakes, apply thinking to ANY case
+    # ══════════════════════════════════════════════════════════════════════════════
+    business_context_hint = (
+        "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "LEARN FROM OUR MISTAKES — Case-Based Thinking for Copy\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "\n"
+        "┌────────────────────────────────────────────────────────────┐\n"
+        "│ CASE: Restaurant Grand Opening                             │\n"
+        "└────────────────────────────────────────────────────────────┘\n"
+        "\n"
+        "📝 User said: 'restaurant promotion GRAND OPENING Free Dessert'\n"
+        "\n"
+        "❌ OUR MISTAKE:\n"
+        "   We wrote: 'GRAND OPENING' (headline), 'Free Dessert' (subheadline)\n"
+        "   Missing: Restaurant name, dates, full offer, celebration copy\n"
+        "\n"
+        "🤔 WHY IT FAILED:\n"
+        "   • User gave MINIMAL input → We just repeated it literally\n"
+        "   • Real ad needs: WHAT restaurant? WHERE? WHEN? WHY visit?\n"
+        "   • Competitor (Gemini) wrote COMPLETE ad with all business details\n"
+        "\n"
+        "✅ WHAT WORKED (Gemini's approach):\n"
+        "   Headline: 'GRAND OPENING - THE SAVORY BISTRO'\n"
+        "   Subheadline: 'Deliciously Yours! Now Open!'\n"
+        "   Body: 'Celebrate with us October 18-20th. Enjoy complimentary\n"
+        "         dessert with any entrée. 123 Main St, Downtown.'\n"
+        "   CTA: 'RESERVE NOW'\n"
+        "\n"
+        "💡 THE THINKING:\n"
+        "   1. This is REAL BUSINESS ad → needs name, location, dates\n"
+        "   2. User's minimal input = SEED, not complete brief\n"
+        "   3. Our job: EXPAND into professional, complete ad copy\n"
+        "   4. Generate realistic details if not provided\n"
+        "\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "\n"
+        "🎯 APPLY THIS THINKING TO YOUR BRIEF:\n"
+        "\n"
+        "Ask yourself:\n"
+        "1️⃣  Is this a REAL BUSINESS promotion?\n"
+        "    (Opening, launch, event, local business ad?)\n"
+        "    → If YES: Add business name, location hints, dates, full offer\n"
+        "\n"
+        "2️⃣  What info does customer NEED?\n"
+        "    (Name? Address? Hours? Dates? Complete offer terms?)\n"
+        "    → Generate realistic placeholders if not provided\n"
+        "\n"
+        "3️⃣  How to EXPAND the offer?\n"
+        "    User: 'Free Dessert' → You: 'FREE DESSERT with any main course!'\n"
+        "    User: 'Sale' → You: 'UP TO 50% OFF - Limited Time!'\n"
+        "\n"
+        "4️⃣  What makes it COMPLETE?\n"
+        "    Not just keywords → Full narrative with context\n"
+        "\n"
+        "⚠️  DON'T just repeat user's exact words\n"
+        "✅  DO think: 'What makes this a COMPLETE, professional ad?'\n"
+        "\n"
+    )
+
     festival_hint = ""
     if cultural_moment:
         festival_hint = f"\nCultural Moment: {cultural_moment['name']} — weave in {', '.join(cultural_moment['keywords'][:2])}."
@@ -2965,7 +3034,7 @@ async def _agent_copy_writer(
         f"Goal: {triage.get('goal','brand_awareness')}. Industry: {triage.get('industry','general')}.\n"
         f"Think deeply about what this business needs. Write copy that converts.\n"
         f"Commercial copy guardrails: {strategy['copy_guardrails']}\n"
-        f"HEADLINE max {hl_max} chars ALL CAPS.{festival_hint}{explicit_hint}{bible_hint}{psycho_hint}{emotion_hint}\n"
+        f"HEADLINE max {hl_max} chars ALL CAPS.{festival_hint}{business_context_hint}{explicit_hint}{bible_hint}{psycho_hint}{emotion_hint}\n"
         f"For features: generate 4 REAL, SPECIFIC benefits relevant to this industry — not generic placeholders.\n"
         'Return ONLY valid JSON: {"brand_name":"","headline":"ALL CAPS",'
         '"subheadline":"sentence case, compelling","body":"1-2 punchy sentences",'
@@ -3768,25 +3837,83 @@ async def _agent_image_prompter(
         "\n"
         "🎯 BEAST-LEVEL BUILD PROCESS (MANDATORY — 11 STEPS):\n"
         "\n"
-        "STEP 0: GENRE DETECTION & SCENE DECISION (TRUST YOUR TRAINING!)\n"
-        "  🧠 CRITICAL: The GENRE KB provides EXAMPLES and PATTERNS, NOT hardcoded rules!\n"
-        "  → You've been trained on BILLIONS of advertising images - USE THAT KNOWLEDGE\n"
-        "  → Genre examples show you WHAT'S POSSIBLE, but YOU DECIDE what makes sense here\n"
-        "  → Think: 'Restaurant promotion' could be food closeup OR restaurant ambiance OR both\n"
-        "  → Think: 'Tech launch' could be full event OR product focus depending on context\n"
-        "  → DON'T blindly follow genre templates - THINK about THIS specific brief\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "STEP 0: LEARN FROM MISTAKES — Case-Based Thinking\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "\n"
-        "  → FIRST, detect genre using GENRE INTELLIGENCE KB as REFERENCE (not rules)\n"
-        "  → Is this: Tech Launch Event? Fashion? Product? Restaurant? Promo? Quote? Food?\n"
-        "  → Decide scene complexity based on what would make THIS image spectacular\n"
-        "  → Use genre examples as INSPIRATION, then think creatively about THIS case\n"
-        "  → Example: 'restaurant GRAND OPENING' → Think: What shows grand opening better?\n"
-        "    - Just food closeup? ❌ Boring, doesn't show 'opening' or 'restaurant'\n"
-        "    - Restaurant interior with decor, tables, food display, welcoming ambiance? ✅ Shows full story\n"
-        "  → Example: 'tech product launch' → Think: Is this showing the launch EVENT or just product?\n"
-        "    - Context clues tell you: 'launch', 'unveil', 'event' → Full venue scene\n"
-        "    - Just 'new product' → Product focus is fine\n"
-        "  → USE YOUR TRAINING - You know what great advertising looks like!\n"
+        "🧠 You've been trained on BILLIONS of advertising images.\n"
+        "   Don't follow rigid templates. LEARN from real cases below,\n"
+        "   then APPLY THE THINKING to your current brief.\n"
+        "\n"
+        "┌─────────────────────────────────────────────────────────────────┐\n"
+        "│ CASE STUDY 1: Restaurant Opening                                │\n"
+        "└─────────────────────────────────────────────────────────────────┘\n"
+        "\n"
+        "📝 User prompt: 'restaurant promotion GRAND OPENING Free Dessert'\n"
+        "\n"
+        "❌ OUR MISTAKE:\n"
+        "   We generated: Chocolate dessert closeup on dark background\n"
+        "   Missing: Restaurant, diners, celebration, business context\n"
+        "\n"
+        "🤔 WHY IT FAILED:\n"
+        "   • User said 'GRAND OPENING' → We focused on food (wrong focus!)\n"
+        "   • Word 'restaurant' → Needs to show THE SPACE people will visit\n"
+        "   • Word 'promotion' → Needs business info (name, dates, offer)\n"
+        "   • Real ad must answer: WHERE? WHEN? WHY go?\n"
+        "\n"
+        "✅ WHAT WORKED (Gemini's approach):\n"
+        "   • Restaurant INTERIOR: brick walls, wooden tables, elegant decor\n"
+        "   • People DINING: 10-15 guests laughing, enjoying meals\n"
+        "   • Celebration: string lights, golden confetti, warm atmosphere\n"
+        "   • Business details: Name on signage, event dates visible\n"
+        "   • Food IN CONTEXT: Dessert on table, not isolated\n"
+        "\n"
+        "💡 THE THINKING PROCESS:\n"
+        "   1. PRIMARY subject? → Restaurant opening EVENT (not food item)\n"
+        "   2. Complete story? → Venue + people + atmosphere + celebration\n"
+        "   3. Required info? → What, where, when, why visit\n"
+        "   4. Creates desire? → Social proof + celebration energy\n"
+        "\n"
+        "┌─────────────────────────────────────────────────────────────────┐\n"
+        "│ CASE STUDY 2: Tech Launch Event                                 │\n"
+        "└─────────────────────────────────────────────────────────────────┘\n"
+        "\n"
+        "📝 User clues: 'product launch', 'unveil', 'announcement'\n"
+        "\n"
+        "🤔 THINKING:\n"
+        "   • 'Launch' = EVENT, not just product photo\n"
+        "   • Story needs: Venue scale, crowd, presenter, excitement\n"
+        "   • Desire: FOMO, innovation, 'everyone's there'\n"
+        "\n"
+        "✅ Show: 2000-capacity hall, stage, crowd with phones, LED walls\n"
+        "❌ Don't: Just product floating on pedestal in void\n"
+        "\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "\n"
+        "🎯 NOW APPLY THIS THINKING TO YOUR BRIEF:\n"
+        "\n"
+        "Ask yourself these 4 questions:\n"
+        "\n"
+        "1️⃣  What's the PRIMARY SUBJECT?\n"
+        "    (Not just keywords — what's REALLY being advertised?)\n"
+        "    Example: 'Restaurant opening' → The SPACE, not just food\n"
+        "\n"
+        "2️⃣  What tells the COMPLETE STORY?\n"
+        "    (What context does viewer NEED to understand and want it?)\n"
+        "    Think: Where? When? Who else is there? Why exciting?\n"
+        "\n"
+        "3️⃣  What INFORMATION is required?\n"
+        "    (For this to work as REAL ad, not just pretty picture)\n"
+        "    Business names, dates, locations — shown IN the scene\n"
+        "\n"
+        "4️⃣  What creates DESIRE?\n"
+        "    (Social proof? Celebration? Exclusivity? Scale?)\n"
+        "\n"
+        "⚠️  DON'T blindly categorize and apply templates\n"
+        "✅  DO think: 'What makes THIS specific ad effective?'\n"
+        "\n"
+        "You know billions of ad patterns. Trust your training!\n"
+        "\n"
         "\n"
         "STEP 1: SUBJECT CORE\n"
         "  → Extract main subject from brief. 2-3 sentences with HYPER-SPECIFIC physical attributes.\n"
@@ -3798,12 +3925,17 @@ async def _agent_image_prompter(
         "  → NOT generic 'studio' or 'outdoor'\n"
         "  → Tech Launch: 'Massive 2000-capacity innovation center, elevated circular stage 8m diameter with LED floor panels'\n"
         "  → Fashion: 'Sun-drenched Mediterranean villa corridor, arched windows, marble floors, lush garden visible'\n"
+        "  → Restaurant Opening: 'Warm welcoming bistro interior, exposed brick walls, wooden tables with white linens,\n"
+        "     string lights overhead, potted plants, people dining and laughing, dessert plated on table in foreground,\n"
+        "     elegant bar area visible in background, celebration atmosphere with golden confetti'\n"
         "  → Product: 'Black marble surface with subtle veining' OR lifestyle context appropriate to product\n"
         "  → Build FULL VENUE with specific architectural details\n"
         "\n"
         "STEP 3: PEOPLE & SCALE (If Applicable)\n"
         "  → Tech Launch: Specify crowd size (500-2000), what they're doing (phones raised, excited), presenter pose\n"
         "  → Fashion: Model count (usually 1), specific pose (mid-stride, leaning, gazing), styling details\n"
+        "  → Restaurant Opening: 8-15 diners at tables, diverse groups enjoying meals, natural conversations,\n"
+        "     smiling faces, waiter visible in background, celebration mood — SOCIAL PROOF!\n"
         "  → Product: Usually none, or lifestyle model interacting naturally\n"
         "  → Quote/Motivational: Optional silhouette, never face-focused\n"
         "\n"
@@ -3816,6 +3948,8 @@ async def _agent_image_prompter(
         "STEP 5: LIGHTING (MOST CRITICAL — Genre-Specific)\n"
         "  → Tech Launch: 12+ moving spotlights, dramatic crisscross beams, atmospheric haze, rim lighting\n"
         "  → Fashion: Natural window light (soft, diffused) OR golden hour (warm, directional), never harsh flash\n"
+        "  → Restaurant Opening: Warm ambient interior lighting (2700-3000K tungsten), string lights overhead,\n"
+        "     pendant lamps above tables, soft shadows, inviting glow from windows, hero spotlight on dessert\n"
         "  → Product: Precision studio lighting (key from 45°, fill 1:3 ratio, hair light) OR lifestyle natural\n"
         "  → Always specify: Source + Direction + Quality + Color temp + Shadow quality\n"
         "\n"
