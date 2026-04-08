@@ -2017,7 +2017,10 @@ def _extract_json(text: str) -> Dict:
                 return json.loads(repaired)
             except Exception:
                 pass
-    logger.warning("[design_chain] _extract_json failed on: %r", text[:200])
+    # Log more context to debug truncation issues
+    logger.warning("[design_chain] _extract_json failed. Full text length: %d chars", len(text))
+    logger.warning("[design_chain] First 500 chars: %r", text[:500])
+    logger.warning("[design_chain] Last 500 chars: %r", text[-500:] if len(text) > 500 else text)
     return {"_parse_error": True}
 
 
@@ -2132,7 +2135,8 @@ async def _acall_gemini(
             )
             result = resp.text or "{}"
             elapsed_ms = int((time.time() - t0) * 1000)
-            logger.info("[design_chain][%s] %dms attempt=%d", agent_name, elapsed_ms, attempt + 1)
+            logger.info("[design_chain][%s] %dms attempt=%d response_length=%d chars",
+                       agent_name, elapsed_ms, attempt + 1, len(result))
             return result
 
         except RuntimeError as e:
