@@ -1,8 +1,7 @@
 "use client";
 
-// Clerk disabled in dev - auth handled by lib/auth.ts (DEV_USER)
-// Re-enable when deploying to production with real Clerk keys
-// import { ClerkProvider } from "@clerk/nextjs";
+// Custom JWT authentication system
+// Auth handled by lib/auth.ts (JWT tokens + OAuth)
 
 export function RootProviders({ children }: { children: React.ReactNode }) {
   return <>{children}</>;

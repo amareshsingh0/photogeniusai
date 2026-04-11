@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import type { Prisma } from "@photogenius/database";
 import { prisma } from "@/lib/db";
 import { UserRepository } from "@photogenius/database";
@@ -9,7 +9,7 @@ import { logger } from "@/lib/logger";
 import { computeGenerationCost, roundCost, type QualityTier } from "@/lib/cost";
 import { getEffectiveTier, classifyPromptComplexity } from "@/lib/prompt-complexity";
 
-// Force dynamic rendering - this route uses headers via Clerk auth
+// Force dynamic rendering - this route uses headers via auth
 export const dynamic = "force-dynamic";
 
 /**
@@ -29,44 +29,25 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const correlationId = getCorrelationId(req);
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json(
         { error: "Authentication required" },
         { status: 401, headers: correlationIdResponseHeaders(correlationId) }
       );
     }
 
-    // Get database user; if missing, sync from Clerk (webhook may not have run)
-    let dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+    // Get database user
+    const dbUser = await prisma.user.findUnique({
+      where: { id: userId },
       select: { id: true },
     });
 
     if (!dbUser) {
-      const clerkUser = await currentUser();
-      if (!clerkUser) {
-        return NextResponse.json(
-          { error: "User not found" },
-          { status: 404, headers: correlationIdResponseHeaders(correlationId) }
-        );
-      }
-      const email = clerkUser.emailAddresses?.[0]?.emailAddress;
-      if (!email) {
-        return NextResponse.json(
-          { error: "Email required. Please complete your profile." },
-          { status: 400, headers: correlationIdResponseHeaders(correlationId) }
-        );
-      }
-      const newUser = await UserRepository.create({
-        clerkId,
-        email,
-        name: clerkUser.firstName && clerkUser.lastName
-          ? `${clerkUser.firstName} ${clerkUser.lastName}`
-          : clerkUser.firstName ?? undefined,
-        profileImageUrl: clerkUser.imageUrl,
-      });
-      dbUser = { id: newUser.id };
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404, headers: correlationIdResponseHeaders(correlationId) }
+      );
     }
 
     const body = await req.json();

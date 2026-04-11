@@ -23,28 +23,63 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const devSignIn = async (emailVal?: string) => {
-    setLoading(true);
-    setError("");
-    document.cookie = "dev_session=dev_user_123; path=/; max-age=86400";
-    const name = emailVal ? emailVal.split("@")[0] : "User";
-    localStorage.setItem(
-      "dev_user",
-      JSON.stringify({
-        id: "dev_user_123",
-        email: emailVal || "dev@photogenius.local",
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-      })
-    );
-    await new Promise((r) => setTimeout(r, 700));
-    router.push("/dashboard");
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) { setError("Email is required"); return; }
-    if (!password.trim()) { setError("Password is required"); return; }
-    await devSignIn(email);
+    setLoading(true);
+    setError("");
+
+    if (!email.trim()) {
+      setError("Email is required");
+      setLoading(false);
+      return;
+    }
+    if (!password.trim()) {
+      setError("Password is required");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Login failed");
+        setLoading(false);
+        return;
+      }
+
+      // Store user data in localStorage
+      if (data.user) {
+        localStorage.setItem("dev_user", JSON.stringify(data.user));
+      }
+
+      // Redirect to dashboard
+      router.push("/dashboard");
+    } catch (err) {
+      console.error("[login] Error:", err);
+      setError("An error occurred. Please try again.");
+      setLoading(false);
+    }
+  };
+
+  const handleOAuthLogin = async (provider: "google" | "apple") => {
+    setLoading(true);
+    setError("");
+
+    try {
+      // Redirect to OAuth provider
+      window.location.href = `/api/auth/${provider}`;
+    } catch (err) {
+      console.error(`[login] ${provider} OAuth error:`, err);
+      setError("An error occurred. Please try again.");
+      setLoading(false);
+    }
   };
 
   const [rightImageIndex, setRightImageIndex] = useState(0);
@@ -81,6 +116,7 @@ export default function LoginPage() {
           <div className="grid grid-cols-2 gap-3 mb-6">
             {[
               {
+                id: "google" as const,
                 label: "Google",
                 icon: (
                   <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -92,6 +128,7 @@ export default function LoginPage() {
                 ),
               },
               {
+                id: "apple" as const,
                 label: "Apple",
                 icon: (
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -102,7 +139,7 @@ export default function LoginPage() {
             ].map((provider) => (
               <button
                 key={provider.label}
-                onClick={() => devSignIn()}
+                onClick={() => handleOAuthLogin(provider.id)}
                 disabled={loading}
                 className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/60 text-sm text-zinc-300 hover:border-zinc-600 hover:text-white hover:bg-zinc-800/60 transition-all disabled:opacity-50"
               >

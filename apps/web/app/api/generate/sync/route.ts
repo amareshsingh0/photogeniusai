@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 
-// Force dynamic rendering - this route uses headers via Clerk auth
+// Force dynamic rendering - this route uses headers via auth
 export const dynamic = "force-dynamic";
 
 const FASTAPI_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
@@ -14,15 +14,15 @@ const FASTAPI_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
  */
 export async function POST(req: Request) {
   try {
-    const { userId: clerkId, getToken } = await auth();
-    if (!clerkId) {
+    const { userId, getToken } = await auth();
+    if (!userId) {
       return NextResponse.json(
         { error: "Authentication required" },
         { status: 401 }
       );
     }
 
-    // Get the Clerk JWT token to pass to FastAPI
+    // Get the JWT token to pass to FastAPI
     const token = await getToken();
 
     const body = await req.json();

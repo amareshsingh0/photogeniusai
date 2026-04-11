@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
+import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 
 // Force dynamic rendering
@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic"
  */
 export async function POST(req: Request) {
   try {
-    const { userId: clerkId } = await auth()
-    if (!clerkId) {
+    const { userId } = await auth()
+    if (!userId) {
       return NextResponse.json(
         { error: "Authentication required" },
         { status: 401 }
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
     // Get database user
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true },
     })
 
