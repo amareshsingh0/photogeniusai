@@ -304,18 +304,13 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         if req.negative_prompt is not None:
             negative_prompt = f"{req.negative_prompt}, {negative_prompt}" if negative_prompt else req.negative_prompt
 
-        # FORCE Ideogram for typography bucket (native text rendering)
-        # Typography bucket uses Ideogram v3 to render text directly in image generation
-        # This overrides any CDI recommendation to ensure text appears properly
+        # Typography bucket — use model from config.py BUCKET_MODEL_MAP (no hardcoded override)
         if bucket == "typography":
-            fal_model_key = "ideogram_quality"
-            model_label = _MODEL_LABELS.get("ideogram_quality", "Ideogram v3 Quality")
-            logger.info("[stream][%s] Typography bucket → forcing ideogram_quality for native text rendering", trace_id)
+            logger.info("[stream][%s] Typography bucket → using config model: %s", trace_id, fal_model_key)
 
         # CDI model override — AI picks better model than router when context warrants it
-        # Skip CDI override for typography bucket (Ideogram is mandatory for text rendering)
         _cdi_recommended = _canonical_model_key(params.get("recommended_model"), default="")
-        if _cdi_recommended and _cdi_recommended in _MODEL_LABELS and bucket != "typography":
+        if _cdi_recommended and _cdi_recommended in _MODEL_LABELS:
             if _cdi_recommended != fal_model_key:
                 logger.info(
                     "[stream][%s] CDI model override: %s → %s (%s)",

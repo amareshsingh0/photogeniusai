@@ -78,6 +78,18 @@ except ImportError as e:
     logger.warning("[design_chain] motion_designer not available: %s", e)
     _MOTION_DESIGNER_AVAILABLE = False
 
+# Import Master Strategist (BEAST Architecture Phase 2)
+try:
+    from app.services.smart.master_strategist import master_strategist, StrategyConfig
+    _MASTER_STRATEGIST_AVAILABLE = True
+except ImportError as e:
+    logger.warning("[design_chain] master_strategist not available: %s", e)
+    _MASTER_STRATEGIST_AVAILABLE = False
+
+# Feature Flag: Enable BEAST Architecture (Master Strategist consolidation)
+_USE_MASTER_STRATEGIST = os.getenv("USE_MASTER_STRATEGIST", "false").lower() == "true"
+logger.info(f"[design_chain] BEAST Architecture Master Strategist: {'ENABLED' if _USE_MASTER_STRATEGIST else 'DISABLED'}")
+
 # ── Hex color validator ──────────────────────────────────────────────────────
 _HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _QUOTED_TEXT_RE = re.compile(r"""['"]([^'"]{1,200})['"]""")
@@ -4276,29 +4288,95 @@ class DesignAgentChain:
             resolved_width = width
             resolved_height = height
 
-            # ── Stage 1: Triage (serial — everything depends on it) ──────────
-            t = time.time()
-            triage = await _agent_triage(safe_prompt)
-            triage["original_prompt"] = safe_prompt  # pass through for image_prompter context
-            agent_times["triage"] = round(time.time() - t, 2)
-            if width == 1024 and height == 1024:
-                resolved_width = int(triage.get("recommended_width") or width)
-                resolved_height = int(triage.get("recommended_height") or height)
-            aspect_ratio = resolved_width / max(resolved_height, 1)
+            # ═══════════════════════════════════════════════════════════════════════
+            # BEAST ARCHITECTURE PHASE 2: Master Strategist (Consolidate 3→1)
+            # ═══════════════════════════════════════════════════════════════════════
+            if _USE_MASTER_STRATEGIST and _MASTER_STRATEGIST_AVAILABLE:
+                logger.info("[design_chain][BEAST] Using Master Strategist (Triage+Brand+CD consolidated)")
+                t = time.time()
 
-            # ── Stage 2: Brand Intel first, then Creative Director with real brand ─
-            # Sequential (not parallel) — saves 1 Gemini call vs old double-CD pattern,
-            # and Creative Director gets accurate brand colors/tone from the start.
-            t = time.time()
-            brand = await _agent_brand_intel(triage, brand_kit, safe_prompt)
-            agent_times["brand_intel"] = round(time.time() - t, 2)
+                try:
+                    strategy = await master_strategist(
+                        prompt=safe_prompt,
+                        brand_data=brand_kit,  # Pass scraped brand data
+                        gemini_client=_get_gemini_client(),
+                        width=resolved_width,
+                        height=resolved_height,
+                        tier=quality,
+                        platform=None,  # Let Master Strategist detect
+                        trace_id=None,  # Auto-generated
+                        config=StrategyConfig(
+                            max_retries=3,
+                            timeout_seconds=15.0,
+                            enable_caching=True,
+                            fallback_on_error=True,
+                        ),
+                    )
 
-            t = time.time()
-            creative = await _agent_creative_director(triage, brand, safe_prompt)
-            agent_times["creative_director"] = round(time.time() - t, 2)
-            creative["aspect_ratio"] = _aspect_ratio_label(resolved_width, resolved_height)
+                    # Extract consolidated outputs
+                    triage = strategy["triage"]
+                    triage["original_prompt"] = safe_prompt
+                    brand = strategy["brand"]
+                    creative = strategy["creative"]
+                    palette = strategy["palette"]
 
-            palette = creative.get("palette", {})
+                    # Merge agent times
+                    agent_times.update(strategy.get("_agent_times", {}))
+
+                    # Log performance metrics
+                    meta = strategy.get("_meta", {})
+                    logger.info(
+                        f"[design_chain][BEAST] Master Strategist SUCCESS — "
+                        f"latency={meta.get('latency_ms')}ms, "
+                        f"source={meta.get('source')}, "
+                        f"cache_hit={meta.get('cache_hit')}, "
+                        f"platform={triage.get('platform')}, "
+                        f"industry={triage.get('industry')}"
+                    )
+
+                    # Update dimensions if recommended
+                    if width == 1024 and height == 1024:
+                        resolved_width = int(triage.get("recommended_width") or width)
+                        resolved_height = int(triage.get("recommended_height") or height)
+                    aspect_ratio = resolved_width / max(resolved_height, 1)
+                    creative["aspect_ratio"] = _aspect_ratio_label(resolved_width, resolved_height)
+
+                except Exception as e:
+                    logger.error(f"[design_chain][BEAST] Master Strategist FAILED: {e}, falling back to 3-agent chain", exc_info=True)
+                    # Fall through to old 3-agent chain below
+                    _USE_MASTER_STRATEGIST_THIS_REQUEST = False
+                else:
+                    _USE_MASTER_STRATEGIST_THIS_REQUEST = True
+
+            # ═══════════════════════════════════════════════════════════════════════
+            # LEGACY 3-AGENT CHAIN (Triage → Brand Intel → Creative Director)
+            # ═══════════════════════════════════════════════════════════════════════
+            if not _USE_MASTER_STRATEGIST or not _MASTER_STRATEGIST_AVAILABLE:
+                logger.info("[design_chain][LEGACY] Using 3-agent chain (Triage → Brand Intel → Creative Director)")
+
+                # ── Stage 1: Triage (serial — everything depends on it) ──────────
+                t = time.time()
+                triage = await _agent_triage(safe_prompt)
+                triage["original_prompt"] = safe_prompt  # pass through for image_prompter context
+                agent_times["triage"] = round(time.time() - t, 2)
+                if width == 1024 and height == 1024:
+                    resolved_width = int(triage.get("recommended_width") or width)
+                    resolved_height = int(triage.get("recommended_height") or height)
+                aspect_ratio = resolved_width / max(resolved_height, 1)
+
+                # ── Stage 2: Brand Intel first, then Creative Director with real brand ─
+                # Sequential (not parallel) — saves 1 Gemini call vs old double-CD pattern,
+                # and Creative Director gets accurate brand colors/tone from the start.
+                t = time.time()
+                brand = await _agent_brand_intel(triage, brand_kit, safe_prompt)
+                agent_times["brand_intel"] = round(time.time() - t, 2)
+
+                t = time.time()
+                creative = await _agent_creative_director(triage, brand, safe_prompt)
+                agent_times["creative_director"] = round(time.time() - t, 2)
+                creative["aspect_ratio"] = _aspect_ratio_label(resolved_width, resolved_height)
+
+                palette = creative.get("palette", {})
 
             # ── Stage 2b: Design Director — Visual System Decree ───────────
             # Issues composition law, grid system, type scale, color rules
