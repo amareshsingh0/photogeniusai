@@ -31,7 +31,11 @@ engine = create_async_engine(
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     pool_pre_ping=True,  # Verify connections before using
-    connect_args={"statement_cache_size": 0},  # Required for pgbouncer/Supabase pooler
+    connect_args={
+        "statement_cache_size": 0,  # Required for pgbouncer/Supabase pooler
+        "prepared_statement_cache_size": 0,  # Also try this variant
+    },
+    execution_options={"compiled_cache": None},  # Disable SQLAlchemy's own cache too
 )
 
 # Create session factory
