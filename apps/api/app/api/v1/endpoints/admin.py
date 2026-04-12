@@ -71,18 +71,18 @@ async def admin_analytics(user_id: CurrentUserId, db = Depends(get_db)):
         this_month = datetime(now.year, now.month, 1)
 
         # Total users
-        result = await db.execute(text("SELECT COUNT(*) as count FROM \"User\""))
+        result = await db.execute(text("SELECT COUNT(*) as count FROM users"))
         row = result.fetchone()
         total_users = row[0] if row else 0
 
         # Total generations
-        result = await db.execute(text("SELECT COUNT(*) as count FROM \"Generation\" WHERE is_deleted = false"))
+        result = await db.execute(text("SELECT COUNT(*) as count FROM generations WHERE is_deleted = false"))
         row = result.fetchone()
         total_generations = row[0] if row else 0
 
         # Today's generations
         result = await db.execute(
-            text("SELECT COUNT(*) as count FROM \"Generation\" WHERE created_at >= :today AND is_deleted = false"),
+            text("SELECT COUNT(*) as count FROM generations WHERE created_at >= :today AND is_deleted = false"),
             {"today": today}
         )
         row = result.fetchone()
@@ -90,7 +90,7 @@ async def admin_analytics(user_id: CurrentUserId, db = Depends(get_db)):
 
         # This week's generations
         result = await db.execute(
-            text("SELECT COUNT(*) as count FROM \"Generation\" WHERE created_at >= :week AND is_deleted = false"),
+            text("SELECT COUNT(*) as count FROM generations WHERE created_at >= :week AND is_deleted = false"),
             {"week": this_week}
         )
         row = result.fetchone()
@@ -98,7 +98,7 @@ async def admin_analytics(user_id: CurrentUserId, db = Depends(get_db)):
 
         # This month's generations
         result = await db.execute(
-            text("SELECT COUNT(*) as count FROM \"Generation\" WHERE created_at >= :month AND is_deleted = false"),
+            text("SELECT COUNT(*) as count FROM generations WHERE created_at >= :month AND is_deleted = false"),
             {"month": this_month}
         )
         row = result.fetchone()
@@ -108,7 +108,7 @@ async def admin_analytics(user_id: CurrentUserId, db = Depends(get_db)):
         result = await db.execute(
             text("""
                 SELECT COUNT(DISTINCT user_id) as count
-                FROM \"Generation\"
+                FROM generations
                 WHERE created_at >= :week AND is_deleted = false
             """),
             {"week": this_week}
@@ -117,14 +117,14 @@ async def admin_analytics(user_id: CurrentUserId, db = Depends(get_db)):
         active_users = row[0] if row else 0
 
         # Total credits used (from generations)
-        result = await db.execute(text("SELECT SUM(credits) as total FROM \"Generation\" WHERE is_deleted = false"))
+        result = await db.execute(text("SELECT SUM(credits) as total FROM generations WHERE is_deleted = false"))
         row = result.fetchone()
         total_credits_used = int(row[0]) if row and row[0] else 0
 
         # Generations by tier (quality)
         result = await db.execute(text("""
             SELECT quality as tier, COUNT(*) as count
-            FROM \"Generation\"
+            FROM generations
             WHERE is_deleted = false AND quality IS NOT NULL
             GROUP BY quality
             ORDER BY count DESC
@@ -134,7 +134,7 @@ async def admin_analytics(user_id: CurrentUserId, db = Depends(get_db)):
         # Generations by bucket
         result = await db.execute(text("""
             SELECT bucket, COUNT(*) as count
-            FROM \"Generation\"
+            FROM generations
             WHERE is_deleted = false AND bucket IS NOT NULL
             GROUP BY bucket
             ORDER BY count DESC
@@ -151,8 +151,8 @@ async def admin_analytics(user_id: CurrentUserId, db = Depends(get_db)):
                 g.created_at,
                 u.email as user_email,
                 u.name as user_name
-            FROM \"Generation\" g
-            LEFT JOIN \"User\" u ON g.user_id = u.id
+            FROM generations g
+            LEFT JOIN users u ON g.user_id = u.id
             WHERE g.is_deleted = false
             ORDER BY g.created_at DESC
             LIMIT 10
@@ -175,7 +175,7 @@ async def admin_analytics(user_id: CurrentUserId, db = Depends(get_db)):
         # User growth (last 30 days)
         result = await db.execute(text("""
             SELECT DATE(created_at) as date, COUNT(*) as count
-            FROM \"User\"
+            FROM users
             WHERE created_at >= NOW() - INTERVAL '30 days'
             GROUP BY DATE(created_at)
             ORDER BY date DESC
