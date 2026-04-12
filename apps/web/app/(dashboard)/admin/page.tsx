@@ -107,7 +107,10 @@ export default function AdminDashboard() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/admin/analytics");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.creatives.bimoraai.com";
+      const res = await fetch(`${apiUrl}/api/v1/admin/analytics`, {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to fetch analytics");
       const data = await res.json();
       setAnalytics(data);
