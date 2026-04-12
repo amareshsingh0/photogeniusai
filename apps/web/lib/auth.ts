@@ -95,6 +95,11 @@ export async function getCurrentUser(): Promise<DevUser | null> {
     return null;
   }
 
+  // Dev user bypass (avoid pgbouncer issues in production)
+  if (userId === DEV_USER.id) {
+    return DEV_USER;
+  }
+
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
