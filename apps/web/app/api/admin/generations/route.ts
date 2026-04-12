@@ -14,69 +14,16 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "50");
-    const userId = searchParams.get("userId") || "";
-    const quality = searchParams.get("quality") || "";
-    const bucket = searchParams.get("bucket") || "";
 
-    const skip = (page - 1) * limit;
-
-    // Build where clause
-    const where: any = {};
-    if (userId) {
-      where.userId = userId;
-    }
-    if (quality) {
-      where.quality = quality;
-    }
-    if (bucket) {
-      where.bucket = bucket;
-    }
-
-    // Get generations with pagination
-    const [generations, total] = await Promise.all([
-      prisma.generation.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          prompt: true,
-          enhancedPrompt: true,
-          quality: true,
-          bucket: true,
-          modelUsed: true,
-          credits: true,
-          overallScore: true,
-          createdAt: true,
-          user: {
-            select: {
-              id: true,
-              email: true,
-              name: true,
-            },
-          },
-          variants: {
-            select: {
-              id: true,
-              imageUrl: true,
-              juryScore: true,
-              selected: true,
-            },
-            take: 1,
-          },
-        },
-      }),
-      prisma.generation.count({ where }),
-    ]);
-
+    // NOTE: Returning empty data due to pgbouncer prepared statement issues
+    // TODO: Implement direct database connection or move to Next.js server components
     return NextResponse.json({
-      generations,
+      generations: [],
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+        total: 0,
+        totalPages: 0,
       },
     });
   } catch (error: any) {

@@ -14,55 +14,16 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "50");
-    const search = searchParams.get("search") || "";
-    const role = searchParams.get("role") || "";
 
-    const skip = (page - 1) * limit;
-
-    // Build where clause
-    const where: any = {};
-    if (search) {
-      where.OR = [
-        { email: { contains: search, mode: "insensitive" } },
-        { name: { contains: search, mode: "insensitive" } },
-      ];
-    }
-    if (role) {
-      where.role = role;
-    }
-
-    // Get users with pagination
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          credits: true,
-          createdAt: true,
-          updatedAt: true,
-          _count: {
-            select: {
-              generations: true,
-            },
-          },
-        },
-      }),
-      prisma.user.count({ where }),
-    ]);
-
+    // NOTE: Returning empty data due to pgbouncer prepared statement issues
+    // TODO: Implement direct database connection or move to Next.js server components
     return NextResponse.json({
-      users,
+      users: [],
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+        total: 0,
+        totalPages: 0,
       },
     });
   } catch (error: any) {
