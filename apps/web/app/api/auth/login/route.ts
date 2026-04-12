@@ -32,7 +32,7 @@ export async function POST(req: Request) {
         email: true,
         name: true,
         passwordHash: true,
-        credits: true,
+        creditsBalance: true,
       },
     });
 
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
         id: user.id,
         email: user.email,
         name: user.name,
-        credits: user.credits,
+        credits: user.creditsBalance,
       },
       token,
     });
