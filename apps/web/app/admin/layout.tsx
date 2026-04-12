@@ -19,13 +19,11 @@ export default async function AdminLayout({
     redirect("/");
   }
 
-  // PURE ADMIN LAYOUT - NO user features, NO dashboard sidebar
+  // PURE ADMIN LAYOUT - NO user features, NO dashboard sidebar, NO mixing
   return (
-    <html lang="en" className="dark">
-      <body className="bg-[#0a0a0a] text-white min-h-screen antialiased">
-        {/* Pure admin panel - no user navigation, no mixing */}
-        {children}
-      </body>
-    </html>
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
+      {/* Pure admin panel - standalone, no user navigation */}
+      {children}
+    </div>
   );
 }
