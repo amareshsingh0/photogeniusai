@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException  # type: ignore[reportMissingImports]
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
+from sqlalchemy import text  # type: ignore[reportMissingImports]
 
 from app.core.dependencies import CurrentUserId
 from app.core.security import require_auth
@@ -17,24 +18,28 @@ async def admin_stats(user_id: CurrentUserId, db = Depends(get_db)):
 
     try:
         # Get total users
-        users_count = await db.execute_query_one("SELECT COUNT(*) as count FROM users")
-        total_users = users_count['count'] if users_count else 0
+        result = await db.execute(text("SELECT COUNT(*) as count FROM users"))
+        row = result.fetchone()
+        total_users = row[0] if row else 0
 
         # Get total generations
-        gen_count = await db.execute_query_one("SELECT COUNT(*) as count FROM generations WHERE is_deleted = false")
-        total_generations = gen_count['count'] if gen_count else 0
+        result = await db.execute(text("SELECT COUNT(*) as count FROM generations WHERE is_deleted = false"))
+        row = result.fetchone()
+        total_generations = row[0] if row else 0
 
         # Get active users (generated in last 30 days)
-        active_count = await db.execute_query_one("""
+        result = await db.execute(text("""
             SELECT COUNT(DISTINCT user_id) as count
             FROM generations
             WHERE created_at > NOW() - INTERVAL '30 days' AND is_deleted = false
-        """)
-        active_users = active_count['count'] if active_count else 0
+        """))
+        row = result.fetchone()
+        active_users = row[0] if row else 0
 
         # Get total credits used
-        credits_count = await db.execute_query_one("SELECT SUM(total_credits_spent) as total FROM users")
-        total_credits_spent = int(credits_count['total']) if credits_count and credits_count['total'] else 0
+        result = await db.execute(text("SELECT SUM(total_credits_spent) as total FROM users"))
+        row = result.fetchone()
+        total_credits_spent = int(row[0]) if row and row[0] else 0
 
         return {
             "users": total_users,
@@ -66,72 +71,78 @@ async def admin_analytics(user_id: CurrentUserId, db = Depends(get_db)):
         this_month = datetime(now.year, now.month, 1)
 
         # Total users
-        total_users_result = await db.execute_query_one("SELECT COUNT(*) as count FROM users")
-        total_users = total_users_result['count'] if total_users_result else 0
+        result = await db.execute(text("SELECT COUNT(*) as count FROM \"User\""))
+        row = result.fetchone()
+        total_users = row[0] if row else 0
 
         # Total generations
-        total_gen_result = await db.execute_query_one(
-            "SELECT COUNT(*) as count FROM generations WHERE is_deleted = false"
-        )
-        total_generations = total_gen_result['count'] if total_gen_result else 0
+        result = await db.execute(text("SELECT COUNT(*) as count FROM \"Generation\" WHERE is_deleted = false"))
+        row = result.fetchone()
+        total_generations = row[0] if row else 0
 
         # Today's generations
-        today_gen_result = await db.execute_query_one(
-            "SELECT COUNT(*) as count FROM generations WHERE created_at >= $1 AND is_deleted = false",
-            today
+        result = await db.execute(
+            text("SELECT COUNT(*) as count FROM \"Generation\" WHERE created_at >= :today AND is_deleted = false"),
+            {"today": today}
         )
-        today_generations = today_gen_result['count'] if today_gen_result else 0
+        row = result.fetchone()
+        today_generations = row[0] if row else 0
 
         # This week's generations
-        week_gen_result = await db.execute_query_one(
-            "SELECT COUNT(*) as count FROM generations WHERE created_at >= $1 AND is_deleted = false",
-            this_week
+        result = await db.execute(
+            text("SELECT COUNT(*) as count FROM \"Generation\" WHERE created_at >= :week AND is_deleted = false"),
+            {"week": this_week}
         )
-        week_generations = week_gen_result['count'] if week_gen_result else 0
+        row = result.fetchone()
+        week_generations = row[0] if row else 0
 
         # This month's generations
-        month_gen_result = await db.execute_query_one(
-            "SELECT COUNT(*) as count FROM generations WHERE created_at >= $1 AND is_deleted = false",
-            this_month
+        result = await db.execute(
+            text("SELECT COUNT(*) as count FROM \"Generation\" WHERE created_at >= :month AND is_deleted = false"),
+            {"month": this_month}
         )
-        month_generations = month_gen_result['count'] if month_gen_result else 0
+        row = result.fetchone()
+        month_generations = row[0] if row else 0
 
         # Active users (generated in last 7 days)
-        active_users_result = await db.execute_query_one("""
-            SELECT COUNT(DISTINCT user_id) as count
-            FROM generations
-            WHERE created_at >= $1 AND is_deleted = false
-        """, this_week)
-        active_users = active_users_result['count'] if active_users_result else 0
+        result = await db.execute(
+            text("""
+                SELECT COUNT(DISTINCT user_id) as count
+                FROM \"Generation\"
+                WHERE created_at >= :week AND is_deleted = false
+            """),
+            {"week": this_week}
+        )
+        row = result.fetchone()
+        active_users = row[0] if row else 0
 
         # Total credits used (from generations)
-        credits_result = await db.execute_query_one(
-            "SELECT SUM(credits) as total FROM generations WHERE is_deleted = false"
-        )
-        total_credits_used = int(credits_result['total']) if credits_result and credits_result['total'] else 0
+        result = await db.execute(text("SELECT SUM(credits) as total FROM \"Generation\" WHERE is_deleted = false"))
+        row = result.fetchone()
+        total_credits_used = int(row[0]) if row and row[0] else 0
 
         # Generations by tier (quality)
-        by_tier_results = await db.execute_query_all("""
+        result = await db.execute(text("""
             SELECT quality as tier, COUNT(*) as count
-            FROM generations
+            FROM \"Generation\"
             WHERE is_deleted = false AND quality IS NOT NULL
             GROUP BY quality
             ORDER BY count DESC
-        """)
-        by_tier = [{"tier": row['tier'], "count": row['count']} for row in by_tier_results] if by_tier_results else []
+        """))
+        by_tier = [{"tier": row[0], "count": row[1]} for row in result.fetchall()]
 
         # Generations by bucket
-        by_bucket_results = await db.execute_query_all("""
+        result = await db.execute(text("""
             SELECT bucket, COUNT(*) as count
-            FROM generations
+            FROM \"Generation\"
             WHERE is_deleted = false AND bucket IS NOT NULL
             GROUP BY bucket
             ORDER BY count DESC
-        """)
-        by_bucket = [{"bucket": row['bucket'], "count": row['count']} for row in by_bucket_results] if by_bucket_results else []
+        """))
+        by_bucket = [{"bucket": row[0], "count": row[1]} for row in result.fetchall()]
 
         # Recent generations (last 10)
-        recent_results = await db.execute_query_all("""
+        result = await db.execute(text("""
             SELECT
                 g.id,
                 g.prompt,
@@ -140,44 +151,42 @@ async def admin_analytics(user_id: CurrentUserId, db = Depends(get_db)):
                 g.created_at,
                 u.email as user_email,
                 u.name as user_name
-            FROM generations g
-            LEFT JOIN users u ON g.user_id = u.id
+            FROM \"Generation\" g
+            LEFT JOIN \"User\" u ON g.user_id = u.id
             WHERE g.is_deleted = false
             ORDER BY g.created_at DESC
             LIMIT 10
-        """)
+        """))
 
         recent = []
-        if recent_results:
-            for row in recent_results:
-                recent.append({
-                    "id": str(row['id']),
-                    "prompt": row['prompt'],
-                    "quality": row['quality'],
-                    "bucket": row['bucket'],
-                    "createdAt": row['created_at'].isoformat() if row['created_at'] else None,
-                    "user": {
-                        "email": row['user_email'],
-                        "name": row['user_name']
-                    }
-                })
+        for row in result.fetchall():
+            recent.append({
+                "id": str(row[0]),
+                "prompt": row[1],
+                "quality": row[2],
+                "bucket": row[3],
+                "createdAt": row[4].isoformat() if row[4] else None,
+                "user": {
+                    "email": row[5],
+                    "name": row[6]
+                }
+            })
 
         # User growth (last 30 days)
-        growth_results = await db.execute_query_all("""
+        result = await db.execute(text("""
             SELECT DATE(created_at) as date, COUNT(*) as count
-            FROM users
+            FROM \"User\"
             WHERE created_at >= NOW() - INTERVAL '30 days'
             GROUP BY DATE(created_at)
             ORDER BY date DESC
-        """)
+        """))
 
         user_growth = []
-        if growth_results:
-            for row in growth_results:
-                user_growth.append({
-                    "date": row['date'].isoformat() if row['date'] else None,
-                    "count": row['count']
-                })
+        for row in result.fetchall():
+            user_growth.append({
+                "date": row[0].isoformat() if row[0] else None,
+                "count": row[1]
+            })
 
         # Calculate averages
         avg_generations_per_user = round(total_generations / total_users, 2) if total_users > 0 else 0
