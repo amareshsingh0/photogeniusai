@@ -31,6 +31,7 @@ engine = create_async_engine(
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     pool_pre_ping=True,  # Verify connections before using
+    connect_args={"statement_cache_size": 0},  # Required for pgbouncer/Supabase pooler
 )
 
 # Create session factory
