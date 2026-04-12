@@ -34,7 +34,10 @@ class Settings(BaseSettings):
 
     # ==================== API ====================
     API_V1_PREFIX: str = "/api/v1"
-    ALLOWED_ORIGINS: List[str] = Field(default=["http://localhost:3000"], env="ALLOWED_ORIGINS")
+    ALLOWED_ORIGINS: List[str] = Field(
+        default=["http://localhost:3000", "http://localhost:3002", "https://creatives.bimoraai.com"],
+        env="ALLOWED_ORIGINS"
+    )
 
     # ==================== Database ====================
     DATABASE_URL: Optional[PostgresDsn] = Field(default=None, env="DATABASE_URL")
