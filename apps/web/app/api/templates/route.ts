@@ -51,9 +51,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const dbUser = await prisma.user.findUnique({ where: { clerkId }, select: { id: true } });
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!dbUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 200) : "";

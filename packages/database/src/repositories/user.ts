@@ -1,6 +1,6 @@
 /**
  * User Repository
- * 
+ *
  * Type-safe database operations for User model with transaction support.
  */
 
@@ -8,11 +8,11 @@ import { prisma, User, UserTier, Prisma } from '../index'
 
 export class UserRepository {
   /**
-   * Find user by Clerk ID
+   * Find user by ID
    */
-  static async findByClerkId(clerkId: string): Promise<User | null> {
+  static async findById(userId: string): Promise<User | null> {
     return prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       include: {
         identities: {
           where: { isDeleted: false },
@@ -54,8 +54,9 @@ export class UserRepository {
    */
   static async create(data: {
     email: string
-    clerkId: string
     name?: string
+    passwordHash?: string
+    role?: string
     profileImageUrl?: string
   }): Promise<User> {
     return prisma.user.create({
@@ -289,7 +290,7 @@ export class UserRepository {
 
   /**
    * Check if user can generate
-   * 
+   *
    * NOTE: Credit checks are DISABLED during development/testing phase
    */
   static async canGenerate(
@@ -298,7 +299,7 @@ export class UserRepository {
   ): Promise<{ can: boolean; reason?: string }> {
     // DEVELOPMENT MODE: Skip credit checks for testing
     const SKIP_CREDIT_CHECKS = true // Set to false to enable credit checks
-    
+
     if (SKIP_CREDIT_CHECKS) {
       console.log(`[DEV] Credit check skipped - required: ${requiredCredits}, user: ${userId}`)
       // Still check if user exists and is not banned

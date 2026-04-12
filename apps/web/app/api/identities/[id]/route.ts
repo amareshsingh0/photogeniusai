@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { logIdentityAccess } from "@/lib/identity-audit";
 
-// Force dynamic rendering - this route uses headers via Clerk auth
+// Force dynamic rendering - this route uses headers via auth
 export const dynamic = 'force-dynamic';
 
 /**
@@ -16,15 +16,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { id } = await params;
 
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true },
     });
 
@@ -84,8 +84,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -94,7 +94,7 @@ export async function DELETE(
     const hardDelete = url.searchParams.get("hard") === "true";
 
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true },
     });
 

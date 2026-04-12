@@ -96,7 +96,8 @@ enum TemplatePriceType {
 model User {
   id              String  @id @default(uuid()) @db.Uuid
   email           String  @unique @db.VarChar(255)
-  clerkId         String  @unique @db.VarChar(255)
+  passwordHash    String? @db.Text
+  role            String  @default("USER") @db.VarChar(50)
   name            String? @db.VarChar(255)
   profileImageUrl String? @db.Text
 
@@ -158,7 +159,7 @@ model User {
   activities           Activity[]
 
   @@index([email])
-  @@index([clerkId])
+  @@index([role])
   @@index([tier])
   @@index([isBanned])
   @@index([createdAt])

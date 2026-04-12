@@ -36,7 +36,6 @@ async function main() {
       name,
       passwordHash,
       credits: 1000,
-      // No clerkId needed anymore
     },
   });
 

@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const dbUser = await prisma.user.findUnique({ where: { clerkId }, select: { id: true } });
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!dbUser) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { searchParams } = new URL(req.url);

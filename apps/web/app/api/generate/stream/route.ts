@@ -76,7 +76,7 @@ export async function POST(req: Request) {
   try {
     if (userId) {
       const dbUser = await prisma.user.findFirst({
-        where: { OR: [{ clerkId: userId }, { id: userId }] },
+        where: { id: userId },
         select: { preferences: true },
       });
       const prefs = dbUser?.preferences as Record<string, unknown> | null;
@@ -151,16 +151,11 @@ export async function POST(req: Request) {
 
                 if (userId && data.image_url) {
                   try {
-                    const dbUser = await prisma.user.upsert({
-                      where: { clerkId: userId },
-                      create: {
-                        clerkId: userId,
-                        email: `${userId}@photogenius.local`,
-                        creditsBalance: 1000,
-                      },
-                      update: {},
+                    const dbUser = await prisma.user.findUnique({
+                      where: { id: userId },
                       select: { id: true },
                     });
+                    if (!dbUser) throw new Error("User not found");
                     const gen = await prisma.generation.create({
                       data: {
                         userId: dbUser.id,

@@ -10,14 +10,14 @@ const OPT_IN_CREDITS = 100;
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { userId: clerkId } = await auth();
+    const { userId } = await auth();
 
-    if (!clerkId) {
+    if (!userId) {
       return NextResponse.json({ success: true, anonymous: true });
     }
 
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true },
     });
 

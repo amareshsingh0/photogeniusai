@@ -15,17 +15,14 @@ export async function GET() {
       return NextResponse.json({ credits: 0, generationsCount: 0, identitiesCount: 0 });
     }
 
-    // Upsert: auto-create dev user on first visit so all DB queries work
-    const dbUser = await prisma.user.upsert({
-      where: { clerkId: userId },
-      create: {
-        clerkId: userId,
-        email: "dev@photogenius.local",
-        creditsBalance: 1000,
-      },
-      update: {},
+    const dbUser = await prisma.user.findUnique({
+      where: { id: userId },
       select: { id: true, creditsBalance: true },
     });
+
+    if (!dbUser) {
+      return NextResponse.json({ credits: 0, generationsCount: 0, identitiesCount: 0 });
+    }
 
     const [generationsCount, identitiesCount] = await Promise.all([
       prisma.generation.count({ where: { userId: dbUser.id } }),

@@ -4,7 +4,7 @@ import { prisma, isPrismaDbUnavailable } from "@/lib/db";
 import { getCorrelationId, correlationIdResponseHeaders } from "@/lib/correlation-id";
 import { logger } from "@/lib/logger";
 
-// Force dynamic rendering - this route uses headers via Clerk auth
+// Force dynamic rendering - this route uses headers via auth
 export const dynamic = 'force-dynamic';
 
 /**
@@ -15,13 +15,13 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   const correlationId = getCorrelationId(req);
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json([]);
     }
 
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true },
     });
 
@@ -123,14 +123,14 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ ok: true, skipped: "no auth" });
     }
 
-    // Get database user by Clerk ID
+    // Get database user
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true, allowTrainingExport: true },
     });
 

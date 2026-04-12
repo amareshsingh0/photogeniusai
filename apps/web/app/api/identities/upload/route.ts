@@ -13,8 +13,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
  */
 export async function POST(req: Request) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -55,11 +55,11 @@ export async function POST(req: Request) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-User-Id": clerkId,
+        "X-User-Id": userId,
       },
       body: JSON.stringify({
         photos: base64Photos,
-        userId: clerkId,
+        userId: userId,
       }),
     });
 

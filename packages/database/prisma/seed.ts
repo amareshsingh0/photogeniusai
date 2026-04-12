@@ -10,7 +10,7 @@ async function main() {
     prisma.user.create({
       data: {
         email: 'free@test.com',
-        clerkId: 'user_free_test',
+        role: 'USER',
         name: 'Free User',
         tier: UserTier.FREE,
         creditsBalance: 15,
@@ -19,7 +19,7 @@ async function main() {
     prisma.user.create({
       data: {
         email: 'pro@test.com',
-        clerkId: 'user_pro_test',
+        role: 'USER',
         name: 'Pro User',
         tier: UserTier.PRO,
         creditsBalance: 200,
@@ -30,7 +30,7 @@ async function main() {
     prisma.user.create({
       data: {
         email: 'premium@test.com',
-        clerkId: 'user_premium_test',
+        role: 'USER',
         name: 'Premium User',
         tier: UserTier.PREMIUM,
         creditsBalance: 1000,

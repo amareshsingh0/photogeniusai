@@ -22,13 +22,13 @@ type Source = (typeof SOURCE_VALUES)[number];
  */
 export async function POST(req: Request) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true },
     });
     if (!dbUser) {
@@ -101,13 +101,13 @@ export async function POST(req: Request) {
  */
 export async function GET(req: Request) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ count: 0, bySource: {} });
     }
 
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true },
     });
     if (!dbUser) {

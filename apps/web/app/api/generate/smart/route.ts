@@ -60,10 +60,10 @@ export async function POST(req: Request) {
     let userPreferences: Record<string, unknown> | null = null;
     try {
       const session = await auth();
-      const clerkId = session?.userId ?? null;
-      if (clerkId) {
+      const authUserId = session?.userId ?? null;
+      if (authUserId) {
         const dbUser = await prisma.user.findUnique({
-          where: { clerkId },
+          where: { id: authUserId },
           select: { preferences: true },
         });
         if (dbUser?.preferences) {
@@ -156,12 +156,10 @@ export async function POST(req: Request) {
     // Save generation to DB → shows in gallery, dashboard stats, enables publish
     let generationId: string | undefined;
     try {
-      const { userId: clerkId } = await auth();
-      if (clerkId) {
-        const dbUser = await prisma.user.upsert({
-          where: { clerkId },
-          create: { clerkId, email: `${clerkId}@photogenius.local`, creditsBalance: 1000 },
-          update: {},
+      const { userId: authId } = await auth();
+      if (authId) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: authId },
           select: { id: true },
         });
         if (dbUser) {

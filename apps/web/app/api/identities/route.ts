@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma, isPrismaDbUnavailable } from "@/lib/db";
 
-// Force dynamic rendering - this route uses headers via Clerk auth
+// Force dynamic rendering - this route uses headers via auth
 export const dynamic = 'force-dynamic';
 
 /**
@@ -10,14 +10,14 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET() {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json([]);
     }
 
-    // Get database user by Clerk ID
+    // Get database user
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true },
     });
 
@@ -64,14 +64,14 @@ export async function GET() {
  */
 export async function POST(req: Request) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get database user by Clerk ID
+    // Get database user
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true },
     });
 

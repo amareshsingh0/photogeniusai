@@ -20,9 +20,8 @@ export async function GET() {
       });
     }
 
-    // First get the database user by Clerk ID
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId: userId },
+      where: { id: userId },
       select: { id: true, creditsBalance: true },
     });
 

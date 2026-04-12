@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({
         hasRecord: false,
         allowTraining: false,
@@ -21,7 +21,7 @@ export async function GET() {
     }
 
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true },
     });
     if (!dbUser) {

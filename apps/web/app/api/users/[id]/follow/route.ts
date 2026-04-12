@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const dbUser = await prisma.user.findUnique({ where: { clerkId }, select: { id: true } });
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!dbUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
     const { id: followingId } = await params;
     if (followingId === dbUser.id) return NextResponse.json({ error: "Cannot follow self" }, { status: 400 });
@@ -30,9 +30,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) return NextResponse.json({ following: false });
-    const dbUser = await prisma.user.findUnique({ where: { clerkId }, select: { id: true } });
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ following: false });
+    const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!dbUser) return NextResponse.json({ following: false });
     const { id: followingId } = await params;
     const f = await prisma.follow.findUnique({ where: { followerId_followingId: { followerId: dbUser.id, followingId } } });

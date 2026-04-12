@@ -14,9 +14,9 @@ const TIER_BONUSES = [
 
 export async function GET(req: Request) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) return NextResponse.json({ optedIn: false, totalContributions: 0, totalCreditsEarned: 0, tier: 0 });
-    const dbUser = await prisma.user.findUnique({ where: { clerkId }, select: { id: true, allowTrainingExport: true } });
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ optedIn: false, totalContributions: 0, totalCreditsEarned: 0, tier: 0 });
+    const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, allowTrainingExport: true } });
     if (!dbUser) return NextResponse.json({ optedIn: false, totalContributions: 0, totalCreditsEarned: 0, tier: 0 });
     const contributions = await prisma.dataContribution.findMany({
       where: { userId: dbUser.id },
@@ -47,9 +47,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const dbUser = await prisma.user.findUnique({ where: { clerkId }, select: { id: true, allowTrainingExport: true, creditsBalance: true } });
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, allowTrainingExport: true, creditsBalance: true } });
     if (!dbUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
     const body = (await req.json().catch(() => ({}))) as { optIn?: boolean };
     if (typeof body.optIn !== "boolean") return NextResponse.json({ error: "optIn boolean required" }, { status: 400 });

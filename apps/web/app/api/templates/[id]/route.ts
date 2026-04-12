@@ -45,9 +45,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const success = body.success === true;
 
     if (template.priceType === "PREMIUM" && template.priceCredits > 0) {
-      const { userId: clerkId } = await auth();
-      if (!clerkId) return NextResponse.json({ error: "Sign in to use premium template" }, { status: 401 });
-      const dbUser = await prisma.user.findUnique({ where: { clerkId }, select: { id: true, creditsBalance: true } });
+      const { userId } = await auth();
+      if (!userId) return NextResponse.json({ error: "Sign in to use premium template" }, { status: 401 });
+      const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, creditsBalance: true } });
       if (!dbUser || (dbUser.creditsBalance ?? 0) < template.priceCredits) return NextResponse.json({ error: "Insufficient credits" }, { status: 400 });
       const creatorShare = Math.floor(template.priceCredits * 0.7);
       const platformShare = template.priceCredits - creatorShare;

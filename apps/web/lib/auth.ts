@@ -17,14 +17,14 @@ export interface DevUser {
   id: string;
   email: string;
   name: string;
-  credits: number;
+  creditsBalance: number;
 }
 
 const DEV_USER: DevUser = {
   id: "dev_user_123",
   email: "dev@photogenius.local",
   name: "Dev User",
-  credits: 1000,
+  creditsBalance: 1000,
 };
 
 /**
@@ -102,7 +102,7 @@ export async function getCurrentUser(): Promise<DevUser | null> {
         id: true,
         email: true,
         name: true,
-        credits: true,
+        creditsBalance: true,
       },
     });
 
@@ -138,8 +138,8 @@ export async function checkCredits(requiredCredits: number): Promise<DevUser> {
     return user;
   }
 
-  if (user.credits < requiredCredits) {
-    throw new Error(`Insufficient credits. Required: ${requiredCredits}, Available: ${user.credits}`);
+  if (user.creditsBalance < requiredCredits) {
+    throw new Error(`Insufficient credits. Required: ${requiredCredits}, Available: ${user.creditsBalance}`);
   }
 
   return user;
@@ -153,10 +153,3 @@ export async function getUserId(): Promise<string | null> {
   return userId;
 }
 
-/**
- * Legacy function for backwards compatibility
- * @deprecated Use getCurrentUser() instead
- */
-export async function getClerkUser() {
-  return getCurrentUser();
-}

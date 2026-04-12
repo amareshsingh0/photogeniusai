@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const dbUser = await prisma.user.findUnique({ where: { clerkId }, select: { id: true } });
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const dbUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!dbUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
     const { id: challengeId } = await params;
     const body = (await req.json().catch(() => ({}))) as { submissionId: string };

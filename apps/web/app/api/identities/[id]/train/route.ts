@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { AIService } from "@/lib/ai-service";
 import { logIdentityAccess } from "@/lib/identity-audit";
 
-// Force dynamic rendering - this route uses headers via Clerk auth
+// Force dynamic rendering - this route uses headers via auth
 export const dynamic = "force-dynamic";
 
 /**
@@ -20,16 +20,16 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId: clerkId } = await auth();
-    if (!clerkId) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { id } = await params;
 
-    // Get database user by Clerk ID
+    // Get database user
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId },
+      where: { id: userId },
       select: { id: true },
     });
 

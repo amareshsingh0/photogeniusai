@@ -19,9 +19,9 @@ const ALLOWED_REASONS = [
  */
 export async function POST(req: Request) {
   try {
-    const { userId: clerkId } = await auth();
+    const { userId } = await auth();
     const dbUser = await prisma.user.findUnique({
-      where: { clerkId: clerkId ?? "" },
+      where: { id: userId ?? "" },
       select: { id: true },
     });
 
