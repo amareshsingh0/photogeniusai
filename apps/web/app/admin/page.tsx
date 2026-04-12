@@ -15,6 +15,7 @@ import {
   Trash2,
   Edit,
   X,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -89,6 +90,16 @@ export default function AdminDashboard() {
   // Edit user modal
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ name: "", email: "", role: "", credits: 0 });
+
+  // Logout function
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
 
   // Fetch data based on active tab
   useEffect(() => {
@@ -265,14 +276,23 @@ export default function AdminDashboard() {
       {/* Header */}
       <div className="border-b border-zinc-800 bg-zinc-900/50">
         <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-orange-600 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-orange-600 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+                <p className="text-sm text-zinc-500">Full system control & analytics</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-              <p className="text-sm text-zinc-500">Full system control & analytics</p>
-            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </button>
           </div>
 
           {/* Tabs */}
