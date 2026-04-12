@@ -231,7 +231,12 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         num_images = model_cfg.get("num_images", 1)
 
         # ── Stage A: Creative Brief ────────────────────────────────────────
-        from app.services.smart.gemini_prompt_engine import gemini_prompt_engine
+        # Import prompt engine based on env flag
+        use_claude = os.getenv("USE_CLAUDE_ENGINE", "true").lower() != "false"
+        if use_claude:
+            from app.services.smart.claude_prompt_engine_v2 import claude_prompt_engine as prompt_engine
+        else:
+            from app.services.smart.gemini_prompt_engine import gemini_prompt_engine as prompt_engine
         brief: dict
 
         if bucket == "typography":
@@ -250,7 +255,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                 logger.info("[stream][%s] DesignAgentChain done in %.2fs", trace_id, brief.get("_elapsed", 0))
             except Exception as _chain_err:
                 logger.warning("[stream][%s] DesignAgentChain failed (%s), falling back to Gemini", trace_id, _chain_err)
-                brief = await gemini_prompt_engine.create_brief(
+                brief = await prompt_engine.create_brief(
                     req.prompt,
                     creative_type=intent.get("creative_type", "typography"),
                     style=req.style or "photo",
@@ -265,7 +270,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                 f"goal={intent.get('goal')}, "
                 f"audience={intent.get('audience_tone')}"
             )
-            brief = await gemini_prompt_engine.create_brief(
+            brief = await prompt_engine.create_brief(
                 req.prompt,
                 creative_type=intent.get("creative_type", "photorealism"),
                 style=req.style or "photo",
@@ -298,7 +303,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         })
 
         # ── Stage B: CDI — Creative Director Integration ──────────────────
-        params = await gemini_prompt_engine.build_params(brief, model_label, bucket)
+        params = await prompt_engine.build_params(brief, model_label, bucket)
         enhanced_prompt = params.get("prompt") or req.prompt
         negative_prompt = params.get("negative_prompt", "")
         if req.negative_prompt is not None:

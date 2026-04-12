@@ -15,8 +15,8 @@ export default async function AdminLayout({
     // Require admin role
     await requireAdmin();
   } catch (error) {
-    // Not admin - block access completely
-    redirect("/");
+    // Not admin - redirect to login
+    redirect("/login");
   }
 
   // PURE ADMIN LAYOUT - NO user features, NO dashboard sidebar, NO mixing
