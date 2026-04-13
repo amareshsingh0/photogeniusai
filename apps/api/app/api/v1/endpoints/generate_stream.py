@@ -31,6 +31,16 @@ router = APIRouter(tags=["streaming"])
 # ── Module-level HTTP client (connection-pooled, reused across requests) ─────
 _http_client: Optional[httpx.AsyncClient] = None
 
+# ── Smart Cache (Semantic + Exact Match Caching) ─────────────────────────────
+try:
+    from app.services.smart.smart_cache import SmartCache
+    _smart_cache = SmartCache()
+    _CACHE_ENABLED = os.getenv("USE_SMART_CACHE", "true").lower() != "false"
+except Exception as e:
+    logger.warning("[cache] SmartCache init failed: %s - caching disabled", e)
+    _smart_cache = None
+    _CACHE_ENABLED = False
+
 
 def _get_http_client() -> httpx.AsyncClient:
     global _http_client
@@ -191,6 +201,47 @@ def _build_design_brief(
 async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[str]:
     start = time.time()
     quality = req.quality  # already validated by Pydantic
+
+    # ── Stage -2: Smart Cache Check ────────────────────────────────────────
+    cache_result = None
+    if _CACHE_ENABLED and _smart_cache:
+        try:
+            cache_result = await asyncio.to_thread(
+                _smart_cache.check_cache,
+                prompt=req.prompt,
+                mode=f"w{req.width}h{req.height}",
+                identity_id=None,  # Add user_id when auth implemented
+                quality_tier=quality,
+                style=req.style,
+            )
+            if cache_result:
+                cache_type = cache_result.get("type", "unknown")
+                logger.info("[stream][%s] Cache %s hit!", trace_id, cache_type)
+
+                # Return cached result via SSE
+                yield _sse("cache_hit", {
+                    "type": cache_type,
+                    "similarity": cache_result.get("similarity", 1.0),
+                    "trace_id": trace_id,
+                })
+
+                # Extract cached data
+                images = cache_result.get("images", [])
+                if images and len(images) > 0:
+                    first_img = images[0]
+                    yield _sse("final_ready", {
+                        "image_url": first_img.get("image_url", ""),
+                        "seed": first_img.get("seed"),
+                        "composite_status": "cached",
+                        "model_used": first_img.get("model_used", "cached"),
+                        "elapsed_seconds": time.time() - start,
+                        "trace_id": trace_id,
+                        "cached": True,
+                        "cache_type": cache_type,
+                    })
+                    return
+        except Exception as cache_err:
+            logger.warning("[stream][%s] Cache check failed: %s", trace_id, cache_err)
 
     try:
         # ── Stage -1: Intent ───────────────────────────────────────────────
@@ -622,6 +673,30 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
 
         # Safe extraction of gen fields
         all_urls = gen.get("all_urls") or ([raw_hero_url] if raw_hero_url else [])
+
+        # ── Store in Smart Cache ─────────────────────────────────────────
+        if _CACHE_ENABLED and _smart_cache and not cache_result:
+            try:
+                await asyncio.to_thread(
+                    _smart_cache.store_result,
+                    prompt=req.prompt,
+                    mode=f"w{req.width}h{req.height}",
+                    identity_id=None,  # Add user_id when auth implemented
+                    images=[{
+                        "image_url": final_image_url,
+                        "seed": gen.get("seed"),
+                        "model_used": _MODEL_LABELS.get(gen.get("model_key", fal_model_key), gen.get("model_key", fal_model_key)),
+                        "backend": gen.get("backend", "fal.ai"),
+                        "quality_score": quality_gate_result.get("total") if quality_gate_result else None,
+                    }],
+                    parsed_prompt=brief,
+                    execution_plan={"bucket": bucket, "model": fal_model_key},
+                    quality_tier=quality,
+                    style=req.style,
+                )
+                logger.info("[stream][%s] Result cached successfully", trace_id)
+            except Exception as store_err:
+                logger.warning("[stream][%s] Cache store failed (non-fatal): %s", trace_id, store_err)
 
         yield _sse("final_ready", {
             "success":           True,

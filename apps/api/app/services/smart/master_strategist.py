@@ -53,6 +53,15 @@ except ImportError:
     genai = None
     _GEMINI_AVAILABLE = False
 
+# LLMLingua-2 prompt compression
+try:
+    from app.services.smart.llmlingua_compressor import get_compressor
+    _llmlingua_compressor = get_compressor()
+    _COMPRESSION_AVAILABLE = _llmlingua_compressor.available
+except ImportError:
+    _llmlingua_compressor = None
+    _COMPRESSION_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -1062,6 +1071,21 @@ Be decisive. Use industry defaults when ambiguous. Output valid JSON immediately
     thinking_budget = _get_thinking_budget(prompt)
     logger.info(f"[master_strategist][{trace_id}] Thinking budget: {thinking_budget} tokens")
 
+    # ═══════════════════════════════════════════════════════════════
+    # LLMLingua-2 Prompt Compression (50% token reduction)
+    # ═══════════════════════════════════════════════════════════════
+    system_prompt_final = _MASTER_STRATEGIST_SYSTEM
+    if _COMPRESSION_AVAILABLE and _llmlingua_compressor:
+        try:
+            system_prompt_final = _llmlingua_compressor.compress_system_prompt(
+                _MASTER_STRATEGIST_SYSTEM,
+                target_token=1200  # Compress ~2400 tokens → 1200 (50% reduction)
+            )
+            logger.info(f"[master_strategist][{trace_id}] System prompt compressed ({len(_MASTER_STRATEGIST_SYSTEM.split())} → {len(system_prompt_final.split())} tokens)")
+        except Exception as comp_err:
+            logger.warning(f"[master_strategist][{trace_id}] Compression failed: {comp_err}, using original")
+            system_prompt_final = _MASTER_STRATEGIST_SYSTEM
+
     try:
         # ═══════════════════════════════════════════════════════════════
         # Claude Haiku 4.5 with Adaptive Thinking + Optional Caching
@@ -1086,7 +1110,7 @@ Be decisive. Use industry defaults when ambiguous. Output valid JSON immediately
                         "content": [
                             {
                                 "type": "text",
-                                "text": _MASTER_STRATEGIST_SYSTEM,  # Static system (cached)
+                                "text": system_prompt_final,  # Static system (cached + compressed)
                                 "cache_control": {"type": "ephemeral"}
                             },
                             {
@@ -1102,7 +1126,7 @@ Be decisive. Use industry defaults when ambiguous. Output valid JSON immediately
                     model="claude-haiku-4-5-20251001",
                     max_tokens=config.max_output_tokens,
                     temperature=config.temperature,
-                    system=_MASTER_STRATEGIST_SYSTEM,
+                    system=system_prompt_final,
                     thinking={
                         "type": "enabled",
                         "budget_tokens": thinking_budget  # Adaptive budget
