@@ -1327,11 +1327,12 @@ class ClaudePromptEngine:
         # Claude API call
         if use_thinking:
             # Extended thinking mode for creative brief (Stage A)
+            # CRITICAL: temperature MUST be 1.0 when thinking is enabled (Claude API requirement)
             resp = client.messages.create(
                 model=self._model,
                 max_tokens=max_tokens,
                 system=system,
-                temperature=temperature,
+                temperature=1.0,  # MUST be 1.0 for extended thinking (Claude requirement)
                 thinking={
                     "type": "enabled",
                     "budget_tokens": 2000  # Allow Haiku to think deeply for creative briefs
