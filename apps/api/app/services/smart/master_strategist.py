@@ -73,7 +73,7 @@ class StrategyConfig:
     timeout_seconds: float = 15.0
     enable_caching: bool = True
     cache_ttl_seconds: int = 3600
-    temperature: float = 0.75
+    temperature: float = 1.0  # Required for extended thinking
     max_output_tokens: int = 4500
     enable_metrics: bool = True
     fallback_on_error: bool = True
@@ -1036,17 +1036,17 @@ Be decisive. Use industry defaults when ambiguous. Output valid JSON immediately
 
     # Adaptive thinking budget based on prompt complexity
     def _get_thinking_budget(prompt_text: str) -> int:
-        """Determine thinking budget based on complexity (500-2000 tokens)"""
+        """Determine thinking budget based on complexity (1024-2000 tokens, min 1024 required by Claude)"""
         if not _use_adaptive_thinking:
             return 2000  # Default
 
         prompt_lower = prompt_text.lower()
 
-        # Simple prompts (sale, discount, promo) → 500 tokens
+        # Simple prompts (sale, discount, promo) → 1024 tokens (minimum allowed)
         simple_keywords = ["sale", "discount", "offer", "promo", "deal", "clearance", "50%", "free"]
         if any(kw in prompt_lower for kw in simple_keywords):
-            logger.info(f"[master_strategist][{trace_id}] Adaptive thinking: SIMPLE route (500 tokens)")
-            return 500
+            logger.info(f"[master_strategist][{trace_id}] Adaptive thinking: SIMPLE route (1024 tokens)")
+            return 1024
 
         # Complex prompts (catalog, detailed, technical, brand story) → 2000 tokens
         complex_keywords = ["catalog", "catalogue", "detailed", "technical", "brand story",
@@ -1055,9 +1055,9 @@ Be decisive. Use industry defaults when ambiguous. Output valid JSON immediately
             logger.info(f"[master_strategist][{trace_id}] Adaptive thinking: COMPLEX route (2000 tokens)")
             return 2000
 
-        # Moderate prompts → 1000 tokens
-        logger.info(f"[master_strategist][{trace_id}] Adaptive thinking: MODERATE route (1000 tokens)")
-        return 1000
+        # Moderate prompts → 1500 tokens
+        logger.info(f"[master_strategist][{trace_id}] Adaptive thinking: MODERATE route (1500 tokens)")
+        return 1500
 
     thinking_budget = _get_thinking_budget(prompt)
     logger.info(f"[master_strategist][{trace_id}] Thinking budget: {thinking_budget} tokens")
