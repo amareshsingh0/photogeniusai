@@ -2283,12 +2283,15 @@ async def _acall_gemini(
     temperature: float = 0.7,
     agent_name: str = "unknown",
     _retries: int = 3,
+    max_tokens: Optional[int] = None,  # Allow caller to override max_tokens
 ) -> str:
     """Call Gemini with automatic retry on rate-limit (429 / ResourceExhausted)."""
     t0 = time.time()
     from google.genai import types
 
-    max_tokens = _AGENT_MAX_TOKENS.get(agent_name, 600)
+    # Use provided max_tokens or default from agent config
+    if max_tokens is None:
+        max_tokens = _AGENT_MAX_TOKENS.get(agent_name, 600)
 
     for attempt in range(_retries):
         try:

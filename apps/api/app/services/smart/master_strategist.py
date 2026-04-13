@@ -28,6 +28,7 @@ Target Scale: 1M+ generations/day
 import asyncio
 import json
 import logging
+import os
 import time
 import hashlib
 from typing import Dict, Optional, Tuple
