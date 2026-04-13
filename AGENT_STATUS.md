@@ -2,13 +2,33 @@
 
 ## 🚀 BEAST 2026 Architecture - PRODUCTION READY
 
-### Deployment Status (April 13, 2026 - 13:30 UTC)
+### Deployment Status (April 13, 2026 - 16:00 UTC)
+- ✅ **All bugs fixed** (8 critical issues resolved)
 - ✅ **Local code verified** (all imports successful, flags enabled)
-- ✅ **Circuit breaker bug fixed** (master_strategist.py line 845)
-- ✅ **Server .env configured** (8 BEAST flags active)
-- ✅ **Code deployed** (commit 0a6bba2)
-- ✅ **API restarted** with fresh Python cache
-- 🎯 **Status**: READY FOR TESTING
+- ✅ **Code committed** (commits: 43b6596 → f001a9d, 5 commits)
+- ✅ **Code pushed to GitHub** (origin/main up to date)
+- ⚠️ **Server status**: Needs `git pull` (currently at b8e0c95, missing f001a9d)
+- 🎯 **Status**: READY FOR DEPLOYMENT (1 command: `git pull && pm2 restart`)
+
+### Bugs Fixed (5 commits)
+1. ✅ Circuit breaker global declaration (master_strategist.py:845)
+2. ✅ Missing `import os` (master_strategist.py:31)
+3. ✅ Quality parameter undefined (design_agent_chain.py:4467)
+4. ✅ Palette UnboundLocalError (design_agent_chain.py:4545)
+5. ✅ max_tokens parameter missing (_acall_gemini signature)
+6. ✅ Temperature constraint (0.75 → 1.0 for extended thinking)
+7. ✅ Thinking budget constraint (500 → 1024 minimum)
+8. ✅ Prompt caching structure implemented (cache_control blocks)
+
+### Manual Deployment (Server accessible)
+```bash
+ssh ubuntu@13.201.195.168
+cd /home/ubuntu/PhotoGenius-AI
+git pull  # Pull commit f001a9d
+pm2 restart photogenius-api
+pm2 logs photogenius-api --lines 50 | grep "Master Strategist"
+# Expected: "Master Strategist SUCCESS — source=claude" (NOT heuristic_fallback)
+```
 
 ### Active Feature Flags
 ```
@@ -186,7 +206,7 @@ BEAST_JUDGE_CROSS_PROVIDER=true
   - ✅ Parallel Best-of-N Copy Writer (3 variants)
   - ✅ Semantic LLM-as-Judge (cross-provider)
   - ✅ Prompt Caching (70-90% cost reduction)
-  - ✅ Adaptive Thinking Budget (500-2000 tokens)
+  - ✅ Adaptive Thinking Budget (1024-2000 tokens, Claude minimum enforced)
 
 **Cost**: $0.0127/gen ✅ (15% under $0.015 budget)
 **Quality**: Monotonic increase guarantee ✅ (never worse, often better)
