@@ -339,8 +339,8 @@ class QualityCritic:
         self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.tier = tier.lower()
         self.config = _get_tier_config(self.tier)
-        # Quality Critic provider: "groq" (Llama 3.2 Vision - best free tier) or "gemini" (fallback)
-        self.provider = os.getenv("QUALITY_CRITIC_PROVIDER", "groq").lower()
+        # Quality Critic provider: "gemini" (default) or "groq" (optional, requires groq package)
+        self.provider = os.getenv("QUALITY_CRITIC_PROVIDER", "gemini").lower()
 
     def _get_gemini_client(self):
         """Get Gemini client from shared pool (round-robin across multiple API keys)."""

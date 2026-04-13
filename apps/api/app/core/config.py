@@ -240,10 +240,6 @@ def validate_settings(settings: Settings) -> None:
         if not settings.DATABASE_URL:
             warnings.append("DATABASE_URL not set - using default local connection")
 
-        # Check auth
-        if not settings.CLERK_SECRET_KEY:
-            warnings.append("CLERK_SECRET_KEY not set - authentication may not work")
-
         # Check storage (support both AWS_* and legacy S3_*)
         access_key = settings.AWS_ACCESS_KEY_ID or settings.S3_ACCESS_KEY
         secret_key = settings.AWS_SECRET_ACCESS_KEY or settings.S3_SECRET_KEY
