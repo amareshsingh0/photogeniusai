@@ -9,6 +9,7 @@ const LogoOverlayModal    = dynamic(() => import("@/components/logo-overlay-moda
 const PosterInlineEditor  = dynamic(() => import("@/components/poster-inline-editor").then(m => ({ default: m.PosterInlineEditor })), { ssr: false })
 const PosterPackModal     = dynamic(() => import("@/components/poster-pack-modal").then(m => ({ default: m.PosterPackModal })),     { ssr: false })
 const TemplatePickerModal = dynamic(() => import("@/components/template-picker-modal").then(m => ({ default: m.TemplatePickerModal })), { ssr: false })
+const GenerationControlsV2 = dynamic(() => import("@/components/generation-controls-v2").then(m => ({ default: m.GenerationControlsV2 })), { ssr: false })
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -1343,12 +1344,12 @@ export default function GeneratePage() {
               </span>
             </motion.div>
 
-            {/* Prompt card */}
+            {/* ── HERO PROMPT AREA ── */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.04 }}
-              className="relative rounded-2xl prompt-hero-box overflow-hidden"
+              className="relative rounded-2xl prompt-hero-box overflow-hidden shadow-xl shadow-black/5"
             >
               {promptTint !== "transparent" && (
                 <div
@@ -1358,7 +1359,7 @@ export default function GeneratePage() {
               )}
 
               {/* Textarea row */}
-              <div className="relative p-4 pb-3">
+              <div className="relative p-5 pb-4">
                 <div className="flex items-start gap-3">
                   <input
                     ref={fileInputRef}
@@ -1372,10 +1373,10 @@ export default function GeneratePage() {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isGenerating}
-                    className="btn-press mt-1 h-9 w-9 rounded-[12px] flex items-center justify-center shrink-0 bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 disabled:opacity-50 transition-all"
+                    className="btn-press mt-1.5 h-10 w-10 rounded-[13px] flex items-center justify-center shrink-0 bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 hover:scale-105 disabled:opacity-50 transition-all"
                     title="Add reference image"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-4.5 w-4.5" />
                   </button>
                   <textarea
                     ref={textareaRef}
@@ -1391,21 +1392,21 @@ export default function GeneratePage() {
                     }
                     rows={5}
                     disabled={isGenerating}
-                    className="flex-1 resize-none bg-transparent px-1 py-1 text-[16px] font-medium leading-relaxed outline-none placeholder:text-muted-foreground/50 disabled:opacity-50 min-h-[140px] max-h-[260px]"
+                    className="flex-1 resize-none bg-transparent px-2 py-1.5 text-[17px] font-medium leading-relaxed outline-none placeholder:text-muted-foreground/50 disabled:opacity-50 min-h-[150px] max-h-[280px]"
                   />
                   <button
                     type="button"
                     onClick={toggleVoice}
                     disabled={isGenerating}
                     className={cn(
-                      "btn-press mt-1 h-9 w-9 rounded-[12px] flex items-center justify-center shrink-0 disabled:opacity-50 transition-colors",
+                      "btn-press mt-1.5 h-10 w-10 rounded-[13px] flex items-center justify-center shrink-0 disabled:opacity-50 transition-all",
                       isListening
-                        ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                        : "bg-white/[0.05] text-muted-foreground border border-white/[0.08] hover:text-foreground hover:bg-white/10"
+                        ? "bg-red-500/20 text-red-400 border border-red-500/30 scale-105"
+                        : "bg-white/[0.05] text-muted-foreground border border-white/[0.08] hover:text-foreground hover:bg-white/10 hover:scale-105"
                     )}
                     title={isListening ? "Stop voice input" : "Voice input"}
                   >
-                    {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    {isListening ? <MicOff className="h-4.5 w-4.5" /> : <Mic className="h-4.5 w-4.5" />}
                   </button>
                 </div>
 
@@ -1431,7 +1432,7 @@ export default function GeneratePage() {
               </div>
 
               {/* Bottom toolbar */}
-              <div className="border-t border-white/[0.06] px-4 py-2 flex items-center gap-2">
+              <div className="border-t border-white/[0.06] px-5 py-2.5 flex items-center gap-2">
                 <input ref={editFileInputRef} type="file" accept="image/*" onChange={handleEditImageSelect} className="hidden" />
                 <button
                   type="button"
@@ -1441,19 +1442,25 @@ export default function GeneratePage() {
                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all",
                     editMode
                       ? "border-primary/50 bg-primary/15 text-primary"
-                      : "border-white/[0.08] bg-white/[0.04] text-muted-foreground hover:text-foreground hover:border-white/15"
+                      : "border-white/[0.08] bg-white/[0.04] text-muted-foreground hover:text-foreground hover:border-white/15 hover:bg-white/[0.06]"
                   )}
                 >
                   <Scissors className="h-3 w-3" />
                   Edit existing
                 </button>
                 <div className="flex-1" />
-                <span className={cn(
-                  "text-[10px] tabular-nums transition-colors",
-                  prompt.length > 1800 ? "text-amber-400" : "text-muted-foreground/40"
-                )}>
-                  {prompt.length}/2000
-                </span>
+                <div className="flex items-center gap-2">
+                  {prompt.length > 0 && (
+                    <span className={cn(
+                      "text-[10px] font-semibold tabular-nums transition-colors px-2 py-0.5 rounded-md",
+                      prompt.length > 1800
+                        ? "text-amber-400 bg-amber-500/10"
+                        : "text-muted-foreground/50"
+                    )}>
+                      {prompt.length}/2000
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Edit source upload */}
@@ -1608,301 +1615,104 @@ export default function GeneratePage() {
               )}
             </AnimatePresence>
 
-            {/* ── Inspirations ── */}
+            {/* ── INSPIRATIONS ── */}
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.07 }}>
-              <p className="text-[11px] font-semibold text-muted-foreground/55 uppercase tracking-wider mb-2.5">
-                {creationMode === "poster" ? "Poster Templates" : "Inspirations"}
+              <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                <Lightbulb className="h-3 w-3" />
+                {creationMode === "poster" ? "Poster Templates" : "Try These"}
               </p>
-              <div className="overflow-x-auto no-scrollbar flex gap-2 px-1 py-1">
+              <div className="overflow-x-auto no-scrollbar flex gap-2 pb-1">
                 {(creationMode === "poster" ? POSTER_SUGGESTION_CARDS : SUGGESTION_CARDS).map((item) => (
                   <motion.button
                     key={item.id}
                     onClick={() => handleSuggestionClick(item)}
-                    whileTap={{ scale: 0.97 }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     className={cn(
-                      "shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border border-white/[0.07] bg-white/[0.025] hover:bg-white/[0.06] hover:border-white/[0.14] transition-all",
-                      suggestionFilling && prompt === item.prompt && "ring-1 ring-primary/50"
+                      "shrink-0 flex items-center gap-2.5 px-4 py-2.5 rounded-xl border bg-gradient-to-br transition-all",
+                      suggestionFilling && prompt === item.prompt
+                        ? "border-primary/50 from-primary/15 to-primary/5 ring-2 ring-primary/30"
+                        : "border-white/[0.08] from-white/[0.03] to-white/[0.01] hover:border-white/[0.15] hover:from-white/[0.06] hover:to-white/[0.02]"
                     )}
                   >
-                    <span className="text-base">{item.emoji}</span>
-                    <span className="text-xs font-medium text-foreground/80 whitespace-nowrap">{item.label}</span>
+                    <span className="text-lg">{item.emoji}</span>
+                    <span className="text-xs font-semibold text-foreground/80 whitespace-nowrap">{item.label}</span>
                   </motion.button>
                 ))}
               </div>
             </motion.div>
 
-            {/* ── Aspect Ratio + Quality — 2-column same row ── */}
-            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
-              <div className="grid grid-cols-2 gap-3 items-start">
-
-                {/* Aspect Ratio */}
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold text-muted-foreground/55 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                    <ImageIcon className="h-3 w-3" /> Aspect
-                  </p>
-                  <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-1 py-1">
-                    {DIMENSION_PRESETS.map((preset) => {
-                      const isSel = sizeMode === "preset" && selectedDimension.label === preset.label
-                      const isAuto = preset.aspect === "auto"
-                      const [w, h] = isAuto ? [1, 1] : preset.aspect.split(":").map(Number)
-                      const ratio = w / h
-                      const base = 18
-                      const boxW = ratio >= 1 ? base : Math.round(base * ratio)
-                      const boxH = ratio >= 1 ? Math.round(base / ratio) : base
-                      return (
-                        <button
-                          key={preset.label}
-                          type="button"
-                          onClick={() => { setSelectedDimension(preset); setSizeMode("preset") }}
-                          className={cn(
-                            "shrink-0 flex flex-col items-center gap-1.5 px-2.5 py-2.5 rounded-xl border transition-all",
-                            isSel
-                              ? "border-primary bg-primary/15 text-primary"
-                              : "border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:text-foreground hover:bg-white/[0.06] hover:border-white/15"
-                          )}
-                        >
-                          {isAuto ? (
-                            <span className="flex items-center justify-center opacity-70 font-bold text-[11px]"
-                              style={{ width: Math.max(base, 18), height: Math.max(base, 18) }}>✦</span>
-                          ) : (
-                            <span className="rounded-[3px] bg-current opacity-70 shrink-0 block"
-                              style={{ width: Math.max(boxW, 9), height: Math.max(boxH, 9) }} />
-                          )}
-                          <span className="text-[10px] font-semibold leading-none">{preset.label}</span>
-                          <span className={cn("text-[9px] leading-none", isSel ? "opacity-60" : "opacity-35")}>
-                            {isAuto ? "any" : preset.aspect}
-                          </span>
-                        </button>
-                      )
-                    })}
-                    {/* Custom */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const d = sizeMode === "custom"
-                          ? { width: customWidth, height: customHeight }
-                          : { width: selectedDimension.width, height: selectedDimension.height }
-                        setSizeMode("custom")
-                        setCustomWidth(d.width)
-                        setCustomHeight(d.height)
-                      }}
-                      className={cn(
-                        "shrink-0 flex flex-col items-center gap-1.5 px-2.5 py-2.5 rounded-xl border transition-all",
-                        sizeMode === "custom"
-                          ? "border-primary bg-primary/15 text-primary"
-                          : "border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:text-foreground hover:bg-white/[0.06] hover:border-white/15"
-                      )}
-                    >
-                      <span className="flex items-center justify-center opacity-70 font-bold text-[11px]"
-                        style={{ width: 18, height: 18 }}>⊞</span>
-                      <span className="text-[10px] font-semibold leading-none">Custom</span>
-                      <span className={cn("text-[9px] leading-none", sizeMode === "custom" ? "opacity-60" : "opacity-35")}>W×H</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Quality */}
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold text-muted-foreground/55 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                    <Zap className="h-3 w-3" /> Quality
-                  </p>
-                  <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-1 py-1">
-                    {QUALITY_OPTIONS.filter(q => !(creationMode === "poster" && q.value === "fast")).map((q) => {
-                      const isSel = qualityTier === q.value
-                      return (
-                        <button
-                          key={q.value}
-                          type="button"
-                          onClick={() => setQualityTier(q.value)}
-                          className={cn(
-                            "shrink-0 flex flex-col items-start gap-1.5 px-2.5 py-2.5 rounded-xl border transition-all text-left",
-                            isSel
-                              ? "border-primary bg-primary/15"
-                              : "border-white/[0.08] bg-white/[0.03] hover:border-white/15 hover:bg-white/[0.04]"
-                          )}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className="h-2 w-2 rounded-full shrink-0"
-                              style={{ backgroundColor: QUALITY_COLORS[q.value], opacity: isSel ? 1 : 0.35 }}
-                            />
-                            <span className={cn("text-xs font-semibold whitespace-nowrap leading-none", isSel ? "text-primary" : "text-foreground/75")}>{q.label}</span>
-                          </div>
-                          <span className={cn("text-[10px] tabular-nums whitespace-nowrap leading-none", isSel ? "text-primary/60" : "text-muted-foreground/40")}>{q.hint}</span>
-                          <span className={cn("text-[9px] whitespace-nowrap leading-none", isSel ? "text-primary/40" : "text-muted-foreground/30")}>{q.note}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Custom W×H steppers — full width, slides down below the 2-col grid */}
-              <AnimatePresence>
-                {sizeMode === "custom" && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden"
-                  >
-                    {(() => {
-                      const snap64 = (v: number) => Math.min(2048, Math.max(64, Math.round(v / 64) * 64))
-                      return (
-                        <div className="mt-3 space-y-2">
-                          <div className="flex items-center gap-3">
-                            {/* Width */}
-                            <div className="flex-1 rounded-xl border border-white/[0.08] bg-white/[0.03] p-2.5">
-                              <p className="text-[9px] text-muted-foreground/50 font-semibold uppercase tracking-wider mb-1.5">Width</p>
-                              <div className="flex items-center gap-1.5">
-                                <button type="button" onClick={() => setCustomWidth(w => snap64(w - 64))}
-                                  className="h-7 w-7 rounded-lg bg-white/[0.05] border border-white/[0.08] text-foreground/70 hover:bg-white/10 hover:text-foreground flex items-center justify-center text-base font-bold transition-all shrink-0">−</button>
-                                <input
-                                  type="number" value={customWidth} min={64} max={2048} step={64}
-                                  onChange={(e) => setCustomWidth(Number(e.target.value))}
-                                  onBlur={(e) => setCustomWidth(snap64(Number(e.target.value)))}
-                                  className="flex-1 min-w-0 text-center text-sm font-semibold text-foreground bg-transparent outline-none tabular-nums"
-                                />
-                                <button type="button" onClick={() => setCustomWidth(w => snap64(w + 64))}
-                                  className="h-7 w-7 rounded-lg bg-white/[0.05] border border-white/[0.08] text-foreground/70 hover:bg-white/10 hover:text-foreground flex items-center justify-center text-base font-bold transition-all shrink-0">+</button>
-                              </div>
-                            </div>
-                            <span className="text-muted-foreground/40 text-sm font-bold shrink-0">×</span>
-                            {/* Height */}
-                            <div className="flex-1 rounded-xl border border-white/[0.08] bg-white/[0.03] p-2.5">
-                              <p className="text-[9px] text-muted-foreground/50 font-semibold uppercase tracking-wider mb-1.5">Height</p>
-                              <div className="flex items-center gap-1.5">
-                                <button type="button" onClick={() => setCustomHeight(h => snap64(h - 64))}
-                                  className="h-7 w-7 rounded-lg bg-white/[0.05] border border-white/[0.08] text-foreground/70 hover:bg-white/10 hover:text-foreground flex items-center justify-center text-base font-bold transition-all shrink-0">−</button>
-                                <input
-                                  type="number" value={customHeight} min={64} max={2048} step={64}
-                                  onChange={(e) => setCustomHeight(Number(e.target.value))}
-                                  onBlur={(e) => setCustomHeight(snap64(Number(e.target.value)))}
-                                  className="flex-1 min-w-0 text-center text-sm font-semibold text-foreground bg-transparent outline-none tabular-nums"
-                                />
-                                <button type="button" onClick={() => setCustomHeight(h => snap64(h + 64))}
-                                  className="h-7 w-7 rounded-lg bg-white/[0.05] border border-white/[0.08] text-foreground/70 hover:bg-white/10 hover:text-foreground flex items-center justify-center text-base font-bold transition-all shrink-0">+</button>
-                              </div>
-                            </div>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground/35 px-1">Steps of 64px · max 2048px · values auto-snap on blur</p>
-                        </div>
-                      )
-                    })()}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-
-            {/* ── Style — single unified filmstrip, all options ── */}
-            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }}>
-              <p className="text-[11px] font-semibold text-muted-foreground/55 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                <Palette className="h-3 w-3" /> Style
-              </p>
-              <div className="flex gap-2 overflow-x-auto no-scrollbar px-1 py-1">
-                {STYLE_ALL.map(({ id, icon: Icon, label, from, to }) => {
-                  const isSel = selectedStyle === id
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setSelectedStyle(id)}
-                      className={cn(
-                        "relative shrink-0 w-[68px] h-[90px] rounded-xl overflow-hidden border transition-all",
-                        isSel
-                          ? "border-primary ring-1 ring-primary/40 scale-[1.05]"
-                          : "border-white/[0.1] hover:border-white/25 hover:scale-[1.02]"
-                      )}
-                    >
-                      <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${from}, ${to})` }} />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Icon className="h-5 w-5 text-white/55" />
-                      </div>
-                      <div className="absolute bottom-0 left-0 right-0 pb-2 pt-4 text-center bg-gradient-to-t from-black/80 via-black/30 to-transparent">
-                        <span className="text-[10px] font-semibold text-white/90 leading-none">{label}</span>
-                      </div>
-                      {isSel && (
-                        <div className="absolute top-1.5 right-1.5 h-3.5 w-3.5 rounded-full bg-primary flex items-center justify-center shadow-sm">
-                          <Check className="h-2 w-2 text-white" />
-                        </div>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            </motion.div>
-
-            {/* ── Advanced ── */}
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.12 }}
-              className="rounded-xl border border-white/[0.07] bg-white/[0.015] overflow-hidden"
-            >
-              <button
-                type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="flex items-center gap-2 px-4 py-2.5 text-[11px] font-semibold text-muted-foreground/60 hover:text-foreground/80 w-full uppercase tracking-wider"
-              >
-                <SlidersHorizontal className="h-3 w-3" />
-                Advanced
-                <div className="flex-1" />
-                {showAdvanced ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              </button>
-              <AnimatePresence>
-                {showAdvanced && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden border-t border-white/[0.06]"
-                  >
-                    <div className="p-3 space-y-2">
-                      <textarea
-                        value={negativePrompt}
-                        onChange={(e) => setNegativePrompt(e.target.value)}
-                        placeholder="What to avoid — blurry, low quality, text..."
-                        rows={2}
-                        disabled={isGenerating}
-                        className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/30 resize-none disabled:opacity-50"
-                      />
-                      <p className="text-[10px] text-muted-foreground/40 flex items-center gap-1.5">
-                        <Sparkles className="h-3 w-3 shrink-0" /> AI auto-adds quality negatives.
-                      </p>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
+            {/* ── WORLD-CLASS CONTROLS V2 ── */}
+            <GenerationControlsV2
+              dimensionPresets={DIMENSION_PRESETS}
+              selectedDimension={selectedDimension}
+              onDimensionChange={(preset) => { setSelectedDimension(preset); setSizeMode("preset") }}
+              sizeMode={sizeMode}
+              customWidth={customWidth}
+              customHeight={customHeight}
+              onCustomWidthChange={setCustomWidth}
+              onCustomHeightChange={setCustomHeight}
+              onSizeModeChange={(mode) => {
+                if (mode === "custom") {
+                  const d = sizeMode === "custom"
+                    ? { width: customWidth, height: customHeight }
+                    : { width: selectedDimension.width, height: selectedDimension.height }
+                  setCustomWidth(d.width)
+                  setCustomHeight(d.height)
+                }
+                setSizeMode(mode)
+              }}
+              qualityOptions={QUALITY_OPTIONS.map(q => ({
+                value: q.value,
+                label: q.label,
+                hint: q.hint,
+                note: q.note,
+              }))}
+              qualityTier={qualityTier}
+              onQualityChange={setQualityTier}
+              styles={STYLE_ALL}
+              selectedStyle={selectedStyle}
+              onStyleChange={setSelectedStyle}
+              negativePrompt={negativePrompt}
+              onNegativePromptChange={setNegativePrompt}
+              showAdvanced={showAdvanced}
+              onAdvancedToggle={() => setShowAdvanced(!showAdvanced)}
+              isGenerating={isGenerating}
+              creationMode={creationMode}
+            />
 
           </div>{/* end LEFT COLUMN */}
 
         </div>{/* end grid */}
       </div>{/* end max-w wrapper */}
 
-      {/* ── Sticky Generate Bar ── */}
+      {/* ── STICKY GENERATE BAR (World-Class) ── */}
       <div className="fixed bottom-0 left-0 lg:left-60 right-0 z-40 pointer-events-none">
         <div className="pointer-events-auto max-w-4xl mx-auto px-3 sm:px-4 pb-3 sm:pb-4" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom, 12px))" }}>
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="rounded-2xl border border-white/[0.1] bg-background/85 backdrop-blur-xl p-3 flex items-center gap-3 shadow-2xl shadow-black/40"
+            className="rounded-2xl border border-white/[0.12] bg-background/90 backdrop-blur-2xl p-3.5 flex items-center gap-3 shadow-2xl shadow-black/50"
           >
             <Button
               onClick={() => handleGenerate()}
               disabled={!canGenerate}
               className={cn(
-                "btn-press w-full px-6 py-5 text-base rounded-[14px] btn-generate-hero",
+                "btn-press w-full px-7 py-5 text-[15px] font-semibold rounded-[15px] btn-generate-hero transition-all hover:scale-[1.01] active:scale-[0.99]",
                 generateShimmer && "shimmer"
               )}
             >
               {isGenerating ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {editMode ? "Editing..." : "Creating..."}
+                <span className="flex items-center gap-2.5">
+                  <Loader2 className="h-4.5 w-4.5 animate-spin" />
+                  <span>{editMode ? "Editing..." : "Creating..."}</span>
                 </span>
               ) : (
-                editMode ? "✦ Apply Edit" : creationMode === "poster" ? "✦ Generate Poster" : "✦ Generate Image"
+                <span className="flex items-center justify-center gap-2">
+                  <Sparkles className="h-4.5 w-4.5" />
+                  <span>{editMode ? "Apply Edit" : creationMode === "poster" ? "Generate Poster" : "Generate Image"}</span>
+                </span>
               )}
             </Button>
           </motion.div>
