@@ -145,8 +145,8 @@ DEFAULT_MODELS = [
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
-@router.post("/api/v1/admin/models/seed")
-async def seed_models(db: AsyncSession = Depends(get_db)):
+@router.post("/admin/models/seed")
+async def seed_models():
     """
     Seed default models into database (run once on first setup).
     Safe to call multiple times - only creates missing models.
@@ -181,7 +181,7 @@ async def seed_models(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to seed models: {str(e)}")
 
 
-@router.get("/api/v1/admin/models")
+@router.get("/admin/models")
 async def get_all_models():
     """
     Get all models with their current configuration and stats.
@@ -230,7 +230,7 @@ async def get_all_models():
         raise HTTPException(status_code=500, detail=f"Failed to fetch models: {str(e)}")
 
 
-@router.get("/api/v1/admin/models/active")
+@router.get("/admin/models/active")
 async def get_active_models(bucket: Optional[str] = None):
     """
     Get only active models, optionally filtered by bucket.
@@ -275,7 +275,7 @@ async def get_active_models(bucket: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/api/v1/admin/models/testing")
+@router.get("/admin/models/testing")
 async def get_testing_models(bucket: Optional[str] = None):
     """
     Get models enabled for parallel testing mode.
@@ -310,7 +310,7 @@ async def get_testing_models(bucket: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/api/v1/admin/models/update")
+@router.post("/admin/models/update")
 async def update_model_config(update: ModelConfigUpdate):
     """
     Update a single model's configuration.
@@ -364,7 +364,7 @@ async def update_model_config(update: ModelConfigUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/api/v1/admin/models/bulk-update")
+@router.post("/admin/models/bulk-update")
 async def bulk_update_models(request: BulkModelUpdate):
     """
     Update multiple models at once.
