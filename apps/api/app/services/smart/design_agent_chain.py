@@ -2182,21 +2182,38 @@ async def _acall_claude(
     _retries: int = 3,
     use_thinking: bool = False,
 ) -> str:
-    """Call Claude Haiku 4.5 with automatic retry."""
+    """Call Claude Haiku 4.5 with automatic retry and prompt caching."""
     t0 = time.time()
 
     max_tokens = _AGENT_MAX_TOKENS.get(agent_name, 600)
+    thinking_budget = 1500
+
+    # CRITICAL: max_tokens must be > thinking_budget when use_thinking=True
+    if use_thinking and max_tokens <= thinking_budget:
+        max_tokens = thinking_budget + 1000  # Budget + response space
 
     for attempt in range(_retries):
         try:
             client = _get_claude_client()
+
+            # Enable prompt caching on system prompt (70-90% cost savings)
+            if _USE_PROMPT_CACHING:
+                system_blocks = [
+                    {
+                        "type": "text",
+                        "text": system,
+                        "cache_control": {"type": "ephemeral"}
+                    }
+                ]
+            else:
+                system_blocks = system  # Keep as string if caching disabled
 
             # Build request
             request_params = {
                 "model": "claude-haiku-4-5-20251001",
                 "max_tokens": max_tokens,
                 "temperature": temperature,
-                "system": system,
+                "system": system_blocks,
                 "messages": [{"role": "user", "content": user}]
             }
 
@@ -2204,7 +2221,7 @@ async def _acall_claude(
             if use_thinking:
                 request_params["thinking"] = {
                     "type": "enabled",
-                    "budget_tokens": 1500
+                    "budget_tokens": thinking_budget
                 }
 
             # Add 60 second timeout
