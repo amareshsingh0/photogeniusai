@@ -454,9 +454,9 @@ class QualityCritic:
             }
 
     async def _call_vision_model(self, system_prompt: str, user_prompt: str, image_b64: str, max_tokens: int = 4000) -> str:
-        """Call vision model (Groq or Gemini) for image analysis with automatic fallback."""
+        """Call vision model (Gemini default, Groq optional) for image analysis with automatic fallback."""
         if self.provider == "groq":
-            # Try Groq Llama 3.2 Vision (free tier, generous limits)
+            # Try Groq Llama 3.2 Vision (free tier, generous limits) - only if explicitly requested
             try:
                 client = self._get_groq_client()
                 import base64
@@ -491,10 +491,10 @@ class QualityCritic:
                 logger.info(f"[quality_critic] Groq response: {len(raw_text)} chars, finish_reason={response.choices[0].finish_reason}")
                 return raw_text
             except Exception as e:
-                logger.warning(f"[quality_critic] Groq failed ({e}), falling back to Gemini")
-                # Fall through to Gemini fallback
+                # Silently fall back to Gemini (no warning needed - Groq is optional)
+                pass
 
-        # Gemini fallback (or primary if provider != groq)
+        # Gemini (default provider)
         client = self._get_gemini_client()
         from google.genai import types
 
