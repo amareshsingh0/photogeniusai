@@ -312,11 +312,7 @@ export function getAuthHeaders(): Record<string, string> {
       return {};
 
     case "backend":
-      // FastAPI: Clerk JWT is sent by Next.js route when calling generation/sync
-      const bearer = process.env.CLERK_JWT_TOKEN || process.env.NEXT_PUBLIC_CLERK_JWT_TOKEN;
-      if (bearer) {
-        return { Authorization: `Bearer ${bearer}` };
-      }
+      // FastAPI: Custom auth will be added here when implemented
       return {};
 
     default:

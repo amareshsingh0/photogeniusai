@@ -48,7 +48,6 @@ class Settings(BaseSettings):
     REDIS_URL: str = Field(default="redis://localhost:6379", env="REDIS_URL")
 
     # ==================== Authentication ====================
-    CLERK_SECRET_KEY: str = Field(default="", env="CLERK_SECRET_KEY")
     JWT_SECRET_KEY: str = Field(
         default_factory=lambda: secrets.token_urlsafe(32), env="JWT_SECRET_KEY"
     )
@@ -223,10 +222,6 @@ def validate_settings(settings: Settings) -> None:
         # Check database
         if not settings.DATABASE_URL:
             errors.append("DATABASE_URL is required in production")
-
-        # Check auth
-        if not settings.CLERK_SECRET_KEY:
-            errors.append("CLERK_SECRET_KEY is required in production")
 
         # Check storage (support both AWS_* and legacy S3_*)
         access_key = settings.AWS_ACCESS_KEY_ID or settings.S3_ACCESS_KEY
