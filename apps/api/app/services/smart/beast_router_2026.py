@@ -325,7 +325,7 @@ Produce exceptionally high-quality, brand-perfect copy."""
     raw = await _acall_claude(
         system=system,
         user=enhanced_context,
-        temperature=0.7,  # Slightly lower temp for reliability
+        temperature=1.0,  # REQUIRED: Must be 1.0 when use_thinking=True (Claude API constraint)
         agent_name="copy_writer_fallback",
         use_thinking=True  # Use extended thinking for recovery
     )

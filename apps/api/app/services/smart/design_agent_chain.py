@@ -4464,6 +4464,7 @@ class DesignAgentChain:
         width: int = 1024,
         height: int = 1536,
         prompt_dna: Optional[Dict] = None,
+        quality: str = "standard",  # Tier for Master Strategist (fast/standard/premium/ultra)
     ) -> Dict:
         brief = _empty_brief()
         agent_times: Dict[str, float] = {}
