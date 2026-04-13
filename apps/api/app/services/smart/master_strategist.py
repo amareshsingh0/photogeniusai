@@ -36,11 +36,21 @@ from enum import Enum
 import re
 
 try:
+    from anthropic import Anthropic
+    _ANTHROPIC_AVAILABLE = True
+except ImportError:
+    Anthropic = None
+    _ANTHROPIC_AVAILABLE = False
+
+# Legacy Gemini imports for fallback
+try:
     from google.genai import types
     from google import genai
+    _GEMINI_AVAILABLE = True
 except ImportError:
     types = None
     genai = None
+    _GEMINI_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -772,7 +782,7 @@ _COLOR_PSYCHOLOGY = {
 async def master_strategist(
     prompt: str,
     brand_data: Optional[Dict] = None,
-    gemini_client = None,
+    claude_client = None,  # Changed from gemini_client
     width: int = 1024,
     height: int = 1024,
     tier: str = "standard",
@@ -781,14 +791,14 @@ async def master_strategist(
     config: Optional[StrategyConfig] = None,
 ) -> Dict:
     """
-    ENTERPRISE-GRADE Master Strategist Agent.
+    ENTERPRISE-GRADE Master Strategist Agent (Claude Haiku 4.5).
 
     Consolidates Triage + Brand Intel + Creative Director into ONE strategic call.
 
     Args:
         prompt: User's creative request
         brand_data: Optional pre-scraped brand info {colors[], logo_url, brand_name, tone}
-        gemini_client: Gemini API client instance
+        claude_client: Claude API client instance (Anthropic)
         width: Target image width
         height: Target image height
         tier: Generation tier (fast/standard/premium/ultra)
@@ -871,7 +881,7 @@ async def master_strategist(
             result = await _execute_llm_strategy(
                 prompt=prompt,
                 brand_data=brand_data,
-                gemini_client=gemini_client,
+                claude_client=claude_client,  # Changed from gemini_client
                 width=width,
                 height=height,
                 tier=tier,
@@ -957,7 +967,7 @@ async def master_strategist(
 async def _execute_llm_strategy(
     prompt: str,
     brand_data: Optional[Dict],
-    gemini_client,
+    claude_client,  # Changed from gemini_client
     width: int,
     height: int,
     tier: str,
@@ -966,7 +976,7 @@ async def _execute_llm_strategy(
     config: StrategyConfig,
     attempt: int,
 ) -> Dict:
-    """Execute single LLM call for strategy generation."""
+    """Execute single LLM call for strategy generation (Claude Haiku 4.5)."""
 
     # Build context
     aspect_ratio = width / max(height, 1)
@@ -1016,26 +1026,111 @@ CRITICAL: Use exact hex codes from colors[] for primary_color. Never override wi
 Be decisive. Use industry defaults when ambiguous. Output valid JSON immediately.
 """
 
-    logger.debug(f"[master_strategist][{trace_id}] LLM call attempt {attempt + 1}, prompt_length={len(user_prompt)}")
+    logger.debug(f"[master_strategist][{trace_id}] Claude Haiku 4.5 call attempt {attempt + 1}, prompt_length={len(user_prompt)}")
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 2026 Enhancements: Adaptive Thinking + Prompt Caching (APR 13, 2026)
+    # ═══════════════════════════════════════════════════════════════════════════
+    _use_prompt_caching = os.getenv("USE_PROMPT_CACHING", "false").lower() == "true"
+    _use_adaptive_thinking = os.getenv("USE_ADAPTIVE_THINKING", "false").lower() == "true"
+
+    # Adaptive thinking budget based on prompt complexity
+    def _get_thinking_budget(prompt_text: str) -> int:
+        """Determine thinking budget based on complexity (500-2000 tokens)"""
+        if not _use_adaptive_thinking:
+            return 2000  # Default
+
+        prompt_lower = prompt_text.lower()
+
+        # Simple prompts (sale, discount, promo) → 500 tokens
+        simple_keywords = ["sale", "discount", "offer", "promo", "deal", "clearance", "50%", "free"]
+        if any(kw in prompt_lower for kw in simple_keywords):
+            logger.info(f"[master_strategist][{trace_id}] Adaptive thinking: SIMPLE route (500 tokens)")
+            return 500
+
+        # Complex prompts (catalog, detailed, technical, brand story) → 2000 tokens
+        complex_keywords = ["catalog", "catalogue", "detailed", "technical", "brand story",
+                           "multi-product", "campaign", "series", "sophisticated"]
+        if any(kw in prompt_lower for kw in complex_keywords):
+            logger.info(f"[master_strategist][{trace_id}] Adaptive thinking: COMPLEX route (2000 tokens)")
+            return 2000
+
+        # Moderate prompts → 1000 tokens
+        logger.info(f"[master_strategist][{trace_id}] Adaptive thinking: MODERATE route (1000 tokens)")
+        return 1000
+
+    thinking_budget = _get_thinking_budget(prompt)
+    logger.info(f"[master_strategist][{trace_id}] Thinking budget: {thinking_budget} tokens")
 
     try:
+        # ═══════════════════════════════════════════════════════════════
+        # Claude Haiku 4.5 with Adaptive Thinking + Optional Caching
+        # ═══════════════════════════════════════════════════════════════
+        async def claude_call():
+            if _use_prompt_caching:
+                # Cache-aware prompt structure
+                # Static: System instructions (cached)
+                # Dynamic: User context (not cached)
+                logger.info(f"[master_strategist][{trace_id}] Using prompt caching (70-90% cost reduction)")
+
+                response = claude_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=config.max_output_tokens,
+                    temperature=config.temperature,
+                    thinking={
+                        "type": "enabled",
+                        "budget_tokens": thinking_budget  # Adaptive budget
+                    },
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": _MASTER_STRATEGIST_SYSTEM,  # Static system (cached)
+                                "cache_control": {"type": "ephemeral"}
+                            },
+                            {
+                                "type": "text",
+                                "text": user_prompt  # Dynamic context (not cached)
+                            }
+                        ]
+                    }]
+                )
+            else:
+                # Traditional prompt structure (no caching)
+                response = claude_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=config.max_output_tokens,
+                    temperature=config.temperature,
+                    system=_MASTER_STRATEGIST_SYSTEM,
+                    thinking={
+                        "type": "enabled",
+                        "budget_tokens": thinking_budget  # Adaptive budget
+                    },
+                    messages=[{
+                        "role": "user",
+                        "content": user_prompt
+                    }]
+                )
+
+            return response
+
         # Execute with timeout
         resp = await asyncio.wait_for(
-            gemini_client.aio.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[{"role": "user", "parts": [{"text": user_prompt}]}],
-                config=types.GenerateContentConfig(
-                    system_instruction=_MASTER_STRATEGIST_SYSTEM,
-                    temperature=config.temperature,
-                    max_output_tokens=config.max_output_tokens,
-                    response_mime_type="application/json",
-                ),
-            ),
+            claude_call(),
             timeout=config.timeout_seconds,
         )
 
-        raw_text = resp.text or "{}"
-        logger.debug(f"[master_strategist][{trace_id}] LLM response length: {len(raw_text)} chars")
+        # Extract text from response (skip thinking blocks)
+        raw_text = ""
+        for block in resp.content:
+            if block.type == "text":
+                raw_text += block.text
+
+        if not raw_text.strip():
+            raw_text = "{}"
+
+        logger.debug(f"[master_strategist][{trace_id}] Claude response length: {len(raw_text)} chars")
 
         # Parse JSON
         result = _extract_json(raw_text)

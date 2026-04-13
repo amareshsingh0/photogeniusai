@@ -167,10 +167,13 @@ If Claude migration causes issues:
 1. ✅ Enable Claude in .env.local
 2. ✅ Update generate_stream.py imports
 3. ✅ Update MEMORY.md documentation
-4. ⏳ Test all buckets and tiers
-5. ⏳ Monitor error rates and quality scores
-6. ⏳ Collect user feedback
-7. ⏳ If successful after 48h, remove Gemini engine flag (make Claude default)
+4. ✅ **Convert Master Strategist to Claude Haiku 4.5** (April 13, 2026)
+5. ✅ **Enable BEAST Architecture** (USE_MASTER_STRATEGIST=true)
+6. ⏳ Test all buckets and tiers
+7. ⏳ Monitor error rates and quality scores
+8. ⏳ Collect user feedback
+9. ⏳ Convert Copy Writer + Image Prompter to Claude
+10. ⏳ If successful after 48h, remove Gemini engine flag (make Claude default)
 
 ## Notes
 
