@@ -8,7 +8,6 @@ const EditImageModal      = dynamic(() => import("@/components/edit-image-modal"
 const LogoOverlayModal    = dynamic(() => import("@/components/logo-overlay-modal"),    { ssr: false })
 const PosterInlineEditor  = dynamic(() => import("@/components/poster-inline-editor").then(m => ({ default: m.PosterInlineEditor })), { ssr: false })
 const PosterPackModal     = dynamic(() => import("@/components/poster-pack-modal").then(m => ({ default: m.PosterPackModal })),     { ssr: false })
-const TemplatePickerModal = dynamic(() => import("@/components/template-picker-modal").then(m => ({ default: m.TemplatePickerModal })), { ssr: false })
 const GenerationControlsV2 = dynamic(() => import("@/components/generation-controls-v2").then(m => ({ default: m.GenerationControlsV2 })), { ssr: false })
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
@@ -35,7 +34,6 @@ import {
   Wand2,
   Mountain,
   Palette as ArtIcon,
-  Type,
   X,
   Clock,
   Star,
@@ -1584,29 +1582,6 @@ export default function GeneratePage() {
           onResult={(newUrl) => {
             setResult(prev => prev ? { ...prev, image_url: newUrl } : prev)
             setShowLogoModal(false)
-          }}
-        />
-      )}
-
-      {/* Template Picker Modal */}
-      {showTemplateModal && (
-        <TemplatePickerModal
-          onClose={() => setShowTemplateModal(false)}
-          onSelect={(template) => {
-            setPrompt(template.prompt_prefix)
-            setPosterHeadline(template.ad_copy.headline ?? "")
-            setPosterSubtitle(template.ad_copy.subheadline ?? "")
-            setPosterCta(template.ad_copy.cta ?? "")
-            setCreationMode("poster")
-            // Switch to story ratio for vertical templates
-            if (template.recommended_ratio === "9:16") {
-              const storyPreset = DIMENSION_PRESETS.find(p => p.aspect === "9:16")
-              if (storyPreset) setSelectedDimension(storyPreset)
-            } else if (template.recommended_ratio === "1:1") {
-              const sqPreset = DIMENSION_PRESETS.find(p => p.aspect === "1:1")
-              if (sqPreset) setSelectedDimension(sqPreset)
-            }
-            setShowTemplateModal(false)
           }}
         />
       )}
