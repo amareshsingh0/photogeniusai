@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     identities,
     gallery,
     admin,
+    admin_config,
     storage,
     unified_generate,
     generate_stream,
@@ -33,6 +34,7 @@ api_router.include_router(variants.router, prefix="/variants", tags=["variants"]
 api_router.include_router(preferences.router, prefix="/preferences", tags=["preferences"])
 api_router.include_router(gallery.router, prefix="/gallery", tags=["gallery"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+api_router.include_router(admin_config.router, tags=["admin"])  # Admin config endpoints
 api_router.include_router(storage.router, prefix="/storage", tags=["storage"])
 api_router.include_router(edit_image.router, tags=["edit"])
 api_router.include_router(upscale_image.router, tags=["upscale"])

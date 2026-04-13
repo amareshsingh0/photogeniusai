@@ -16,10 +16,12 @@ import {
   Edit,
   X,
   LogOut,
+  Sliders,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import FeatureConfigPanel from "@/components/admin/feature-config-panel";
 
-type Tab = "overview" | "users" | "generations" | "settings";
+type Tab = "overview" | "users" | "generations" | "settings" | "config";
 
 interface User {
   id: string;
@@ -268,6 +270,7 @@ export default function AdminDashboard() {
     { id: "overview" as Tab, label: "Overview", icon: BarChart3 },
     { id: "users" as Tab, label: "Users", icon: Users },
     { id: "generations" as Tab, label: "Generations", icon: ImageIcon },
+    { id: "config" as Tab, label: "Feature Config", icon: Sliders },
     { id: "settings" as Tab, label: "Settings", icon: Settings },
   ];
 
@@ -649,6 +652,11 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Feature Config Tab */}
+        {activeTab === "config" && (
+          <FeatureConfigPanel />
         )}
 
         {/* Settings Tab */}

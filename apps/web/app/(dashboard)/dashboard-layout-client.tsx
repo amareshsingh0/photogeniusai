@@ -6,7 +6,7 @@ import Link from "next/link"
 import {
   Sparkles, Image, Globe, Menu, X, LogOut, User, Home, Users,
   ChevronDown, Bell, SlidersHorizontal, Shield, Key, CreditCard,
-  Receipt, Activity, Plus, CalendarDays, Palette, Zap, Share2,
+  Receipt, Activity, Plus, CalendarDays, Palette, Zap, Share2, Settings,
 } from "lucide-react"
 
 const navigation = [
@@ -27,6 +27,7 @@ const userMenuItems = [
   { name: "Generation Defaults", href: "/settings/generation-defaults", icon: SlidersHorizontal },
   { name: "Privacy & Consent",   href: "/settings/privacy",             icon: Shield },
   { name: "API Keys",            href: "/settings/api-keys",            icon: Key },
+  { name: "Admin Panel",         href: "/admin",                        icon: Settings },
   { name: "Pricing",             href: "/pricing",                      icon: CreditCard },
   { name: "Billing",             href: "/settings/billing",             icon: Receipt },
   { name: "Activity Log",        href: "/settings/activity",            icon: Activity },
