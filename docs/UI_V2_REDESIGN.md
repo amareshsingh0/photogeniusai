@@ -2,7 +2,33 @@
 
 **Date**: April 14, 2026
 **Status**: ✅ COMPLETE
+**Version**: V2.1 (Streamlined)
 **Inspired by**: Ideogram, Recraft, Leonardo AI, Wan, Seedream
+
+---
+
+## 🎯 V2.1 Update (April 14, 2026)
+
+### **Streamlined Generation Flow**
+**Goal**: Remove unnecessary poster text fields, keep only essential AI-driven generation
+
+**Removed**:
+- ❌ Poster text fields (Headline, Subtitle, CTA manual inputs)
+- ❌ Brand URL import section
+- ❌ Template picker modal
+- ❌ Manual text overlay system
+
+**Kept**:
+- ✅ Image/Poster mode toggle
+- ✅ Editing system (Edit existing, mask editor, erasing, invert)
+- ✅ All generation controls (aspect, quality, style)
+- ✅ AI-driven text generation (backend handles copy)
+
+**Impact**:
+- **Code reduction**: 107 lines removed (poster text fields + brand kit)
+- **Simpler UX**: Users just describe what they want, AI handles text
+- **Faster workflow**: No manual text field filling required
+- **Backend-driven**: AI Copy Writer generates all text from prompt context
 
 ---
 
@@ -231,6 +257,7 @@ Priority 4: Advanced Options (collapsed by default)
 
 ## 📁 Files Changed
 
+### **V2.0 (Initial Redesign)**
 1. ✅ **Created**: `apps/web/components/generation-controls-v2.tsx` (420 lines)
 2. ✅ **Updated**: `apps/web/app/(dashboard)/generate/page.tsx`:
    - Added import for GenerationControlsV2
@@ -239,6 +266,16 @@ Priority 4: Advanced Options (collapsed by default)
    - Enhanced bottom toolbar (character counter badge)
    - Enhanced generate button (icon, sizing, hover)
    - Enhanced inspirations (gradients, animations)
+
+### **V2.1 (Streamlined - April 14, 2026)**
+3. ✅ **Updated**: `apps/web/app/(dashboard)/generate/page.tsx`:
+   - Removed poster text fields section (107 lines)
+   - Removed state: `posterHeadline`, `posterSubtitle`, `posterCta`, `brandUrl`, `brandKit`
+   - Removed `handleBrandResearch()` function
+   - Removed `TemplatePickerModal` import and usage
+   - Simplified `buildFinalPrompt()` to just return base prompt
+   - Removed `brand_kit` from generation API request
+   - Kept editing system completely intact
 
 ---
 
@@ -260,6 +297,7 @@ Priority 4: Advanced Options (collapsed by default)
 
 ## ✅ Checklist
 
+### **V2.0 (Initial Redesign)**
 - [x] Create GenerationControlsV2 component
 - [x] Integrate into generate page
 - [x] Enhance prompt area
@@ -269,6 +307,15 @@ Priority 4: Advanced Options (collapsed by default)
 - [x] Document changes
 - [x] Update MEMORY.md
 
+### **V2.1 (Streamlined)**
+- [x] Remove poster text fields (headline, subtitle, CTA)
+- [x] Remove brand URL import section
+- [x] Remove template picker modal
+- [x] Simplify prompt building logic
+- [x] Keep editing system intact
+- [x] Deploy to production
+- [x] Update documentation
+
 ---
 
-**Result**: World-class UI that rivals Ideogram, Recraft, Leonardo AI while maintaining PhotoGenius AI's unique identity and features. 🎉
+**Result**: World-class UI that rivals Ideogram, Recraft, Leonardo AI with streamlined AI-driven generation flow. Simple, powerful, and focused on what matters — the prompt. 🎉
