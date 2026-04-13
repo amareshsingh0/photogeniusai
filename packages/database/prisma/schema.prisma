@@ -292,6 +292,10 @@ model Generation {
   qualityTierUsed String? @db.VarChar(20) // FAST | STANDARD | PREMIUM | PERFECT (for cost/tier analytics)
   cacheHit        Boolean @default(false) // True if served from semantic prompt cache ($0 inference)
 
+  // Model Tracking (for multi-model admin analytics)
+  modelUsed String? @db.VarChar(100)  // "flux_2_pro", "ideogram_v3" (which model generated this)
+  bucket    String? @db.VarChar(50)   // "typography", "photorealism" (detected capability bucket)
+
   // Performance
   generationTimeSeconds Float?  @db.DoublePrecision
   gpuType               String? @db.VarChar(50)
@@ -1081,6 +1085,45 @@ model LearningLog {
   @@index([timestamp])
   @@index([modelUsed])
   @@map("learning_logs")
+}
+
+// ==================== MULTI-MODEL ADMIN CONTROL ====================
+
+/// Model registry for admin control of active models and parallel testing
+model ModelConfig {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Model Identity
+  modelId      String  @unique @db.VarChar(100) // "flux_2_pro", "ideogram_v3"
+  provider     String  @db.VarChar(50)          // "fal.ai", "wavespeed", "vertex"
+  displayName  String  @db.VarChar(100)         // "Flux 2 Pro" (admin display only)
+
+  // Bucket Assignment (array of buckets this model supports)
+  buckets      String[] // ["typography", "photorealism", "anime"]
+
+  // Control Flags
+  isActive            Boolean @default(true)   // Use in production generations
+  isTestingEnabled    Boolean @default(false)  // Include in parallel testing mode
+
+  // Performance Stats (auto-updated from generations)
+  totalGenerations Int   @default(0)
+  avgRating        Float? @db.DoublePrecision // Average user rating (1-5)
+  avgCost          Float? @db.DoublePrecision // Average cost per image
+  avgLatency       Float? @db.DoublePrecision // Average generation time (seconds)
+
+  // Metadata
+  costPerImage Float  @db.DoublePrecision // Base cost per generation
+  metadata     Json?  @db.JsonB           // Additional config (endpoints, params, etc.)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([modelId])
+  @@index([isActive])
+  @@index([isTestingEnabled])
+  @@index([avgRating])
+  @@map("model_configs")
 }
 
 /// Visual System Decree snapshots for analysis

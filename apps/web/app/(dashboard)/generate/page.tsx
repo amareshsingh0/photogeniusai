@@ -319,18 +319,8 @@ export default function GeneratePage() {
     camera: string; color_palette: string; style_refs: string[]
   } | null>(null)
   const [activeModel, setActiveModel] = useState<string>("")
-  // New state: creation mode, poster text fields, advanced panel, result details
+  // New state: creation mode, advanced panel, result details
   const [creationMode, setCreationMode] = useState<CreationMode>("image")
-  const [posterHeadline, setPosterHeadline] = useState("")
-  const [posterSubtitle, setPosterSubtitle] = useState("")
-  const [posterCta, setPosterCta] = useState("")
-  // Brand kit inline (poster mode)
-  const [brandUrl,       setBrandUrl]       = useState("")
-  const [brandResearching, setBrandResearching] = useState(false)
-  const [brandKit, setBrandKit] = useState<{
-    brand_name?: string; logo_url?: string
-    primary_color?: string; secondary_color?: string; tone?: string
-  } | null>(null)
   const [negativePrompt, setNegativePrompt] = useState("")
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showFullPrompt, setShowFullPrompt] = useState(false)
@@ -340,11 +330,10 @@ export default function GeneratePage() {
   const [editSourceImage, setEditSourceImage] = useState<string | null>(null)
   const [editSourceUrl, setEditSourceUrl] = useState<string>("")
   const editFileInputRef = useRef<HTMLInputElement>(null)
-  // Advanced edit modal + logo overlay modal + pack modal + template picker
+  // Advanced edit modal + logo overlay modal + pack modal
   const [showEditModal, setShowEditModal]       = useState(false)
   const [showLogoModal, setShowLogoModal]       = useState(false)
   const [showPackModal, setShowPackModal]       = useState(false)
-  const [showTemplateModal, setShowTemplateModal] = useState(false)
   // Poster inline editor state (updated image replaces result.image_url)
   const [posterImageUrl, setPosterImageUrl] = useState<string | null>(null)
   // Dual variant toggle (Phase 6)
@@ -393,19 +382,10 @@ export default function GeneratePage() {
   ) && !isGenerating
   const promptTint = useMemo(() => getPromptTint(prompt), [prompt])
 
-  // Build final prompt: for poster mode, append text fields automatically
+  // Build final prompt
   const buildFinalPrompt = useCallback((base: string): string => {
-    if (creationMode !== "poster") return base.trim()
-    let p = base.trim()
-    const textParts: string[] = []
-    if (posterHeadline.trim()) textParts.push(`text '${posterHeadline.trim()}'`)
-    if (posterSubtitle.trim()) textParts.push(`text '${posterSubtitle.trim()}'`)
-    if (posterCta.trim()) textParts.push(`text '${posterCta.trim()}'`)
-    if (textParts.length > 0) {
-      p = `${p} poster with ${textParts.join(" and ")}`
-    }
-    return p
-  }, [creationMode, posterHeadline, posterSubtitle, posterCta])
+    return base.trim()
+  }, [])
 
   // ── Edit-existing-image upload (inline in Image/Poster mode) ─────────────────
   const handleEditImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -424,31 +404,6 @@ export default function GeneratePage() {
     setEditSourceImage(null)
     setEditSourceUrl("")
   }, [])
-
-  // Brand research — scrapes company URL inline on poster panel
-  const handleBrandResearch = useCallback(async () => {
-    const url = brandUrl.trim()
-    if (!url) return
-    setBrandResearching(true)
-    try {
-      const res  = await fetch("/api/brand/research", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ url }),
-      })
-      const data = await res.json()
-      if (data.brand_name || data.primary_color) {
-        setBrandKit({
-          brand_name:      data.brand_name      || "",
-          logo_url:        data.logo_url        || "",
-          primary_color:   data.primary_color   || "",
-          secondary_color: data.secondary_color || "",
-          tone:            data.tone            || "",
-        })
-      }
-    } catch { /* silent */ }
-    finally { setBrandResearching(false) }
-  }, [brandUrl])
 
   const handleGenerate = useCallback(async (promptText?: string) => {
     const rawPrompt = promptText ?? prompt
@@ -547,7 +502,6 @@ export default function GeneratePage() {
           style: selectedStyle !== "Auto" ? selectedStyle : undefined,
           reference_image: referenceImage || undefined,
           negative_prompt: negativePrompt.trim() || undefined,
-          brand_kit: (creationMode === "poster" && brandKit) ? brandKit : undefined,
         }),
       })
 
@@ -1505,115 +1459,6 @@ export default function GeneratePage() {
                 )}
               </AnimatePresence>
             </motion.div>
-
-            {/* Poster Text Fields */}
-            <AnimatePresence>
-              {creationMode === "poster" && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4 space-y-3">
-
-                    {/* Header row */}
-                    <div className="flex items-center justify-between">
-                      <p className="flex items-center gap-2 text-xs font-semibold text-foreground/80">
-                        <Type className="h-3.5 w-3.5 text-primary" /> Ad / Poster
-                      </p>
-                      <button
-                        onClick={() => setShowTemplateModal(true)}
-                        className="flex items-center gap-1.5 text-[10px] text-purple-400 hover:text-purple-300 border border-purple-500/20 hover:border-purple-500/40 px-2 py-1 rounded-lg transition-colors"
-                      >
-                        <Sparkles className="h-3 w-3" /> Templates
-                      </button>
-                    </div>
-
-                    {/* ── Brand section ── */}
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Your Brand</p>
-
-                      {/* If brand is researched — show chip */}
-                      {brandKit ? (
-                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-                          {brandKit.logo_url && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={brandKit.logo_url} alt="" className="h-5 w-5 rounded object-contain shrink-0" />
-                          )}
-                          {brandKit.primary_color && (
-                            <span className="w-3.5 h-3.5 rounded-full shrink-0 border border-white/20"
-                              style={{ background: brandKit.primary_color }} />
-                          )}
-                          <span className="text-xs text-white/80 flex-1 truncate">
-                            {brandKit.brand_name || "Brand imported"}
-                          </span>
-                          <button onClick={() => { setBrandKit(null); setBrandUrl("") }}
-                            className="text-white/20 hover:text-white/60 transition-colors">
-                            <XIcon className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        /* URL import row */
-                        <div className="flex gap-2">
-                          <input
-                            type="url"
-                            value={brandUrl}
-                            onChange={e => setBrandUrl(e.target.value)}
-                            onKeyDown={e => e.key === "Enter" && handleBrandResearch()}
-                            placeholder="yourcompany.com"
-                            disabled={isGenerating || brandResearching}
-                            className="flex-1 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 outline-none focus:border-purple-500/40 disabled:opacity-40 transition-colors"
-                          />
-                          <button
-                            onClick={handleBrandResearch}
-                            disabled={!brandUrl.trim() || brandResearching || isGenerating}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-white disabled:opacity-40 transition-all"
-                            style={{ background: "rgba(124,58,237,0.2)", border: "1px solid rgba(124,58,237,0.3)" }}
-                          >
-                            {brandResearching
-                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              : <Globe className="h-3.5 w-3.5" />}
-                            {brandResearching ? "Reading…" : "Import"}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* ── Poster text ── */}
-                    <div className="grid grid-cols-1 gap-2">
-                      <input
-                        type="text"
-                        value={posterHeadline}
-                        onChange={(e) => setPosterHeadline(e.target.value)}
-                        placeholder="Headline — SUMMER SALE (optional, AI generates)"
-                        disabled={isGenerating}
-                        className="px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 focus:bg-primary/5 disabled:opacity-50 transition-colors"
-                      />
-                      <input
-                        type="text"
-                        value={posterSubtitle}
-                        onChange={(e) => setPosterSubtitle(e.target.value)}
-                        placeholder="Subtitle — Up to 50% OFF (optional)"
-                        disabled={isGenerating}
-                        className="px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 focus:bg-primary/5 disabled:opacity-50 transition-colors"
-                      />
-                      <input
-                        type="text"
-                        value={posterCta}
-                        onChange={(e) => setPosterCta(e.target.value)}
-                        placeholder="CTA — Shop Now (optional)"
-                        disabled={isGenerating}
-                        className="px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary/40 focus:bg-primary/5 disabled:opacity-50 transition-colors"
-                      />
-                    </div>
-                    <p className="text-[10px] text-muted-foreground/40">
-                      Text fields optional — AI writes copy from your prompt. Brand URL gives it your colors + identity.
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             {/* ── INSPIRATIONS ── */}
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.07 }}>

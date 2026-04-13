@@ -775,17 +775,193 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         })
 
 
+async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIterator[str]:
+    """
+    Parallel multi-model generation for admin testing.
+
+    Generates from ALL active testing-enabled models simultaneously,
+    streaming results as each model completes.
+    """
+    try:
+        from prisma import Prisma
+        from app.services.smart.config import detect_capability_bucket
+
+        # Detect bucket
+        bucket = detect_capability_bucket(req.prompt)
+        yield _sse("intent_ready", {
+            "bucket": bucket,
+            "trace_id": trace_id,
+            "testing_mode": True,
+        })
+
+        # Get all testing-enabled models for this bucket
+        prisma = Prisma()
+        await prisma.connect()
+
+        models = await prisma.modelconfig.find_many(
+            where={
+                "isActive": True,
+                "isTestingEnabled": True,
+            }
+        )
+
+        # Filter by bucket
+        applicable_models = [m for m in models if bucket in m.buckets]
+
+        if not applicable_models:
+            await prisma.disconnect()
+            yield _sse("error", {"message": f"No testing models found for bucket: {bucket}"})
+            return
+
+        logger.info(f"[parallel][{trace_id}] Testing {len(applicable_models)} models: {[m.modelId for m in applicable_models]}")
+
+        await prisma.disconnect()
+
+        # Generate from each model in parallel
+        tasks = []
+        for model in applicable_models:
+            task = _generate_with_model(req, model.modelId, trace_id)
+            tasks.append(task)
+
+        # Stream results as they complete
+        for coro in asyncio.as_completed(tasks):
+            result = await coro
+
+            if result:
+                # Yield model_result event (model name HIDDEN from user, saved in DB)
+                yield _sse("model_result", {
+                    "generationId": result.get("generation_id"),
+                    "imageUrl": result.get("image_url"),
+                    "modelId": result.get("model_id"),  # Admin only, not shown to user
+                    "latency": result.get("latency"),
+                    "cost": result.get("cost"),
+                    "trace_id": trace_id,
+                })
+
+        yield _sse("testing_complete", {
+            "total_models": len(applicable_models),
+            "trace_id": trace_id,
+        })
+
+    except Exception as e:
+        logger.error(f"[parallel][{trace_id}] Error: {e}", exc_info=True)
+        yield _sse("error", {"message": str(e)})
+
+
+async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str) -> dict:
+    """
+    Generate with a specific model.
+
+    Returns:
+        {
+            "generation_id": str,
+            "image_url": str,
+            "model_id": str,
+            "latency": float,
+            "cost": float,
+        }
+    """
+    start = time.time()
+
+    try:
+        from app.services.external.multi_provider_client import MultiProviderClient
+        from prisma import Prisma
+
+        client = MultiProviderClient()
+
+        # Generate image
+        result = await client.generate_image_fal(
+            prompt=req.prompt,
+            model_key=model_id,
+            size_string=f"{req.width}x{req.height}",
+            num_inference_steps=_QUALITY_STEPS.get(req.quality, 20),
+            guidance_scale=_MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
+            negative_prompt=req.negative_prompt,
+        )
+
+        latency = time.time() - start
+
+        if not result.get("success"):
+            logger.warning(f"[parallel][{trace_id}][{model_id}] Generation failed: {result.get('error')}")
+            return None
+
+        # Save to database (Generation model)
+        prisma = Prisma()
+        await prisma.connect()
+
+        from app.services.smart.config import detect_capability_bucket
+        bucket = detect_capability_bucket(req.prompt)
+
+        generation = await prisma.generation.create(
+            data={
+                "userId": "DEV_USER",  # Replace with actual user_id when auth implemented
+                "mode": "REALISM",  # Default mode
+                "originalPrompt": req.prompt,
+                "enhancedPrompt": req.prompt,
+                "numInferenceSteps": _QUALITY_STEPS.get(req.quality, 20),
+                "guidanceScale": _MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
+                "width": req.width,
+                "height": req.height,
+                "outputUrls": [result.get("image_url")],
+                "selectedOutputUrl": result.get("image_url"),
+                "creditsUsed": 0,  # Testing mode = free
+                "qualityTierUsed": req.quality,
+                "modelUsed": model_id,
+                "bucket": bucket,
+                "generationTimeSeconds": latency,
+            }
+        )
+
+        # Get model cost
+        model_config = await prisma.modelconfig.find_unique(
+            where={"modelId": model_id}
+        )
+
+        await prisma.disconnect()
+
+        return {
+            "generation_id": generation.id,
+            "image_url": result.get("image_url"),
+            "model_id": model_id,
+            "latency": latency,
+            "cost": model_config.costPerImage if model_config else 0.0,
+        }
+
+    except Exception as e:
+        logger.error(f"[parallel][{trace_id}][{model_id}] Error: {e}", exc_info=True)
+        return None
+
+
 @router.post("/generate/stream")
-async def stream_generate(req: StreamRequest, request: Request):
+async def stream_generate(req: StreamRequest, request: Request, testing_mode: bool = False):
+    """
+    Generate image(s) with SSE streaming.
+
+    Args:
+        req: Generation parameters
+        testing_mode: If True, generates from ALL active testing-enabled models in parallel
+                     (used by admin for model comparison)
+    """
     trace_id = str(uuid.uuid4())[:8]
 
+    # Check if testing mode is enabled (from query param or system config)
+    testing_enabled = testing_mode or _parse_bool_env("TESTING_MODE_ENABLED", False)
+
     async def _guarded() -> AsyncIterator[str]:
-        async for chunk in _stream_pipeline(req, trace_id):
-            # Abort if client disconnected
-            if await request.is_disconnected():
-                logger.info("[stream][%s] client disconnected mid-stream", trace_id)
-                return
-            yield chunk
+        if testing_enabled:
+            # PARALLEL TESTING MODE - generate from multiple models
+            async for chunk in _parallel_model_stream(req, trace_id):
+                if await request.is_disconnected():
+                    logger.info("[stream][%s] client disconnected mid-stream", trace_id)
+                    return
+                yield chunk
+        else:
+            # NORMAL MODE - single model generation
+            async for chunk in _stream_pipeline(req, trace_id):
+                if await request.is_disconnected():
+                    logger.info("[stream][%s] client disconnected mid-stream", trace_id)
+                    return
+                yield chunk
 
     return StreamingResponse(
         _guarded(),

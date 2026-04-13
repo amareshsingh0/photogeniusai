@@ -743,5 +743,73 @@ async def get_generation_db(
     
     if generation.user_id != user_db_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    
+
     return GenerationResponse.model_validate(generation)
+
+
+# ==================== Rating Endpoint ====================
+
+class RatingRequest(BaseModel):
+    """Submit user rating for generated image."""
+    generationId: str
+    rating: int = Field(..., ge=1, le=5, description="Rating from 1-5 stars")
+
+
+@router.post("/rate")
+async def rate_generation(body: RatingRequest):
+    """
+    Submit user rating for a generated image (1-5 stars).
+
+    This rating is used for:
+    1. Admin analytics (avg rating per model)
+    2. Model performance tracking
+    3. Future improvements
+
+    Model names are HIDDEN from users - only admin sees them.
+    """
+    try:
+        from prisma import Prisma
+        prisma = Prisma()
+        await prisma.connect()
+
+        # Update generation with user rating
+        generation = await prisma.generation.update(
+            where={"id": body.generationId},
+            data={"userRating": body.rating}
+        )
+
+        # Update model stats (increment totalGenerations, recalculate avgRating)
+        if generation.modelUsed:
+            # Get all ratings for this model
+            all_gens = await prisma.generation.find_many(
+                where={
+                    "modelUsed": generation.modelUsed,
+                    "userRating": {"not": None}
+                },
+                select={"userRating": True}
+            )
+
+            # Calculate average
+            if all_gens:
+                ratings = [g.userRating for g in all_gens if g.userRating is not None]
+                avg_rating = sum(ratings) / len(ratings) if ratings else None
+
+                # Update model config stats
+                await prisma.modelconfig.update_many(
+                    where={"modelId": generation.modelUsed},
+                    data={"avgRating": avg_rating}
+                )
+
+        await prisma.disconnect()
+
+        logger.info(f"[rating] Generation {body.generationId} rated {body.rating}/5")
+
+        return {
+            "success": True,
+            "message": "Rating submitted successfully",
+            "rating": body.rating,
+        }
+
+    except Exception as e:
+        logger.error(f"[rating] Error submitting rating: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to submit rating: {str(e)}")
