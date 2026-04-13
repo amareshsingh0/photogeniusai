@@ -4480,6 +4480,8 @@ class DesignAgentChain:
             # ═══════════════════════════════════════════════════════════════════════
             # BEAST ARCHITECTURE PHASE 2: Master Strategist (Consolidate 3→1)
             # ═══════════════════════════════════════════════════════════════════════
+            master_strategist_succeeded = False  # Track success to prevent palette UnboundLocalError
+
             if _USE_MASTER_STRATEGIST and _MASTER_STRATEGIST_AVAILABLE:
                 logger.info("[design_chain][BEAST] Using Master Strategist with Claude Haiku 4.5 (Triage+Brand+CD consolidated)")
                 t = time.time()
@@ -4533,14 +4535,17 @@ class DesignAgentChain:
                 except Exception as e:
                     logger.error(f"[design_chain][BEAST] Master Strategist FAILED: {e}, falling back to 3-agent chain", exc_info=True)
                     # Fall through to old 3-agent chain below
+                    master_strategist_succeeded = False
                     _USE_MASTER_STRATEGIST_THIS_REQUEST = False
                 else:
+                    master_strategist_succeeded = True
                     _USE_MASTER_STRATEGIST_THIS_REQUEST = True
 
             # ═══════════════════════════════════════════════════════════════════════
             # LEGACY 3-AGENT CHAIN (Triage → Brand Intel → Creative Director)
+            # Runs if Master Strategist is disabled OR if it failed
             # ═══════════════════════════════════════════════════════════════════════
-            if not _USE_MASTER_STRATEGIST or not _MASTER_STRATEGIST_AVAILABLE:
+            if not master_strategist_succeeded:
                 logger.info("[design_chain][LEGACY] Using 3-agent chain (Triage → Brand Intel → Creative Director)")
 
                 # ── Stage 1: Triage (serial — everything depends on it) ──────────
