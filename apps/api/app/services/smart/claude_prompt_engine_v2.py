@@ -1438,12 +1438,19 @@ class ClaudePromptEngine:
                     str(brief.get("_model_preference") or model_name),
                     default=_normalize_model_key(model_name),
                 )
+                # Safe conversion for steps (handle "auto" or non-numeric values)
+                steps_value = img_params.get("steps", 30)
+                try:
+                    steps = int(steps_value) if steps_value != "auto" else 30
+                except (ValueError, TypeError):
+                    steps = 30
+
                 result: Dict = {
                     "prompt": img_prompt,
                     "negative_prompt": str(brief.get("negative_prompt") or "").strip(),
                     "recommended_model": recommended_model,
                     "parameters": {
-                        "steps": int(img_params.get("steps", 30)),
+                        "steps": steps,
                         "guidance": float(img_params.get("guidance", 3.5)),
                     },
                     "translation_notes": str(brief.get("_img_translation_notes") or ""),
