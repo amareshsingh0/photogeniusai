@@ -842,7 +842,7 @@ async def master_strategist(
         raise
 
     # ── 2. Circuit Breaker Check ──────────────────────────────────────────────
-    global _circuit_breaker_open, _circuit_breaker_last_failure_time
+    global _circuit_breaker_open, _circuit_breaker_last_failure_time, _circuit_breaker_failures
 
     if _circuit_breaker_open:
         elapsed_since_failure = time.time() - _circuit_breaker_last_failure_time
@@ -892,7 +892,6 @@ async def master_strategist(
             )
 
             # Success — reset circuit breaker
-            global _circuit_breaker_failures
             _circuit_breaker_failures = 0
 
             elapsed_ms = int((time.time() - start_time) * 1000)
