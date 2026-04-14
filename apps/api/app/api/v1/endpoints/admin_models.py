@@ -266,17 +266,12 @@ async def get_all_models():
                 }
             )
 
-            # Get average rating from user ratings
+            # Get average rating from user ratings (Python Prisma doesn't support select)
             rated_gens = await prisma.generation.find_many(
                 where={
                     "modelUsed": m.modelId,
                     "userRating": {"not": None},
                     "isDeleted": False
-                },
-                select={
-                    "userRating": True,
-                    "creditsUsed": True,
-                    "generationTimeSeconds": True
                 }
             )
 
@@ -285,7 +280,7 @@ async def get_all_models():
             avg_latency = None
 
             if rated_gens:
-                # Calculate averages
+                # Calculate averages (extract fields after fetch)
                 ratings = [g.userRating for g in rated_gens if g.userRating is not None]
                 costs = [g.creditsUsed for g in rated_gens if g.creditsUsed is not None]
                 latencies = [g.generationTimeSeconds for g in rated_gens if g.generationTimeSeconds is not None]
@@ -513,21 +508,11 @@ async def get_model_ratings(model_id: str):
         prisma = Prisma()
         await prisma.connect()
 
-        # Get all generations with ratings for this model
+        # Get all generations with ratings for this model (Python Prisma doesn't support select)
         generations = await prisma.generation.find_many(
             where={
                 "modelUsed": model_id,
                 "userRating": {"not": None}
-            },
-            select={
-                "id": True,
-                "userRating": True,
-                "userReason": True,
-                "originalPrompt": True,
-                "bucket": True,
-                "generationTimeSeconds": True,
-                "createdAt": True,
-                "outputUrls": True,
             },
             order={"createdAt": "desc"},
             take=100  # Latest 100 ratings
