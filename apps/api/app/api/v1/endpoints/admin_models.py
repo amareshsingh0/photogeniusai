@@ -176,6 +176,15 @@ DEFAULT_MODELS = [
         "isActive": False,  # Not integrated yet
         "isTestingEnabled": False,
     },
+    {
+        "modelId": "gemini_flash_image",
+        "provider": "vertex",
+        "displayName": "Gemini 3.1 Flash Image (Nano Banana 2)",
+        "buckets": ["photorealism", "artistic"],
+        "costPerImage": 0.01,
+        "isActive": False,  # Not integrated yet
+        "isTestingEnabled": False,
+    },
 ]
 
 
