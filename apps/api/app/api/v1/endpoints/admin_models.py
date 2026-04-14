@@ -267,27 +267,32 @@ async def get_all_models():
             )
 
             # Get average rating from user ratings (Python Prisma doesn't support select)
-            rated_gens = await prisma.generation.find_many(
-                where={
-                    "modelUsed": m.modelId,
-                    "userRating": {"not": None},
-                    "isDeleted": False
-                }
-            )
-
+            # Wrapped in try-except to handle schema mismatches (userReason column may not exist yet)
             avg_rating = None
             avg_cost = None
             avg_latency = None
 
-            if rated_gens:
-                # Calculate averages (extract fields after fetch)
-                ratings = [g.userRating for g in rated_gens if g.userRating is not None]
-                costs = [g.creditsUsed for g in rated_gens if g.creditsUsed is not None]
-                latencies = [g.generationTimeSeconds for g in rated_gens if g.generationTimeSeconds is not None]
+            try:
+                rated_gens = await prisma.generation.find_many(
+                    where={
+                        "modelUsed": m.modelId,
+                        "userRating": {"not": None},
+                        "isDeleted": False
+                    }
+                )
 
-                avg_rating = sum(ratings) / len(ratings) if ratings else None
-                avg_cost = sum(costs) / len(costs) if costs else None
-                avg_latency = sum(latencies) / len(latencies) if latencies else None
+                if rated_gens:
+                    # Calculate averages (extract fields after fetch)
+                    ratings = [g.userRating for g in rated_gens if g.userRating is not None]
+                    costs = [g.creditsUsed for g in rated_gens if g.creditsUsed is not None]
+                    latencies = [g.generationTimeSeconds for g in rated_gens if g.generationTimeSeconds is not None]
+
+                    avg_rating = sum(ratings) / len(ratings) if ratings else None
+                    avg_cost = sum(costs) / len(costs) if costs else None
+                    avg_latency = sum(latencies) / len(latencies) if latencies else None
+            except Exception as e:
+                # Schema mismatch (userReason column doesn't exist) - skip averages for now
+                logger.warning(f"[admin_models] Could not calculate averages for {m.modelId}: {e}")
 
             models_data.append({
                 "id": m.id,
