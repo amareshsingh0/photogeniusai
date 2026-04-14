@@ -275,23 +275,23 @@ _claude_client: Optional[object] = None
 
 
 def _get_claude_client():
-    """Get or create Claude Haiku 4.5 client (Anthropic)."""
+    """Get or create Claude Haiku 4.5 ASYNC client (Anthropic)."""
     global _claude_client
 
     if _claude_client is not None:
         return _claude_client
 
     try:
-        from anthropic import Anthropic
+        from anthropic import AsyncAnthropic  # FIXED: Use async client to avoid blocking event loop
         api_key = os.getenv("ANTHROPIC_API_KEY", "")
         if not api_key:
             raise RuntimeError("ANTHROPIC_API_KEY not set")
 
-        _claude_client = Anthropic(api_key=api_key)
-        logger.info("[design_chain] Claude Haiku 4.5 client initialized")
+        _claude_client = AsyncAnthropic(api_key=api_key)  # FIXED: AsyncAnthropic instead of Anthropic
+        logger.info("[design_chain] Claude Haiku 4.5 ASYNC client initialized")
         return _claude_client
     except Exception as e:
-        logger.error(f"[design_chain] Failed to initialize Claude client: {e}")
+        logger.error(f"[design_chain] Failed to initialize Claude ASYNC client: {e}")
         raise
 
 
