@@ -11,6 +11,7 @@ from app.api.v1.endpoints import (
     admin,
     admin_config,
     admin_models,
+    admin_users,
     storage,
     unified_generate,
     generate_stream,
@@ -37,6 +38,7 @@ api_router.include_router(gallery.router, prefix="/gallery", tags=["gallery"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(admin_config.router, tags=["admin"])  # Admin config endpoints
 api_router.include_router(admin_models.router, tags=["admin"])  # Admin model registry
+api_router.include_router(admin_users.router, tags=["admin"])  # Admin users management
 api_router.include_router(storage.router, prefix="/storage", tags=["storage"])
 api_router.include_router(edit_image.router, tags=["edit"])
 api_router.include_router(upscale_image.router, tags=["upscale"])

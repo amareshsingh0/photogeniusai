@@ -1,0 +1,158 @@
+"""
+Admin users management endpoint
+GET /api/admin/users - List all users with pagination
+PATCH /api/admin/users - Update user
+DELETE /api/admin/users - Delete user
+"""
+
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
+from typing import Optional, List
+from prisma import Prisma
+import logging
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# Models
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    role: str
+    credits: int
+    createdAt: str
+    _count: dict
+
+class PaginationResponse(BaseModel):
+    page: int
+    limit: int
+    total: int
+    totalPages: int
+
+class UsersListResponse(BaseModel):
+    users: List[UserResponse]
+    pagination: PaginationResponse
+
+class UpdateUserRequest(BaseModel):
+    userId: str
+    updates: dict
+
+@router.get("/admin/users", response_model=UsersListResponse)
+async def get_users(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    search: Optional[str] = Query(None)
+):
+    """Get all users with pagination and search"""
+    try:
+        prisma = Prisma()
+        await prisma.connect()
+
+        skip = (page - 1) * limit
+
+        # Build where clause for search
+        where = {}
+        if search:
+            where = {
+                "OR": [
+                    {"email": {"contains": search, "mode": "insensitive"}},
+                    {"name": {"contains": search, "mode": "insensitive"}},
+                ]
+            }
+
+        # Fetch users and count
+        users = await prisma.user.find_many(
+            where=where,
+            skip=skip,
+            take=limit,
+            order={"createdAt": "desc"},
+            include={"_count": {"select": {"generations": True}}}
+        )
+
+        total = await prisma.user.count(where=where)
+
+        await prisma.disconnect()
+
+        # Format response
+        users_data = [
+            {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "role": user.role,
+                "credits": user.credits,
+                "createdAt": user.createdAt.isoformat(),
+                "_count": {"generations": user._count.get("generations", 0) if hasattr(user, "_count") else 0}
+            }
+            for user in users
+        ]
+
+        return {
+            "users": users_data,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "totalPages": (total + limit - 1) // limit
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"[admin/users] GET error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.patch("/admin/users")
+async def update_user(body: UpdateUserRequest):
+    """Update user"""
+    try:
+        prisma = Prisma()
+        await prisma.connect()
+
+        # Allowed update fields
+        allowed_fields = ["name", "email", "role", "credits"]
+        update_data = {k: v for k, v in body.updates.items() if k in allowed_fields}
+
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No valid update fields provided")
+
+        # Update user
+        user = await prisma.user.update(
+            where={"id": body.userId},
+            data=update_data
+        )
+
+        await prisma.disconnect()
+
+        return {
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "role": user.role,
+                "credits": user.credits,
+                "updatedAt": user.updatedAt.isoformat()
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"[admin/users] PATCH error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/admin/users")
+async def delete_user(userId: str = Query(...)):
+    """Delete user"""
+    try:
+        prisma = Prisma()
+        await prisma.connect()
+
+        # Delete user
+        await prisma.user.delete(where={"id": userId})
+
+        await prisma.disconnect()
+
+        return {"success": True}
+
+    except Exception as e:
+        logger.error(f"[admin/users] DELETE error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
