@@ -74,7 +74,7 @@ export async function requireAdmin(): Promise<AdminUser> {
       email: true,
       name: true,
       role: true,
-      credits: true,
+      creditsBalance: true,
     },
   });
 
@@ -114,7 +114,7 @@ export async function getAdminUser(): Promise<AdminUser | null> {
         email: true,
         name: true,
         role: true,
-        credits: true,
+        creditsBalance: true,
       },
     });
 

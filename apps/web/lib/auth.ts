@@ -57,8 +57,8 @@ async function verifyToken(token: string) {
  * Returns userId and token getter function
  */
 export async function auth() {
-  // Development mode bypass
-  if (process.env.NODE_ENV === "development" && !process.env.REQUIRE_AUTH) {
+  // Dev user bypass (no real auth implemented yet - Sprint 8 pending)
+  if (!process.env.REQUIRE_AUTH) {
     return {
       userId: DEV_USER.id,
       getToken: async () => "dev_token_123",
@@ -85,8 +85,8 @@ export async function auth() {
  * Get current authenticated user from database
  */
 export async function getCurrentUser(): Promise<DevUser | null> {
-  // Development mode bypass
-  if (process.env.NODE_ENV === "development" && !process.env.REQUIRE_AUTH) {
+  // Dev user bypass (no real auth implemented yet - Sprint 8 pending)
+  if (!process.env.REQUIRE_AUTH) {
     return DEV_USER;
   }
 
@@ -137,8 +137,8 @@ export async function requireAuth(): Promise<DevUser> {
 export async function checkCredits(requiredCredits: number): Promise<DevUser> {
   const user = await requireAuth();
 
-  // Development mode bypass
-  if (process.env.NODE_ENV === "development" && !process.env.REQUIRE_AUTH) {
+  // Dev user bypass (no real auth implemented yet - Sprint 8 pending)
+  if (!process.env.REQUIRE_AUTH) {
     console.log(`[DEV] Credit check skipped - required: ${requiredCredits}`);
     return user;
   }
