@@ -1482,6 +1482,32 @@ def _enrich_brand(brand: Dict, brand_data: Optional[Dict], industry: str) -> Dic
     return brand
 
 
+def _safe_str(value, fallback: str = "") -> str:
+    """Safely convert any value to string. Handles dict/list/None from Claude JSON."""
+    if value is None:
+        return fallback
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (dict, list)):
+        return str(value)
+    return str(value)
+
+
+def _safe_list(value, fallback: list = None) -> list:
+    """Safely convert any value to list. Handles dict/str/None from Claude JSON."""
+    if fallback is None:
+        fallback = []
+    if value is None:
+        return fallback
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        return [value] if value.strip() else fallback
+    if isinstance(value, dict):
+        return list(value.values()) if value else fallback
+    return fallback
+
+
 def _enrich_creative_bible(bible: Dict, triage: Dict, brand: Dict) -> Dict:
     """
     Enrich Creative Bible with intelligent defaults based on industry + tone.
@@ -1495,7 +1521,8 @@ def _enrich_creative_bible(bible: Dict, triage: Dict, brand: Dict) -> Dict:
     tone = triage.get("tone", "exciting")
 
     # Emotional Territory
-    if not bible.get("emotional_territory") or len(bible.get("emotional_territory", "").strip()) < 10:
+    et = _safe_str(bible.get("emotional_territory"))
+    if not et or len(et.strip()) < 10:
         # Build from tone + industry
         territory_templates = {
             ("fashion", "luxurious"): "timeless elegance with exclusive mystique",
@@ -1517,7 +1544,9 @@ def _enrich_creative_bible(bible: Dict, triage: Dict, brand: Dict) -> Dict:
         )
 
     # Visual Metaphors
-    if not bible.get("visual_metaphors") or len(bible.get("visual_metaphors", [])) < 3:
+    vm = _safe_list(bible.get("visual_metaphors"))
+    bible["visual_metaphors"] = vm  # Normalize to list
+    if not vm or len(vm) < 3:
         metaphor_library = {
             "fashion": ["rain-slicked runway", "soft studio haze", "editorial shadow play"],
             "luxury": ["polished marble surface", "golden hour through sheer curtains", "champagne bubble bokeh"],
@@ -1536,7 +1565,9 @@ def _enrich_creative_bible(bible: Dict, triage: Dict, brand: Dict) -> Dict:
         )
 
     # Forbidden Elements
-    if not bible.get("forbidden_elements") or len(bible.get("forbidden_elements", [])) < 3:
+    fe = _safe_list(bible.get("forbidden_elements"))
+    bible["forbidden_elements"] = fe  # Normalize to list
+    if not fe or len(fe) < 3:
         forbidden_library = {
             "fashion": ["stock photo clichés", "busy distracting patterns", "amateur smartphone lighting"],
             "luxury": ["discount store fluorescents", "plastic textures", "sans-serif body copy"],
@@ -1567,7 +1598,9 @@ def _enrich_creative_bible(bible: Dict, triage: Dict, brand: Dict) -> Dict:
         bible["dominant_color_story"] = f"60% {primary_name} backgrounds, 30% {secondary_name} supporting elements, 10% {accent_name} highlight accents"
 
     # Composition Archetype
-    if not bible.get("composition_archetype") or bible["composition_archetype"] not in [
+    ca = _safe_str(bible.get("composition_archetype"))
+    bible["composition_archetype"] = ca  # Normalize to string
+    if not ca or ca not in [
         "hero_dominant", "split_60_40", "typographic_led", "frame_within_frame",
         "dynamic_diagonal", "asymmetric_grid", "full_bleed", "centered_symmetrical"
     ]:
