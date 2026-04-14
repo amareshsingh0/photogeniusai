@@ -119,6 +119,7 @@ class StreamRequest(BaseModel):
     negative_prompt: Optional[str] = Field(default=None)
     brand_kit: Optional[dict] = Field(default=None)
     prompt_dna: Optional[dict] = Field(default=None)   # User.preferences.prompt_dna from Next.js
+    testing_mode: Optional[bool] = Field(default=False)  # Admin testing mode (parallel models)
 
     @field_validator("quality")
     @classmethod
@@ -933,19 +934,18 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
 
 
 @router.post("/generate/stream")
-async def stream_generate(req: StreamRequest, request: Request, testing_mode: bool = False):
+async def stream_generate(req: StreamRequest, request: Request):
     """
     Generate image(s) with SSE streaming.
 
     Args:
-        req: Generation parameters
-        testing_mode: If True, generates from ALL active testing-enabled models in parallel
-                     (used by admin for model comparison)
+        req: Generation parameters (includes testing_mode for admin)
+        request: FastAPI request object
     """
     trace_id = str(uuid.uuid4())[:8]
 
-    # Check if testing mode is enabled (from query param or system config)
-    testing_enabled = testing_mode or _parse_bool_env("TESTING_MODE_ENABLED", False)
+    # Check if testing mode is enabled (from request body or system config)
+    testing_enabled = req.testing_mode or _parse_bool_env("TESTING_MODE_ENABLED", False)
 
     async def _guarded() -> AsyncIterator[str]:
         if testing_enabled:

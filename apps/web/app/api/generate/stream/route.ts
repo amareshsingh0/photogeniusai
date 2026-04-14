@@ -38,6 +38,7 @@ export async function POST(req: Request) {
     reference_image?: string;
     negative_prompt?: string;
     brand_kit?: Record<string, string>;
+    testing_mode?: boolean;
   };
 
   const {
@@ -49,6 +50,7 @@ export async function POST(req: Request) {
     reference_image,
     negative_prompt,
     brand_kit,
+    testing_mode = false,
   } = body;
 
   if (!prompt || prompt.trim().length < 3) {
@@ -107,6 +109,7 @@ export async function POST(req: Request) {
         negative_prompt,
         brand_kit: resolvedBrandKit || undefined,
         prompt_dna: resolvedPromptDna || undefined,
+        testing_mode,
       }),
     });
   } catch {

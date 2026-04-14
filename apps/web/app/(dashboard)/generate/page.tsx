@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation"
 
 const EditImageModal      = dynamic(() => import("@/components/edit-image-modal"),      { ssr: false })
 const LogoOverlayModal    = dynamic(() => import("@/components/logo-overlay-modal"),    { ssr: false })
-const PosterInlineEditor  = dynamic(() => import("@/components/poster-inline-editor").then(m => ({ default: m.PosterInlineEditor })), { ssr: false })
 const PosterPackModal     = dynamic(() => import("@/components/poster-pack-modal").then(m => ({ default: m.PosterPackModal })),     { ssr: false })
 const GenerationControlsV2 = dynamic(() => import("@/components/generation-controls-v2").then(m => ({ default: m.GenerationControlsV2 })), { ssr: false })
 import { motion, AnimatePresence } from "framer-motion"
@@ -297,6 +296,8 @@ export default function GeneratePage() {
     if (typeof window === "undefined") return null
     try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null")?.result ?? null } catch { return null }
   })
+  const [multiResults, setMultiResults] = useState<GenerationResult[]>([]) // For admin testing mode
+  const [isAdmin, setIsAdmin] = useState(false) // Admin detection
   const [error, setError] = useState<string | null>(null)
   const [selectedDimension, setSelectedDimension] = useState<DimensionPreset>(DIMENSION_PRESETS[0])
   const [sizeMode, setSizeMode] = useState<"preset" | "custom">("preset")
@@ -374,6 +375,22 @@ export default function GeneratePage() {
     }
   }, [result, userPrompt])
 
+  // Admin detection - check if user is dev@photogenius.local
+  useEffect(() => {
+    const checkAdmin = async () => {
+      try {
+        const res = await fetch("/api/user/current")
+        if (res.ok) {
+          const user = await res.json()
+          setIsAdmin(user.email === "dev@photogenius.local")
+        }
+      } catch {
+        // If API fails, assume not admin (safe default)
+        setIsAdmin(false)
+      }
+    }
+    checkAdmin()
+  }, [])
 
   const canGenerate = (editMode
     ? (editSourceUrl.length > 0 && prompt.trim().length >= 3 && prompt.trim().length <= 2000)
@@ -457,6 +474,7 @@ export default function GeneratePage() {
     setIsGenerating(true)
     setError(null)
     setResult(null)
+    setMultiResults([]) // Reset multi-results for admin testing
     setFeedbackGiven(null)
     setPosterImageUrl(null)
     setBriefData(null)
@@ -501,6 +519,7 @@ export default function GeneratePage() {
           style: selectedStyle !== "Auto" ? selectedStyle : undefined,
           reference_image: referenceImage || undefined,
           negative_prompt: negativePrompt.trim() || undefined,
+          testing_mode: isAdmin, // Enable parallel testing for admin
         }),
       })
 
@@ -558,38 +577,91 @@ export default function GeneratePage() {
             setSseStage("quality_checking")
             setGenProgress(SSE_STAGES.quality_checking.pct)
 
+          } else if (event === "model_result") {
+            // Admin testing mode: collect results as each model completes
+            const newResult: GenerationResult = {
+              success: true,
+              image_url: data.imageUrl,
+              enhanced_prompt: finalPrompt.trim(),
+              detected_settings: {
+                style: "Professional",
+                mood: "Testing",
+                lighting: "Auto",
+                quality: qualityTier,
+                category: "test",
+              },
+              model_used: data.modelId,
+              total_time: data.latency,
+              generationId: data.generationId,
+            }
+            setMultiResults(prev => [...prev, newResult])
+
+          } else if (event === "testing_complete") {
+            // All testing models finished
+            setSseStage("done")
+            setGenProgress(100)
+            setPosterImageUrl(null)
+
           } else if (event === "final_ready") {
             setSseStage("done")
             setGenProgress(100)
             setPosterImageUrl(null) // reset inline editor override
             setActiveVariant("safe") // reset variant toggle
-            setResult({
-              success: true,
-              image_url: data.image_url,
-              enhanced_prompt: data.enhanced_prompt,
-              detected_settings: {
-                style: "Professional",
-                mood: data.brief?.mood || "Cinematic",
-                lighting: data.brief?.lighting?.split(",")[0] || "Natural",
-                quality: "Premium",
-                category: data.capability_bucket || "photo",
-              },
-              model_used: data.model_used,
-              total_time: data.total_time,
-              quality_score: data.quality_score,
-              quality_gate: data.quality_gate,
-              generationId: data.generationId,
-              creative_os: data.creative_os,
-              // Poster fields
-              ad_copy: data.ad_copy,
-              poster_design: data.poster_design,
-              hero_url: data.hero_url,
-              capability_bucket: data.capability_bucket,
-              design_brief: data.design_brief,
-              image_url_experimental: data.image_url_experimental ?? undefined,
-              motion_hints: data.design_brief?.motion_hints,
-              learning_logged: true, // Learning Engine logs all generations
-            })
+
+            // Check if admin testing mode returned multiple results
+            if (isAdmin && data.model_results && Array.isArray(data.model_results)) {
+              // Admin testing mode: multiple results from different models
+              const results = data.model_results.map((mr: any) => ({
+                success: true,
+                image_url: mr.image_url,
+                enhanced_prompt: data.enhanced_prompt,
+                detected_settings: {
+                  style: "Professional",
+                  mood: data.brief?.mood || "Cinematic",
+                  lighting: data.brief?.lighting?.split(",")[0] || "Natural",
+                  quality: "Premium",
+                  category: data.capability_bucket || "photo",
+                },
+                model_used: mr.model_name,
+                total_time: mr.generation_time,
+                quality_score: data.quality_score,
+                generationId: mr.generationId,
+                creative_os: data.creative_os,
+                capability_bucket: data.capability_bucket,
+              }))
+              setMultiResults(results)
+              setResult(null) // Clear single result for admin
+            } else {
+              // Normal mode: single result
+              setResult({
+                success: true,
+                image_url: data.image_url,
+                enhanced_prompt: data.enhanced_prompt,
+                detected_settings: {
+                  style: "Professional",
+                  mood: data.brief?.mood || "Cinematic",
+                  lighting: data.brief?.lighting?.split(",")[0] || "Natural",
+                  quality: "Premium",
+                  category: data.capability_bucket || "photo",
+                },
+                model_used: data.model_used,
+                total_time: data.total_time,
+                quality_score: data.quality_score,
+                quality_gate: data.quality_gate,
+                generationId: data.generationId,
+                creative_os: data.creative_os,
+                // Poster fields
+                ad_copy: data.ad_copy,
+                poster_design: data.poster_design,
+                hero_url: data.hero_url,
+                capability_bucket: data.capability_bucket,
+                design_brief: data.design_brief,
+                image_url_experimental: data.image_url_experimental ?? undefined,
+                motion_hints: data.design_brief?.motion_hints,
+                learning_logged: true, // Learning Engine logs all generations
+              })
+              setMultiResults([]) // Clear multi results for normal users
+            }
 
 
           } else if (event === "error") {
@@ -608,7 +680,7 @@ export default function GeneratePage() {
       setIsGenerating(false)
       if (stageTimerRef.current) clearTimeout(stageTimerRef.current)
     }
-  }, [prompt, isGenerating, selectedDimension, sizeMode, customWidth, customHeight, qualityTier, selectedStyle, referenceImage, negativePrompt, buildFinalPrompt, toast, editMode, editSourceUrl])
+  }, [prompt, isGenerating, selectedDimension, sizeMode, customWidth, customHeight, qualityTier, selectedStyle, referenceImage, negativePrompt, buildFinalPrompt, toast, editMode, editSourceUrl, isAdmin])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey && canGenerate) {
@@ -804,9 +876,69 @@ export default function GeneratePage() {
   }
 
   // ——— Result view ———
-  if (result?.image_url) {
+  if (result?.image_url || multiResults.length > 0) {
     const aspectStyle = { aspectRatio: `${generationDimension.width}/${generationDimension.height}` }
-    const ds = result.detected_settings
+    const ds = result?.detected_settings
+
+    // Admin multi-results grid
+    if (multiResults.length > 0) {
+      return (
+        <div className="relative w-full generate-mesh py-6 px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-7xl mx-auto"
+          >
+            <p className="text-xs text-muted-foreground/60 text-center mb-5 italic">&quot;{userPrompt}&quot;</p>
+
+            {/* Multi-model results grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {multiResults.map((res, idx) => (
+                <motion.div
+                  key={res.generationId || idx}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="relative rounded-2xl overflow-hidden border border-white/10 bg-black/20"
+                >
+                  <div className="relative w-full" style={aspectStyle}>
+                    <Image
+                      src={res.image_url || ""}
+                      alt={`Result ${idx + 1}`}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                      priority
+                    />
+                  </div>
+
+                  {/* Rating UI below image */}
+                  {res.generationId && (
+                    <div className="p-4 bg-black/40">
+                      <ImageRating generationId={res.generationId} />
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Back button */}
+            <div className="flex justify-center mt-8">
+              <Button
+                onClick={handleReset}
+                variant="ghost"
+                className="gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Generate Another
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )
+    }
+
+    // Normal single result view
     return (
       <div className="relative w-full generate-mesh py-6 px-4">
         <motion.div
@@ -861,26 +993,6 @@ export default function GeneratePage() {
                   priority
                 />
               </motion.div>
-
-              {/* Poster Inline Editor — shown only for ad/poster bucket */}
-              {result.ad_copy && result.hero_url && (
-                <PosterInlineEditor
-                  heroUrl={result.hero_url}
-                  adCopy={result.ad_copy}
-                  posterDesign={result.poster_design ?? {}}
-                  width={generationDimension.width}
-                  height={generationDimension.height}
-                  onUpdated={(uri, newAdCopy, newDesign) => {
-                    setPosterImageUrl(uri)
-                    // Keep result in sync so Pack Modal + Canvas Editor get the edited values
-                    setResult(prev => prev ? {
-                      ...prev,
-                      ad_copy: newAdCopy,
-                      poster_design: newDesign,
-                    } : prev)
-                  }}
-                />
-              )}
             </div>
 
             {/* Details panel */}
