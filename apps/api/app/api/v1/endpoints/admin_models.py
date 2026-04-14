@@ -464,3 +464,57 @@ async def bulk_update_models(request: BulkModelUpdate):
     except Exception as e:
         logger.error(f"[admin_models] Error in bulk update: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/models/{model_id}/ratings")
+async def get_model_ratings(model_id: str):
+    """
+    Get all user ratings and feedback for a specific model.
+    Shows rating, reason, prompt, and timestamp for admin analytics.
+    """
+    try:
+        from prisma import Prisma
+        prisma = Prisma()
+        await prisma.connect()
+
+        # Get all generations with ratings for this model
+        generations = await prisma.generation.find_many(
+            where={
+                "modelUsed": model_id,
+                "userRating": {"not": None}
+            },
+            select={
+                "id": True,
+                "userRating": True,
+                "userReason": True,
+                "originalPrompt": True,
+                "bucket": True,
+                "createdAt": True,
+                "outputUrls": True,
+            },
+            order={"createdAt": "desc"},
+            take=100  # Latest 100 ratings
+        )
+
+        await prisma.disconnect()
+
+        return {
+            "model_id": model_id,
+            "total_ratings": len(generations),
+            "ratings": [
+                {
+                    "id": g.id,
+                    "rating": g.userRating,
+                    "reason": g.userReason,
+                    "prompt": g.originalPrompt[:100] + "..." if len(g.originalPrompt) > 100 else g.originalPrompt,
+                    "bucket": g.bucket,
+                    "image_url": g.outputUrls[0] if isinstance(g.outputUrls, list) and len(g.outputUrls) > 0 else None,
+                    "created_at": g.createdAt.isoformat() if g.createdAt else None,
+                }
+                for g in generations
+            ],
+        }
+
+    except Exception as e:
+        logger.error(f"[admin_models] Error fetching ratings: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

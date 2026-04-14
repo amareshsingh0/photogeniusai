@@ -753,6 +753,7 @@ class RatingRequest(BaseModel):
     """Submit user rating for generated image."""
     generationId: str
     rating: int = Field(..., ge=1, le=5, description="Rating from 1-5 stars")
+    reason: Optional[str] = Field(None, max_length=500, description="Why user chose this image")
 
 
 @router.post("/rate")
@@ -772,10 +773,14 @@ async def rate_generation(body: RatingRequest):
         prisma = Prisma()
         await prisma.connect()
 
-        # Update generation with user rating
+        # Update generation with user rating and reason
+        update_data = {"userRating": body.rating}
+        if body.reason:
+            update_data["userReason"] = body.reason
+
         generation = await prisma.generation.update(
             where={"id": body.generationId},
-            data={"userRating": body.rating}
+            data=update_data
         )
 
         # Update model stats (increment totalGenerations, recalculate avgRating)
