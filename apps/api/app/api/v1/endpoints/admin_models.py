@@ -140,6 +140,42 @@ DEFAULT_MODELS = [
         "isActive": False,  # Not integrated yet
         "isTestingEnabled": False,
     },
+    {
+        "modelId": "flux_2_flex",
+        "provider": "fal.ai",
+        "displayName": "Flux 2 Flex",
+        "buckets": ["photorealism", "artistic"],
+        "costPerImage": 0.04,
+        "isActive": True,
+        "isTestingEnabled": True,
+    },
+    {
+        "modelId": "wan_2_7",
+        "provider": "wavespeed",
+        "displayName": "Wan 2.7",
+        "buckets": ["photorealism", "artistic"],
+        "costPerImage": 0.05,
+        "isActive": False,  # Not integrated yet
+        "isTestingEnabled": False,
+    },
+    {
+        "modelId": "imagen_4_standard",
+        "provider": "vertex",
+        "displayName": "Imagen 4 Standard",
+        "buckets": ["photorealism"],
+        "costPerImage": 0.08,
+        "isActive": False,  # Not integrated yet
+        "isTestingEnabled": False,
+    },
+    {
+        "modelId": "imagen_3",
+        "provider": "vertex",
+        "displayName": "Imagen 3",
+        "buckets": ["photorealism"],
+        "costPerImage": 0.04,
+        "isActive": False,  # Not integrated yet
+        "isTestingEnabled": False,
+    },
 ]
 
 
