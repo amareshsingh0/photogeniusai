@@ -1097,7 +1097,7 @@ Be decisive. Use industry defaults when ambiguous. Output valid JSON immediately
                 # Dynamic: User context (not cached)
                 logger.info(f"[master_strategist][{trace_id}] Using prompt caching (70-90% cost reduction)")
 
-                response = claude_client.messages.create(
+                response = await claude_client.messages.create(  # FIXED: await async call
                     model="claude-haiku-4-5-20251001",
                     max_tokens=config.max_output_tokens,
                     temperature=config.temperature,
@@ -1123,7 +1123,7 @@ Be decisive. Use industry defaults when ambiguous. Output valid JSON immediately
                 )
             else:
                 # Traditional prompt structure (no caching)
-                response = claude_client.messages.create(
+                response = await claude_client.messages.create(  # FIXED: await async call
                     model="claude-haiku-4-5-20251001",
                     max_tokens=config.max_output_tokens,
                     temperature=config.temperature,
