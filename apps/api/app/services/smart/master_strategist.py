@@ -1240,11 +1240,12 @@ def _validate_inputs(
 
 
 def _validate_llm_output(result: Dict, trace_id: str) -> None:
-    """Validate LLM output structure."""
+    """Validate LLM output structure (lenient — enrichment fills defaults)."""
     required_top_level = ["triage", "brand", "creative_bible"]
     for field in required_top_level:
         if field not in result:
-            raise ValueError(f"Missing required field: {field}")
+            logger.warning(f"[master_strategist][{trace_id}] Missing top-level field: {field}, will enrich with defaults")
+            result[field] = {}  # Set empty dict so enrichment can fill it
 
     # Validate triage
     triage = result.get("triage", {})
