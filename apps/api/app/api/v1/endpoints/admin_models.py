@@ -489,6 +489,7 @@ async def get_model_ratings(model_id: str):
                 "userReason": True,
                 "originalPrompt": True,
                 "bucket": True,
+                "generationTimeSeconds": True,
                 "createdAt": True,
                 "outputUrls": True,
             },
@@ -508,6 +509,7 @@ async def get_model_ratings(model_id: str):
                     "reason": g.userReason,
                     "prompt": g.originalPrompt[:100] + "..." if len(g.originalPrompt) > 100 else g.originalPrompt,
                     "bucket": g.bucket,
+                    "generation_time_seconds": g.generationTimeSeconds,
                     "image_url": g.outputUrls[0] if isinstance(g.outputUrls, list) and len(g.outputUrls) > 0 else None,
                     "created_at": g.createdAt.isoformat() if g.createdAt else None,
                 }
