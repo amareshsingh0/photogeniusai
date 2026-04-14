@@ -6,8 +6,8 @@ DELETE /api/admin/users - Delete user
 """
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Optional, List, Dict, Any
 from prisma import Prisma
 import logging
 
@@ -16,13 +16,15 @@ logger = logging.getLogger(__name__)
 
 # Models
 class UserResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     email: str
     name: str
     role: str
     credits: int
     createdAt: str
-    _count: dict
+    count: Dict[str, Any] = Field(serialization_alias="_count")
 
 class PaginationResponse(BaseModel):
     page: int
@@ -84,7 +86,7 @@ async def get_users(
                 "role": user.role,
                 "credits": user.creditsBalance,
                 "createdAt": user.createdAt.isoformat(),
-                "_count": {"generations": gen_count}
+                "count": {"generations": gen_count}
             })
 
         await prisma.disconnect()
