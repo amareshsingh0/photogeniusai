@@ -82,7 +82,7 @@ async def get_users(
                 "email": user.email,
                 "name": user.name,
                 "role": user.role,
-                "credits": user.credits,
+                "credits": user.creditsBalance,
                 "createdAt": user.createdAt.isoformat(),
                 "_count": {"generations": gen_count}
             })
@@ -111,7 +111,7 @@ async def update_user(body: UpdateUserRequest):
         await prisma.connect()
 
         # Allowed update fields
-        allowed_fields = ["name", "email", "role", "credits"]
+        allowed_fields = ["name", "email", "role", "creditsBalance"]
         update_data = {k: v for k, v in body.updates.items() if k in allowed_fields}
 
         if not update_data:
@@ -131,7 +131,7 @@ async def update_user(body: UpdateUserRequest):
                 "email": user.email,
                 "name": user.name,
                 "role": user.role,
-                "credits": user.credits,
+                "credits": user.creditsBalance,
                 "updatedAt": user.updatedAt.isoformat()
             }
         }
