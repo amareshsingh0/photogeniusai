@@ -1101,10 +1101,11 @@ Be decisive. Use industry defaults when ambiguous. Output valid JSON immediately
                     model="claude-haiku-4-5-20251001",
                     max_tokens=config.max_output_tokens,
                     temperature=config.temperature,
-                    thinking={
-                        "type": "enabled",
-                        "budget_tokens": thinking_budget  # Adaptive budget
-                    },
+                    # DISABLED: Extended thinking adds 60s+ latency for strategic briefs
+                    # thinking={
+                    #     "type": "enabled",
+                    #     "budget_tokens": thinking_budget  # Adaptive budget
+                    # },
                     messages=[{
                         "role": "user",
                         "content": [
@@ -1127,10 +1128,11 @@ Be decisive. Use industry defaults when ambiguous. Output valid JSON immediately
                     max_tokens=config.max_output_tokens,
                     temperature=config.temperature,
                     system=system_prompt_final,
-                    thinking={
-                        "type": "enabled",
-                        "budget_tokens": thinking_budget  # Adaptive budget
-                    },
+                    # DISABLED: Extended thinking adds 60s+ latency for strategic briefs
+                    # thinking={
+                    #     "type": "enabled",
+                    #     "budget_tokens": thinking_budget  # Adaptive budget
+                    # },
                     messages=[{
                         "role": "user",
                         "content": user_prompt
