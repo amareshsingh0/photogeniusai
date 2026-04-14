@@ -61,32 +61,33 @@ async def get_users(
                 ]
             }
 
-        # Fetch users and count
+        # Fetch users and total count
         users = await prisma.user.find_many(
             where=where,
             skip=skip,
             take=limit,
-            order={"createdAt": "desc"},
-            include={"_count": {"select": {"generations": True}}}
+            order={"createdAt": "desc"}
         )
 
         total = await prisma.user.count(where=where)
 
-        await prisma.disconnect()
+        # Get generation counts for each user
+        users_data = []
+        for user in users:
+            # Count generations for this user
+            gen_count = await prisma.generation.count(where={"userId": user.id})
 
-        # Format response
-        users_data = [
-            {
+            users_data.append({
                 "id": user.id,
                 "email": user.email,
                 "name": user.name,
                 "role": user.role,
                 "credits": user.credits,
                 "createdAt": user.createdAt.isoformat(),
-                "_count": {"generations": user._count.get("generations", 0) if hasattr(user, "_count") else 0}
-            }
-            for user in users
-        ]
+                "_count": {"generations": gen_count}
+            })
+
+        await prisma.disconnect()
 
         return {
             "users": users_data,
