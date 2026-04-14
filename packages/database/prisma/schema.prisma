@@ -299,8 +299,8 @@ model Generation {
   cacheHit        Boolean @default(false) // True if served from semantic prompt cache ($0 inference)
 
   // Model Tracking (for multi-model admin analytics)
-  modelUsed String? @db.VarChar(100)  // "flux_2_pro", "ideogram_v3" (which model generated this)
-  bucket    String? @db.VarChar(50)   // "typography", "photorealism" (detected capability bucket)
+  modelUsed String? @db.VarChar(100) // "flux_2_pro", "ideogram_v3" (which model generated this)
+  bucket    String? @db.VarChar(50) // "typography", "photorealism" (detected capability bucket)
 
   // Performance
   generationTimeSeconds Float?  @db.DoublePrecision
@@ -315,6 +315,7 @@ model Generation {
   downloadCount Int     @default(0)
   sharedCount   Int     @default(0)
   userRating    Int? // 1-5 optional rating for training quality
+  userReason    String? @db.Text // User feedback: why they chose this image
 
   // Training data export (set from user consent at creation time; GDPR/CCPA)
   allowTrainingDataExport Boolean @default(false)
@@ -1063,27 +1064,27 @@ model LearningLog {
   timestamp DateTime @default(now()) @db.Timestamptz
 
   // Input context
-  userPrompt String   @db.VarChar(500)
-  bucket     String   @db.VarChar(50)   // industry/category
-  platform   String   @db.VarChar(50)   // instagram, tiktok, etc.
-  aesthetic  String?  @db.VarChar(50)   // ai_native, quiet_luxury_loud, etc.
+  userPrompt String  @db.VarChar(500)
+  bucket     String  @db.VarChar(50) // industry/category
+  platform   String  @db.VarChar(50) // instagram, tiktok, etc.
+  aesthetic  String? @db.VarChar(50) // ai_native, quiet_luxury_loud, etc.
 
   // Agent decisions
-  creativeConcept  String @db.VarChar(200)  // emotional_territory
-  visualDecreeId   String @db.VarChar(50)   // composition_law (hero_dominant, etc.)
-  layoutVariant    String @db.VarChar(20)   // safe | bold | disruptive
-  modelUsed        String @db.VarChar(50)   // flux_2_pro, ideogram_quality, etc.
+  creativeConcept String @db.VarChar(200) // emotional_territory
+  visualDecreeId  String @db.VarChar(50) // composition_law (hero_dominant, etc.)
+  layoutVariant   String @db.VarChar(20) // safe | bold | disruptive
+  modelUsed       String @db.VarChar(50) // flux_2_pro, ideogram_quality, etc.
 
   // Quality metrics
-  qualityScore      Float          // 0.0-10.0 overall score
-  dimensionScores   Json  @db.JsonB // 12-dimension breakdown
-  beastGatesPassed  Int            // 0-10 gates passed
-  userFeedback      String?  @db.VarChar(20)  // thumbs_up | thumbs_down | neutral
+  qualityScore     Float // 0.0-10.0 overall score
+  dimensionScores  Json    @db.JsonB // 12-dimension breakdown
+  beastGatesPassed Int // 0-10 gates passed
+  userFeedback     String? @db.VarChar(20) // thumbs_up | thumbs_down | neutral
 
   // Performance
-  generationTimeMs Int   // Total time in milliseconds
+  generationTimeMs Int // Total time in milliseconds
   costUsd          Float // API cost in USD
-  revisionCycles   Int   // Number of revision loops
+  revisionCycles   Int // Number of revision loops
 
   @@index([bucket, platform, aesthetic])
   @@index([qualityScore])
@@ -1100,26 +1101,26 @@ model ModelConfig {
   id String @id @default(uuid()) @db.Uuid
 
   // Model Identity
-  modelId      String  @unique @db.VarChar(100) // "flux_2_pro", "ideogram_v3"
-  provider     String  @db.VarChar(50)          // "fal.ai", "wavespeed", "vertex"
-  displayName  String  @db.VarChar(100)         // "Flux 2 Pro" (admin display only)
+  modelId     String @unique @db.VarChar(100) // "flux_2_pro", "ideogram_v3"
+  provider    String @db.VarChar(50) // "fal.ai", "wavespeed", "vertex"
+  displayName String @db.VarChar(100) // "Flux 2 Pro" (admin display only)
 
   // Bucket Assignment (array of buckets this model supports)
-  buckets      String[] // ["typography", "photorealism", "anime"]
+  buckets String[] // ["typography", "photorealism", "anime"]
 
   // Control Flags
-  isActive            Boolean @default(true)   // Use in production generations
-  isTestingEnabled    Boolean @default(false)  // Include in parallel testing mode
+  isActive         Boolean @default(true) // Use in production generations
+  isTestingEnabled Boolean @default(false) // Include in parallel testing mode
 
   // Performance Stats (auto-updated from generations)
-  totalGenerations Int   @default(0)
+  totalGenerations Int    @default(0)
   avgRating        Float? @db.DoublePrecision // Average user rating (1-5)
   avgCost          Float? @db.DoublePrecision // Average cost per image
   avgLatency       Float? @db.DoublePrecision // Average generation time (seconds)
 
   // Metadata
-  costPerImage Float  @db.DoublePrecision // Base cost per generation
-  metadata     Json?  @db.JsonB           // Additional config (endpoints, params, etc.)
+  costPerImage Float @db.DoublePrecision // Base cost per generation
+  metadata     Json? @db.JsonB // Additional config (endpoints, params, etc.)
 
   // Timestamps
   createdAt DateTime @default(now()) @db.Timestamptz
