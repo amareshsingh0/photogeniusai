@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import FeatureConfigPanel from "@/components/admin/feature-config-panel";
+import ModelRatingsModal from "@/components/admin/model-ratings-modal";
 
 type Tab = "overview" | "users" | "generations" | "models" | "settings" | "config";
 
@@ -116,6 +117,7 @@ export default function AdminDashboard() {
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsFilter, setModelsFilter] = useState<"all" | "active" | "inactive">("all");
+  const [viewingRatingsModel, setViewingRatingsModel] = useState<{ id: string; name: string } | null>(null);
 
   // Edit user modal
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -909,6 +911,16 @@ export default function AdminDashboard() {
                             />
                           </button>
                         </div>
+
+                        {/* View Ratings Button */}
+                        <button
+                          onClick={() => setViewingRatingsModel({ id: model.modelId, name: model.displayName })}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-colors text-sm font-medium"
+                        >
+                          <Star className="w-4 h-4" />
+                          View Ratings
+                          {model.avgRating && ` (${model.avgRating.toFixed(1)} avg)`}
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -1178,6 +1190,16 @@ export default function AdminDashboard() {
             </div>
           </motion.div>
         </div>
+      )}
+
+      {/* Model Ratings Modal */}
+      {viewingRatingsModel && (
+        <ModelRatingsModal
+          isOpen={true}
+          onClose={() => setViewingRatingsModel(null)}
+          modelId={viewingRatingsModel.id}
+          modelName={viewingRatingsModel.name}
+        />
       )}
     </div>
   );

@@ -12,6 +12,7 @@ const GenerationControlsV2 = dynamic(() => import("@/components/generation-contr
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import ImageRating from "@/components/feedback/image-rating"
 import {
   Sparkles,
   Loader2,
@@ -1046,34 +1047,23 @@ export default function GeneratePage() {
                     <Package className="h-3.5 w-3.5" /> Download Pack (4 sizes)
                   </Button>
                 )}
-                {/* Thumbs feedback */}
-                <div className="col-span-2 flex items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground/40 shrink-0">Rate this</span>
-                  <button
-                    type="button"
-                    onClick={() => handleFeedback("up")}
-                    className={cn(
-                      "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-sm font-medium transition-all",
-                      feedbackGiven === "up"
-                        ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-400"
-                        : "border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:border-emerald-500/30 hover:text-emerald-400 hover:bg-emerald-500/10"
-                    )}
-                  >
-                    <ThumbsUp className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleFeedback("down")}
-                    className={cn(
-                      "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-sm font-medium transition-all",
-                      feedbackGiven === "down"
-                        ? "border-red-500/60 bg-red-500/15 text-red-400"
-                        : "border-white/[0.08] bg-white/[0.03] text-muted-foreground hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/10"
-                    )}
-                  >
-                    <ThumbsDown className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                {/* Rating Component (replaces thumbs up/down) */}
+                {result.generationId && (
+                  <div className="col-span-2">
+                    <ImageRating
+                      generationId={result.generationId}
+                      imageUrl={result.image_url}
+                      currentRating={undefined}
+                      onRatingSubmit={(rating, reason) => {
+                        // Optional: Update local state or show toast
+                        toast({
+                          title: "Rating submitted",
+                          description: `Thank you for rating this ${rating} stars!`,
+                        })
+                      }}
+                    />
+                  </div>
+                )}
                 <Button onClick={handleEditGeneratedImage} className="gap-2 rounded-xl border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 text-sm" variant="outline">
                   <Scissors className="h-3.5 w-3.5" /> Edit Image
                 </Button>
