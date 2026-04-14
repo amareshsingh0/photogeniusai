@@ -527,7 +527,7 @@ async def get_model_ratings(model_id: str):
                 {
                     "id": g.id,
                     "rating": g.userRating,
-                    "reason": g.userReason,
+                    "reason": getattr(g, 'userReason', None),  # Safe access (column may not exist yet)
                     "prompt": g.originalPrompt[:100] + "..." if len(g.originalPrompt) > 100 else g.originalPrompt,
                     "bucket": g.bucket,
                     "generation_time_seconds": g.generationTimeSeconds,
