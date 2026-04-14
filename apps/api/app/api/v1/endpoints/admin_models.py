@@ -61,21 +61,21 @@ class BulkModelUpdate(BaseModel):
 DEFAULT_MODELS = [
     {
         "modelId": "flux_2_pro",
-        "provider": "fal.ai",
+        "provider": "wavespeed",
         "displayName": "Flux 2 Pro",
         "buckets": ["typography", "photorealism", "artistic"],
         "costPerImage": 0.025,
-        "isActive": True,
-        "isTestingEnabled": True,
+        "isActive": False,  # WaveSpeed integration pending
+        "isTestingEnabled": False,
     },
     {
         "modelId": "flux_2_max",
-        "provider": "fal.ai",
+        "provider": "wavespeed",
         "displayName": "Flux 2 Max",
         "buckets": ["photorealism", "artistic"],
         "costPerImage": 0.055,
-        "isActive": True,
-        "isTestingEnabled": True,
+        "isActive": False,  # WaveSpeed integration pending
+        "isTestingEnabled": False,
     },
     {
         "modelId": "flux_schnell",
@@ -85,6 +85,15 @@ DEFAULT_MODELS = [
         "costPerImage": 0.003,
         "isActive": True,
         "isTestingEnabled": False,
+    },
+    {
+        "modelId": "flux_dev",
+        "provider": "fal.ai",
+        "displayName": "Flux Dev",
+        "buckets": ["photorealism", "artistic"],
+        "costPerImage": 0.015,
+        "isActive": True,
+        "isTestingEnabled": True,
     },
     {
         "modelId": "ideogram_v3",
@@ -106,21 +115,21 @@ DEFAULT_MODELS = [
     },
     {
         "modelId": "hunyuan_image",
-        "provider": "fal.ai",
+        "provider": "wavespeed",
         "displayName": "Hunyuan Image",
         "buckets": ["anime"],
         "costPerImage": 0.04,
-        "isActive": True,
+        "isActive": False,  # WaveSpeed integration pending
         "isTestingEnabled": False,
     },
     {
         "modelId": "seedream_4_5",
-        "provider": "wavespeed",
+        "provider": "fal.ai",
         "displayName": "Seedream 4.5",
         "buckets": ["character_consistency", "photorealism"],
         "costPerImage": 0.06,
-        "isActive": False,  # Not integrated yet
-        "isTestingEnabled": False,
+        "isActive": True,
+        "isTestingEnabled": True,
     },
     {
         "modelId": "grok_2_imagine",
@@ -142,12 +151,12 @@ DEFAULT_MODELS = [
     },
     {
         "modelId": "flux_2_flex",
-        "provider": "fal.ai",
+        "provider": "wavespeed",
         "displayName": "Flux 2 Flex",
         "buckets": ["photorealism", "artistic"],
         "costPerImage": 0.04,
-        "isActive": True,
-        "isTestingEnabled": True,
+        "isActive": False,  # WaveSpeed integration pending
+        "isTestingEnabled": False,
     },
     {
         "modelId": "wan_2_7",
