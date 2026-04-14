@@ -65,21 +65,21 @@ export async function GET() {
 
       // Total credits used (approximate from generations)
       prisma.generation.aggregate({
-        _sum: { credits: true },
+        _sum: { creditsUsed: true },
       }),
 
       // Generations by tier
       prisma.generation.groupBy({
-        by: ["quality"],
+        by: ["qualityTierUsed"],
+        where: { qualityTierUsed: { not: null } },
         _count: true,
-        orderBy: { _count: { quality: "desc" } },
       }),
 
       // Generations by bucket
       prisma.generation.groupBy({
         by: ["bucket"],
+        where: { bucket: { not: null } },
         _count: true,
-        orderBy: { _count: { bucket: "desc" } },
       }),
 
       // Recent generations
@@ -88,8 +88,8 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
-          prompt: true,
-          quality: true,
+          originalPrompt: true,
+          qualityTierUsed: true,
           bucket: true,
           createdAt: true,
           user: {
@@ -123,7 +123,7 @@ export async function GET() {
         totalUsers,
         totalGenerations,
         activeUsers,
-        totalCreditsUsed: totalCreditsUsed._sum.credits || 0,
+        totalCreditsUsed: totalCreditsUsed._sum.creditsUsed || 0,
         avgGenerationsPerUser,
         dailyAverage,
       },
@@ -134,7 +134,7 @@ export async function GET() {
       },
       breakdown: {
         byTier: generationsByTier.map((item) => ({
-          tier: item.quality || "unknown",
+          tier: item.qualityTierUsed || "unknown",
           count: item._count,
         })),
         byBucket: generationsByBucket.map((item) => ({

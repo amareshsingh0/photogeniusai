@@ -241,7 +241,7 @@ async def get_all_models():
     Get all models with their current configuration and stats.
 
     Returns model configs with performance metrics:
-    - totalGenerations
+    - totalGenerations (calculated from Generation table)
     - avgRating (from user ratings)
     - avgCost
     - avgLatency
@@ -255,29 +255,65 @@ async def get_all_models():
             order={"displayName": "asc"}
         )
 
+        # Calculate stats for each model from Generation table
+        models_data = []
+        for m in models:
+            # Count generations for this model
+            total_gens = await prisma.generation.count(
+                where={
+                    "modelUsed": m.modelId,
+                    "isDeleted": False
+                }
+            )
+
+            # Get average rating from user ratings
+            rated_gens = await prisma.generation.find_many(
+                where={
+                    "modelUsed": m.modelId,
+                    "userRating": {"not": None},
+                    "isDeleted": False
+                },
+                select={
+                    "userRating": True,
+                    "creditsUsed": True,
+                    "generationTimeSeconds": True
+                }
+            )
+
+            avg_rating = None
+            avg_cost = None
+            avg_latency = None
+
+            if rated_gens:
+                # Calculate averages
+                ratings = [g.userRating for g in rated_gens if g.userRating is not None]
+                costs = [g.creditsUsed for g in rated_gens if g.creditsUsed is not None]
+                latencies = [g.generationTimeSeconds for g in rated_gens if g.generationTimeSeconds is not None]
+
+                avg_rating = sum(ratings) / len(ratings) if ratings else None
+                avg_cost = sum(costs) / len(costs) if costs else None
+                avg_latency = sum(latencies) / len(latencies) if latencies else None
+
+            models_data.append({
+                "id": m.id,
+                "modelId": m.modelId,
+                "provider": m.provider,
+                "displayName": m.displayName,
+                "buckets": m.buckets,
+                "isActive": m.isActive,
+                "isTestingEnabled": m.isTestingEnabled,
+                "totalGenerations": total_gens,
+                "avgRating": round(avg_rating, 2) if avg_rating else None,
+                "avgCost": round(avg_cost, 2) if avg_cost else None,
+                "avgLatency": round(avg_latency, 2) if avg_latency else None,
+                "costPerImage": m.costPerImage,
+                "createdAt": m.createdAt.isoformat() if m.createdAt else None,
+                "updatedAt": m.updatedAt.isoformat() if m.updatedAt else None,
+            })
+
         await prisma.disconnect()
 
-        return {
-            "models": [
-                {
-                    "id": m.id,
-                    "modelId": m.modelId,
-                    "provider": m.provider,
-                    "displayName": m.displayName,
-                    "buckets": m.buckets,
-                    "isActive": m.isActive,
-                    "isTestingEnabled": m.isTestingEnabled,
-                    "totalGenerations": m.totalGenerations,
-                    "avgRating": m.avgRating,
-                    "avgCost": m.avgCost,
-                    "avgLatency": m.avgLatency,
-                    "costPerImage": m.costPerImage,
-                    "createdAt": m.createdAt.isoformat() if m.createdAt else None,
-                    "updatedAt": m.updatedAt.isoformat() if m.updatedAt else None,
-                }
-                for m in models
-            ],
-        }
+        return {"models": models_data}
 
     except Exception as e:
         logger.error(f"[admin_models] Error fetching models: {e}", exc_info=True)

@@ -16,21 +16,64 @@ export async function GET(req: Request) {
     const limit = parseInt(searchParams.get("limit") || "50");
     const skip = (page - 1) * limit;
 
-    // Fetch generations with user info
+    // Filters
+    const search = searchParams.get("search") || "";
+    const qualityFilter = searchParams.get("quality");
+    const modelFilter = searchParams.get("model");
+    const userFilter = searchParams.get("userId");
+    const bucketFilter = searchParams.get("bucket");
+    const sortBy = searchParams.get("sortBy") || "createdAt";
+    const sortOrder = searchParams.get("sortOrder") || "desc";
+
+    // Build where clause
+    const where: any = { isDeleted: false };
+
+    if (search) {
+      where.originalPrompt = { contains: search, mode: "insensitive" };
+    }
+
+    if (qualityFilter) {
+      where.qualityTierUsed = qualityFilter;
+    }
+
+    if (modelFilter) {
+      where.modelUsed = modelFilter;
+    }
+
+    if (userFilter) {
+      where.userId = userFilter;
+    }
+
+    if (bucketFilter) {
+      where.bucket = bucketFilter;
+    }
+
+    // Build orderBy
+    const orderBy: any = {};
+    orderBy[sortBy] = sortOrder;
+
+    // Fetch generations with user info and all data
     const [generations, total] = await Promise.all([
       prisma.generation.findMany({
-        where: { isDeleted: false },
+        where,
         skip,
         take: limit,
-        orderBy: { createdAt: "desc" },
+        orderBy,
         select: {
           id: true,
           originalPrompt: true,
+          enhancedPrompt: true,
           mode: true,
           creditsUsed: true,
           qualityTierUsed: true,
           modelUsed: true,
           bucket: true,
+          selectedOutputUrl: true,
+          thumbnailUrl: true,
+          userRating: true,
+          userReason: true,
+          generationTimeSeconds: true,
+          overallScore: true,
           createdAt: true,
           user: {
             select: {
@@ -41,7 +84,7 @@ export async function GET(req: Request) {
           },
         },
       }),
-      prisma.generation.count({ where: { isDeleted: false } }),
+      prisma.generation.count({ where }),
     ]);
 
     return NextResponse.json({

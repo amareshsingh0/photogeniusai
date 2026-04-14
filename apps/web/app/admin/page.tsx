@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import FeatureConfigPanel from "@/components/admin/feature-config-panel";
 import ModelRatingsModal from "@/components/admin/model-ratings-modal";
+import GenerationsTable from "@/components/admin/generations-table";
 
 type Tab = "overview" | "users" | "generations" | "models" | "settings" | "config";
 
@@ -634,104 +635,10 @@ export default function AdminDashboard() {
         {/* Generations Tab */}
         {activeTab === "generations" && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">All Generations</h2>
-              <button
-                onClick={fetchGenerations}
-                className="p-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 transition-colors"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold">All Generations</h2>
             </div>
-
-            {/* Generations Table */}
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-zinc-800 bg-zinc-900">
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-400 uppercase">
-                        Prompt
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-400 uppercase">
-                        User
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-400 uppercase">
-                        Quality
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-400 uppercase">
-                        Model
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-400 uppercase">
-                        Credits
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-400 uppercase">
-                        Date
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-semibold text-zinc-400 uppercase">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {generations.map((gen) => (
-                      <tr key={gen.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                        <td className="px-6 py-4 max-w-xs">
-                          <div className="truncate text-sm">{gen.prompt}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm">{gen.user.email}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="px-2 py-1 rounded-md text-xs font-medium bg-violet-500/10 text-violet-400 uppercase">
-                            {gen.quality}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-zinc-400">{gen.modelUsed || "N/A"}</td>
-                        <td className="px-6 py-4 font-medium">{gen.credits}</td>
-                        <td className="px-6 py-4 text-sm text-zinc-500">
-                          {new Date(gen.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-end">
-                            <button
-                              onClick={() => handleDeleteGeneration(gen.id)}
-                              className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-800">
-                <div className="text-sm text-zinc-500">
-                  Showing {generations.length} of {generationsTotal} generations
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setGenerationsPage((p) => Math.max(1, p - 1))}
-                    disabled={generationsPage === 1}
-                    className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="text-sm">Page {generationsPage}</span>
-                  <button
-                    onClick={() => setGenerationsPage((p) => p + 1)}
-                    disabled={generations.length < 50}
-                    className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
+            <GenerationsTable />
           </div>
         )}
 
