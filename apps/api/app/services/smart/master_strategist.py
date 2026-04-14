@@ -1552,7 +1552,10 @@ def _enrich_creative_bible(bible: Dict, triage: Dict, brand: Dict) -> Dict:
         )
 
     # Dominant Color Story
-    if not bible.get("dominant_color_story") or len(bible.get("dominant_color_story", "").strip()) < 15:
+    color_story = bible.get("dominant_color_story", "")
+    if isinstance(color_story, dict):
+        color_story = str(color_story)
+    if not color_story or not isinstance(color_story, str) or len(color_story.strip()) < 15:
         primary = brand.get("primary_color", "#6C63FF")
         secondary = brand.get("secondary_color", "#4FACFE")
         accent = brand.get("accent_color", "#00D4FF")
