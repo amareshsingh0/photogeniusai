@@ -304,6 +304,7 @@ _AGENT_MAX_TOKENS = {
     "brand_intel":      1200,
     "creative_director":4000,  # KB + bible JSON needs LOTS of room (was 2500, caused truncation)
     "copy_writer":      3000,  # Restaurant ads need expanded copy (name, dates, hours, etc)
+    "copy_writer_fallback": 3000,  # FIX: Haiku fallback needs same tokens as Gemini copy writer
     "image_prompter":   3500,  # cd_integration schema is large + restaurant scene complexity
     "layout_planner":   2500,  # More elements for restaurant ads (name, dates, address, etc)
     "reconcile":        400,
