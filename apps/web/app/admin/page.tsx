@@ -17,11 +17,17 @@ import {
   X,
   LogOut,
   Sliders,
+  Cpu,
+  CheckCircle,
+  XCircle,
+  DollarSign,
+  Clock,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import FeatureConfigPanel from "@/components/admin/feature-config-panel";
 
-type Tab = "overview" | "users" | "generations" | "settings" | "config";
+type Tab = "overview" | "users" | "generations" | "models" | "settings" | "config";
 
 interface User {
   id: string;
@@ -67,6 +73,23 @@ interface Analytics {
   };
 }
 
+interface ModelConfig {
+  id: string;
+  modelId: string;
+  provider: string;
+  displayName: string;
+  buckets: string[];
+  isActive: boolean;
+  isTestingEnabled: boolean;
+  totalGenerations: number;
+  avgRating: number | null;
+  avgCost: number | null;
+  avgLatency: number | null;
+  costPerImage: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(false);
@@ -88,6 +111,11 @@ export default function AdminDashboard() {
 
   // Settings state
   const [settings, setSettings] = useState<any>(null);
+
+  // Models state
+  const [models, setModels] = useState<ModelConfig[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsFilter, setModelsFilter] = useState<"all" | "active" | "inactive">("all");
 
   // Edit user modal
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -111,6 +139,8 @@ export default function AdminDashboard() {
       fetchUsers();
     } else if (activeTab === "generations") {
       fetchGenerations();
+    } else if (activeTab === "models") {
+      fetchModels();
     } else if (activeTab === "settings") {
       fetchSettings();
     }
@@ -278,10 +308,47 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchModels = async () => {
+    setModelsLoading(true);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.creatives.bimoraai.com";
+      const res = await fetch(`${apiUrl}/api/v1/admin/models`);
+      if (!res.ok) throw new Error("Failed to fetch models");
+      const data = await res.json();
+      setModels(data.models);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
+  const handleToggleModel = async (modelId: string, field: "isActive" | "isTestingEnabled", currentValue: boolean) => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.creatives.bimoraai.com";
+      const res = await fetch(`${apiUrl}/api/v1/admin/models/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modelId,
+          [field]: !currentValue,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update model");
+
+      // Refresh models list
+      fetchModels();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
   const tabs = [
     { id: "overview" as Tab, label: "Overview", icon: BarChart3 },
     { id: "users" as Tab, label: "Users", icon: Users },
     { id: "generations" as Tab, label: "Generations", icon: ImageIcon },
+    { id: "models" as Tab, label: "Models", icon: Cpu },
     { id: "config" as Tab, label: "Feature Config", icon: Sliders },
     { id: "settings" as Tab, label: "Settings", icon: Settings },
   ];
@@ -663,6 +730,201 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Models Tab */}
+        {activeTab === "models" && (
+          <div className="max-w-7xl mx-auto px-6 py-8">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-2xl font-bold">Model Registry</h2>
+                <p className="text-zinc-400 mt-1">Manage AI models for image generation</p>
+              </div>
+              <button
+                onClick={fetchModels}
+                disabled={modelsLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={cn("w-4 h-4", modelsLoading && "animate-spin")} />
+                Refresh
+              </button>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex gap-2 mb-6">
+              {(["all", "active", "inactive"] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setModelsFilter(filter)}
+                  className={cn(
+                    "px-4 py-2 rounded-lg font-medium transition-colors capitalize",
+                    modelsFilter === filter
+                      ? "bg-violet-600 text-white"
+                      : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                  )}
+                >
+                  {filter} ({filter === "all" ? models.length : filter === "active" ? models.filter(m => m.isActive).length : models.filter(m => !m.isActive).length})
+                </button>
+              ))}
+            </div>
+
+            {/* Models Grid */}
+            {modelsLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <RefreshCw className="w-8 h-8 animate-spin text-violet-500" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {models
+                  .filter((m) =>
+                    modelsFilter === "all" ? true :
+                    modelsFilter === "active" ? m.isActive :
+                    !m.isActive
+                  )
+                  .map((model) => (
+                    <div
+                      key={model.id}
+                      className={cn(
+                        "bg-zinc-900/50 border rounded-xl p-6 transition-all",
+                        model.isActive ? "border-green-500/30 hover:border-green-500/50" : "border-zinc-800 hover:border-zinc-700"
+                      )}
+                    >
+                      {/* Header */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-lg font-semibold">{model.displayName}</h3>
+                            {model.isActive ? (
+                              <CheckCircle className="w-5 h-5 text-green-500" />
+                            ) : (
+                              <XCircle className="w-5 h-5 text-zinc-600" />
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="px-2 py-1 rounded-md bg-zinc-800 text-zinc-400 font-mono">
+                              {model.provider}
+                            </span>
+                            <span className="text-zinc-500">•</span>
+                            <span className="text-zinc-400">{model.modelId}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Buckets */}
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {model.buckets.map((bucket) => (
+                          <span
+                            key={bucket}
+                            className="px-2 py-1 rounded-md bg-violet-500/10 text-violet-400 text-xs font-medium"
+                          >
+                            {bucket}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Stats Grid */}
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="bg-zinc-800/50 rounded-lg p-3">
+                          <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
+                            <DollarSign className="w-3 h-3" />
+                            Cost/Image
+                          </div>
+                          <div className="text-lg font-semibold">${model.costPerImage.toFixed(3)}</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-lg p-3">
+                          <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
+                            <ImageIcon className="w-3 h-3" />
+                            Generations
+                          </div>
+                          <div className="text-lg font-semibold">{model.totalGenerations}</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-lg p-3">
+                          <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
+                            <Star className="w-3 h-3" />
+                            Avg Rating
+                          </div>
+                          <div className="text-lg font-semibold">
+                            {model.avgRating ? model.avgRating.toFixed(2) : "N/A"}
+                          </div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-lg p-3">
+                          <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
+                            <Clock className="w-3 h-3" />
+                            Avg Latency
+                          </div>
+                          <div className="text-lg font-semibold">
+                            {model.avgLatency ? `${model.avgLatency.toFixed(1)}s` : "N/A"}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Toggle Switches */}
+                      <div className="space-y-3 pt-4 border-t border-zinc-800">
+                        {/* Active Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-sm">Active for Production</div>
+                            <div className="text-xs text-zinc-500">
+                              {model.isActive ? "Available for generation" : "Disabled"}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleToggleModel(model.modelId, "isActive", model.isActive)}
+                            className={cn(
+                              "relative w-14 h-8 rounded-full transition-colors",
+                              model.isActive ? "bg-green-500" : "bg-zinc-700"
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "absolute top-1 w-6 h-6 bg-white rounded-full transition-transform",
+                                model.isActive ? "right-1" : "left-1"
+                              )}
+                            />
+                          </button>
+                        </div>
+
+                        {/* Testing Toggle */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-sm">Testing Mode</div>
+                            <div className="text-xs text-zinc-500">
+                              {model.isTestingEnabled ? "Enabled for parallel testing" : "Not in testing"}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleToggleModel(model.modelId, "isTestingEnabled", model.isTestingEnabled)}
+                            className={cn(
+                              "relative w-14 h-8 rounded-full transition-colors",
+                              model.isTestingEnabled ? "bg-violet-500" : "bg-zinc-700"
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "absolute top-1 w-6 h-6 bg-white rounded-full transition-transform",
+                                model.isTestingEnabled ? "right-1" : "left-1"
+                              )}
+                            />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!modelsLoading && models.filter((m) =>
+              modelsFilter === "all" ? true :
+              modelsFilter === "active" ? m.isActive :
+              !m.isActive
+            ).length === 0 && (
+              <div className="text-center py-16 text-zinc-500">
+                No {modelsFilter !== "all" && modelsFilter} models found
+              </div>
+            )}
           </div>
         )}
 
