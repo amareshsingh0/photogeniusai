@@ -21,7 +21,7 @@ export interface DevUser {
 }
 
 const DEV_USER: DevUser = {
-  id: "dev_user_123",
+  id: "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c", // Actual UUID from database
   email: "dev@photogenius.local",
   name: "Dev User",
   creditsBalance: 1000,
