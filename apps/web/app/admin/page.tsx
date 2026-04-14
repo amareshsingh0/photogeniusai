@@ -153,8 +153,8 @@ export default function AdminDashboard() {
     setLoading(true);
     setError("");
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.creatives.bimoraai.com";
-      const res = await fetch(`${apiUrl}/api/v1/admin/analytics`, {
+      // Use Next.js API route (not Python API)
+      const res = await fetch("/api/admin/analytics", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch analytics");
