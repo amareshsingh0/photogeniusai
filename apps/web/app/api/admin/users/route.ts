@@ -39,7 +39,7 @@ export async function GET(req: Request) {
           email: true,
           name: true,
           role: true,
-          credits: true,
+          creditsBalance: true,
           createdAt: true,
           _count: {
             select: { generations: true },
@@ -49,8 +49,15 @@ export async function GET(req: Request) {
       prisma.user.count({ where }),
     ]);
 
+    // Map creditsBalance to credits for frontend compatibility
+    const formattedUsers = users.map((user) => ({
+      ...user,
+      credits: user.creditsBalance,
+      creditsBalance: undefined,
+    }));
+
     return NextResponse.json({
-      users,
+      users: formattedUsers,
       pagination: {
         page,
         limit,
@@ -84,13 +91,15 @@ export async function PATCH(req: Request) {
       );
     }
 
-    // Allowed update fields
+    // Allowed update fields (map credits to creditsBalance)
     const allowedFields = ["name", "email", "role", "credits"];
     const updateData: any = {};
 
     for (const field of allowedFields) {
       if (updates[field] !== undefined) {
-        updateData[field] = updates[field];
+        // Map credits to creditsBalance for database
+        const dbField = field === "credits" ? "creditsBalance" : field;
+        updateData[dbField] = updates[field];
       }
     }
 
@@ -109,12 +118,19 @@ export async function PATCH(req: Request) {
         email: true,
         name: true,
         role: true,
-        credits: true,
+        creditsBalance: true,
         updatedAt: true,
       },
     });
 
-    return NextResponse.json({ user: updatedUser });
+    // Map creditsBalance to credits for frontend
+    return NextResponse.json({
+      user: {
+        ...updatedUser,
+        credits: updatedUser.creditsBalance,
+        creditsBalance: undefined,
+      },
+    });
   } catch (error: any) {
     console.error("[admin/users] PATCH error:", error);
     return NextResponse.json(
