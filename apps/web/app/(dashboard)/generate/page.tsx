@@ -287,15 +287,9 @@ export default function GeneratePage() {
   const router = useRouter()
   const [openingEditor, setOpeningEditor] = useState(false)
   const [prompt, setPrompt] = useState("")
-  const [userPrompt, setUserPrompt] = useState<string>(() => {
-    if (typeof window === "undefined") return ""
-    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null")?.userPrompt ?? "" } catch { return "" }
-  })
+  const [userPrompt, setUserPrompt] = useState<string>("")
   const [isGenerating, setIsGenerating] = useState(false)
-  const [result, setResult] = useState<GenerationResult | null>(() => {
-    if (typeof window === "undefined") return null
-    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null")?.result ?? null } catch { return null }
-  })
+  const [result, setResult] = useState<GenerationResult | null>(null)
   const [multiResults, setMultiResults] = useState<GenerationResult[]>([]) // For admin testing mode
   const [isAdmin, setIsAdmin] = useState(false) // Admin detection
   const [error, setError] = useState<string | null>(null)
@@ -354,6 +348,15 @@ export default function GeneratePage() {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 220)}px`
     }
   }, [prompt])
+
+  // Restore from sessionStorage after hydration (avoids SSR mismatch)
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null")
+      if (stored?.userPrompt) setUserPrompt(stored.userPrompt)
+      if (stored?.result) setResult(stored.result)
+    } catch { /* ignore */ }
+  }, [])
 
   // Persist result to sessionStorage so back-navigation restores it
   useEffect(() => {
