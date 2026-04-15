@@ -140,11 +140,11 @@ async def run_ensemble(
     PREMIUM  → 1× best model + ESRGAN 4x
     ULTRA    → N× jury + ESRGAN 4x  (N = num_images in config)
     """
-    from app.services.smart.config import get_model_config, TIER_ALIASES
+    from app.services.smart.model_config import get_model_for_request
     from app.services.external.multi_provider_client import multi_client
 
-    resolved_tier = TIER_ALIASES.get(tier, tier).lower()
-    model_cfg = get_model_config(bucket, resolved_tier)
+    resolved_tier = tier.lower()
+    model_cfg = get_model_for_request(bucket, resolved_tier)
     model_key  = model_cfg.get("model", "flux_2_pro")
     num_images = model_cfg.get("num_images", 1)   # >1 only in ultra rows
 

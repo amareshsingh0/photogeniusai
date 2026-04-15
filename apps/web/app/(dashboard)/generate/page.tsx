@@ -186,10 +186,9 @@ function calcDims(preset: DimensionPreset, size: number): { width: number; heigh
 }
 
 const QUALITY_OPTIONS = [
-  { value: "fast",     label: "Fast",     hint: "~8s",   note: "Quick draft"     },
-  { value: "balanced", label: "Standard", hint: "~25s",  note: "ESRGAN 2× boost" },
-  { value: "quality",  label: "Premium",  hint: "~45s",  note: "ESRGAN 4× boost" },
-  { value: "ultra",    label: "Ultra",    hint: "~60s",  note: "Jury + 4× boost" },
+  { value: "1k", label: "1K", hint: "~10s", note: "1024px render" },
+  { value: "2k", label: "2K", hint: "~30s", note: "2048px render" },
+  { value: "4k", label: "4K", hint: "~60s", note: "4096px render" },
 ] as const
 
 // Style filmstrip — portrait-ratio cards with rich gradient fills
@@ -215,7 +214,27 @@ const STYLE_ALL: { id: string; icon: React.ElementType; label: string; from: str
 ]
 // Quality color coding
 const QUALITY_COLORS: Record<string, string> = {
-  fast: "#71717a", balanced: "#3b82f6", quality: "#8b5cf6", ultra: "#d97706"
+  "1k": "#3b82f6", "2k": "#8b5cf6", "4k": "#d97706"
+}
+
+const LEGACY_QUALITY_MAP: Record<string, string> = {
+  fast: "1k",
+  standard: "2k",
+  balanced: "2k",
+  premium: "2k",
+  quality: "2k",
+  ultra: "4k",
+}
+
+function normalizeQualityTier(value?: string): string {
+  const normalized = value?.trim().toLowerCase() ?? ""
+  if (normalized in QUALITY_COLORS) return normalized
+  return LEGACY_QUALITY_MAP[normalized] ?? "1k"
+}
+
+function getQualityMeta(value?: string) {
+  const normalized = normalizeQualityTier(value)
+  return QUALITY_OPTIONS.find((option) => option.value === normalized) ?? QUALITY_OPTIONS[0]
 }
 
 // P6: Try These — horizontal scroll cards with gradient + label
@@ -297,7 +316,7 @@ export default function GeneratePage() {
   const [sizeMode, setSizeMode] = useState<"preset" | "custom">("preset")
   const [customWidth, setCustomWidth] = useState<number>(1024)
   const [customHeight, setCustomHeight] = useState<number>(1024)
-  const [qualityTier, setQualityTier] = useState<string>("balanced")
+  const [qualityTier, setQualityTier] = useState<string>("1k")
   const [selectedStyle, setSelectedStyle] = useState<string>("Auto")
   const [referenceImage, setReferenceImage] = useState<string | null>(null)
   const [generationDimension, setGenerationDimension] = useState<DimensionPreset>(DIMENSION_PRESETS[0])
@@ -590,7 +609,7 @@ export default function GeneratePage() {
                 style: "Professional",
                 mood: "Testing",
                 lighting: "Auto",
-                quality: qualityTier,
+                quality: getQualityMeta(qualityTier).label,
                 category: "test",
               },
               model_used: data.modelId,
@@ -622,7 +641,7 @@ export default function GeneratePage() {
                   style: "Professional",
                   mood: data.brief?.mood || "Cinematic",
                   lighting: data.brief?.lighting?.split(",")[0] || "Natural",
-                  quality: "Premium",
+                  quality: getQualityMeta(qualityTier).label,
                   category: data.capability_bucket || "photo",
                 },
                 model_used: mr.model_name,
@@ -644,7 +663,7 @@ export default function GeneratePage() {
                   style: "Professional",
                   mood: data.brief?.mood || "Cinematic",
                   lighting: data.brief?.lighting?.split(",")[0] || "Natural",
-                  quality: "Premium",
+                  quality: getQualityMeta(qualityTier).label,
                   category: data.capability_bucket || "photo",
                 },
                 model_used: data.model_used,
@@ -918,7 +937,7 @@ export default function GeneratePage() {
                   {/* Rating UI below image */}
                   {res.generationId && (
                     <div className="p-4 bg-black/40">
-                      <ImageRating generationId={res.generationId} />
+                      <ImageRating generationId={res.generationId} imageUrl={res.image_url || ""} />
                     </div>
                   )}
                 </motion.div>
@@ -1250,7 +1269,7 @@ export default function GeneratePage() {
               {sseStage === "generating" && (
                 <div className="flex items-center justify-center gap-2 mt-2">
                   <p className="text-[11px] text-muted-foreground/60">
-                    {qualityTier === "fast" ? "~8s" : qualityTier === "ultra" ? "~60s" : qualityTier === "quality" ? "~45s" : "~25s"} est.
+                    {getQualityMeta(qualityTier).hint} est.
                   </p>
                   {activeModel && (
                     <span className="text-[11px] text-sky-400/80 bg-sky-500/10 px-1.5 py-0.5 rounded font-medium">
@@ -1380,8 +1399,6 @@ export default function GeneratePage() {
                       setCreationMode(id)
                       setEditMode(false)
                       clearEditSource()
-                      // Auto-upgrade fast → balanced (Standard) for poster mode
-                      if (id === "poster" && qualityTier === "fast") setQualityTier("balanced")
                     }}
                     className={cn(
                       "flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2.5 rounded-[10px] text-sm font-medium transition-all",
@@ -1626,7 +1643,6 @@ export default function GeneratePage() {
               showAdvanced={showAdvanced}
               onAdvancedToggle={() => setShowAdvanced(!showAdvanced)}
               isGenerating={isGenerating}
-              creationMode={creationMode}
             />
 
           </div>{/* end LEFT COLUMN */}
@@ -1693,4 +1709,3 @@ export default function GeneratePage() {
     </div>
   )
 }
-

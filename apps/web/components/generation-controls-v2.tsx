@@ -77,15 +77,13 @@ interface GenerationControlsV2Props {
 
   // State
   isGenerating: boolean
-  creationMode?: "image" | "poster"
 }
 
 // ─── QUALITY COLOR MAPPING ───
 const QUALITY_COLORS: Record<string, string> = {
-  fast: "#71717a",
-  balanced: "#3b82f6",
-  quality: "#8b5cf6",
-  ultra: "#d97706",
+  "1k": "#3b82f6",
+  "2k": "#8b5cf6",
+  "4k": "#d97706",
 }
 
 export function GenerationControlsV2({
@@ -109,9 +107,8 @@ export function GenerationControlsV2({
   showAdvanced,
   onAdvancedToggle,
   isGenerating,
-  creationMode = "image",
 }: GenerationControlsV2Props) {
-  const snap64 = (v: number) => Math.min(2048, Math.max(64, Math.round(v / 64) * 64))
+  const snap64 = (v: number) => Math.min(4096, Math.max(256, Math.round(v / 64) * 64))
 
   return (
     <div className="space-y-4">
@@ -225,8 +222,8 @@ export function GenerationControlsV2({
                       <input
                         type="number"
                         value={customWidth}
-                        min={64}
-                        max={2048}
+                        min={256}
+                        max={4096}
                         step={64}
                         onChange={(e) => onCustomWidthChange(Number(e.target.value))}
                         onBlur={(e) => onCustomWidthChange(snap64(Number(e.target.value)))}
@@ -258,8 +255,8 @@ export function GenerationControlsV2({
                       <input
                         type="number"
                         value={customHeight}
-                        min={64}
-                        max={2048}
+                        min={256}
+                        max={4096}
                         step={64}
                         onChange={(e) => onCustomHeightChange(Number(e.target.value))}
                         onBlur={(e) => onCustomHeightChange(snap64(Number(e.target.value)))}
@@ -276,7 +273,7 @@ export function GenerationControlsV2({
                   </div>
                 </div>
                 <p className="text-[10px] text-muted-foreground/35 mt-2">
-                  Steps of 64px · max 2048px · values auto-snap
+                  Steps of 64px · max 4096px · values auto-snap
                 </p>
               </motion.div>
             )}
@@ -286,12 +283,10 @@ export function GenerationControlsV2({
         {/* Quality Pills */}
         <div>
           <label className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-            <Zap className="h-3 w-3" /> Quality Tier
+            <Zap className="h-3 w-3" /> Resolution
           </label>
           <div className="flex flex-wrap gap-1.5">
-            {qualityOptions
-              .filter((q) => !(creationMode === "poster" && q.value === "fast"))
-              .map((q) => {
+            {qualityOptions.map((q) => {
                 const isSel = qualityTier === q.value
                 return (
                   <button

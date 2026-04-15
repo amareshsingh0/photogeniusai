@@ -4,6 +4,21 @@ import axios from "axios";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
+const LEGACY_QUALITY_MAP: Record<string, string> = {
+  fast: "1k",
+  standard: "2k",
+  balanced: "2k",
+  premium: "2k",
+  quality: "2k",
+  ultra: "4k",
+};
+
+function normalizeQualityTier(quality?: string): string {
+  const normalized = quality?.trim().toLowerCase() ?? "";
+  if (normalized === "1k" || normalized === "2k" || normalized === "4k") return normalized;
+  return LEGACY_QUALITY_MAP[normalized] ?? "1k";
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json() as {
@@ -13,7 +28,8 @@ export async function POST(req: Request) {
       mask_data?: string;
     };
 
-    const { image_url, instruction, quality = "balanced", mask_data } = body;
+    const { image_url, instruction, quality = "1k", mask_data } = body;
+    const normalizedQuality = normalizeQualityTier(quality);
 
     if (!image_url) return NextResponse.json({ success: false, error: "image_url required" }, { status: 400 });
     if (!instruction || instruction.trim().length < 3)
@@ -40,7 +56,7 @@ export async function POST(req: Request) {
 
     const res = await axios.post(
       `${apiBase}/api/v1/edit`,
-      { image_url: resolvedUrl, instruction: instruction.trim(), quality, mask_data },
+      { image_url: resolvedUrl, instruction: instruction.trim(), quality: normalizedQuality, mask_data },
       { timeout: 120_000, headers: { "Content-Type": "application/json" }, validateStatus: null }
     );
 

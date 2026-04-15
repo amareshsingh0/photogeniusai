@@ -625,7 +625,8 @@ class SmartGenerationRouter:
             "flags": dict,
           }
         """
-        from app.services.smart.config import detect_capability_bucket, get_model_config
+        from app.services.smart.config import detect_capability_bucket
+        from app.services.smart.model_config import get_model_for_request
         from app.services.smart.ensemble import run_ensemble, _cache_key, _cache_get, _cache_set
 
         start = time.time()
@@ -659,7 +660,7 @@ class SmartGenerationRouter:
                     dna_hint = f"User prefers {top_style} style."
                     extra_context = f"{extra_context} {dna_hint}".strip() if extra_context else dna_hint
 
-        model_cfg = get_model_config(bucket, tier)
+        model_cfg = get_model_for_request(bucket, tier)
         model_key = model_cfg.get("model", "flux_2_pro")
         rendering_speed = model_cfg.get("rendering_speed", "BALANCED")
 

@@ -71,6 +71,40 @@ _PROVIDER_KEYS = {
 # First entry = cheapest / primary. Rest = ordered fallbacks.
 
 MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
+    # ── Next-gen models used by smart model routing ───────────────────────────
+    "flux_2_flex": [
+        ("fal",      "fal-ai/flux-2-flex",                          0.015),
+    ],
+    "gemini_3_imagen": [
+        ("google",   "gemini-3.0-imagen",                           0.035),
+    ],
+    "gemini_3_1_imagen": [
+        ("google",   "gemini-3.1-imagen",                           0.070),
+    ],
+    "imagen_4_base": [
+        ("google",   "imagen-4-base",                               0.020),
+    ],
+    "imagen_4_fast": [
+        ("google",   "imagen-4-fast",                               0.020),
+    ],
+    "imagen_4_ultra": [
+        ("google",   "imagen-4-ultra",                              0.060),
+    ],
+    "grok_2_imagine": [
+        ("fal",      "xai/grok-imagine-image",                      0.020),
+    ],
+    "ideogram_v3": [
+        ("fal",      "fal-ai/ideogram/v3",                          0.030),
+    ],
+    "seedream_4_5": [
+        ("fal",      "fal-ai/bytedance/seedream/v4.5/text-to-image", 0.030),
+    ],
+    "wan_2_7": [
+        ("fal",      "fal-ai/wan/v2.7/text-to-image",               0.030),
+    ],
+    "recraft_v4_pro": [
+        ("fal",      "fal-ai/recraft/v4/pro/text-to-image",         0.030),
+    ],
     # ── Flux Schnell — pixazo cheapest ($0.0012) + 100 free/day, Fireworks fallback
     "flux_schnell": [
         ("pixazo",   "flux-schnell",                              0.0012),
@@ -148,13 +182,23 @@ _MODEL_KEY_ALIASES = {
     "flux_dev": "flux_2_dev",
     "flux_schnell_fal": "flux_schnell",
     "flux_schnell_pixazo": "flux_schnell",
+    "xai_grok_imagine_image": "grok_2_imagine",
+    "fal_ai_ideogram_v3": "ideogram_v3",
+    "fal_ai_recraft_v4_pro_text_to_image": "recraft_v4_pro",
 }
 
 # Models that need special payload handling
 _SCHNELL_IDS  = {"fal-ai/flux/schnell", "accounts/fireworks/models/flux-1-schnell-fp8"}
 _IDEOGRAM_IDS = {"fal-ai/ideogram/v3"}
-_RECRAFT_IDS  = {"fal-ai/recraft/v4/text-to-image", "fal-ai/recraft/v4/text-to-vector"}
+_RECRAFT_IDS  = {
+    "fal-ai/recraft/v4/text-to-image",
+    "fal-ai/recraft/v4/text-to-vector",
+    "fal-ai/recraft/v4/pro/text-to-image",
+}
 _KONTEXT_IDS  = {"fal-ai/flux-pro/kontext", "fal-ai/flux-pro/kontext/max"}
+_SEEDREAM_IDS = {"fal-ai/bytedance/seedream/v4.5/text-to-image"}
+_WAN_IDS      = {"fal-ai/wan/v2.7/text-to-image"}
+_GROK_IDS     = {"xai/grok-imagine-image"}
 _KIE_ASPECT_RATIO_MAP = {
     "square_hd": "1:1",
     "landscape_16_9": "16:9",
@@ -773,6 +817,40 @@ class MultiProviderClient:
             if style:
                 p["style"] = style
             return p
+
+        if model_id in _SEEDREAM_IDS:
+            return {
+                "prompt": prompt,
+                "image_size": image_size,
+                "num_images": num_images,
+                "max_images": num_images,
+                "enable_safety_checker": True,
+            }
+
+        if model_id in _WAN_IDS:
+            p = {
+                "prompt": prompt,
+                "image_size": image_size,
+                "max_images": num_images,
+                "num_inference_steps": steps,
+                "guidance_scale": guidance,
+                "enable_safety_checker": True,
+                "image_format": "jpeg",
+            }
+            if negative_prompt:
+                p["negative_prompt"] = negative_prompt
+            if seed is not None:
+                p["seed"] = seed
+            return p
+
+        if model_id in _GROK_IDS:
+            return {
+                "prompt": prompt,
+                "num_images": num_images,
+                "aspect_ratio": _kie_aspect_ratio_for_size(image_size),
+                "resolution": "1k",
+                "output_format": "jpeg",
+            }
 
         if model_id in _KONTEXT_IDS:
             p = {"prompt": prompt, "image_size": image_size, "num_images": num_images}

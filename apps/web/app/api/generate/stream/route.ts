@@ -23,8 +23,25 @@ const MODE_MAP: Record<string, string> = {
 };
 
 const CREDITS_MAP: Record<string, number> = {
-  ultra: 3, quality: 3, balanced: 2, fast: 1,
+  "1k": 1,
+  "2k": 2,
+  "4k": 3,
 };
+
+const LEGACY_QUALITY_MAP: Record<string, string> = {
+  fast: "1k",
+  standard: "2k",
+  balanced: "2k",
+  premium: "2k",
+  quality: "2k",
+  ultra: "4k",
+};
+
+function normalizeQualityTier(quality?: string): string {
+  const normalized = quality?.trim().toLowerCase() ?? "";
+  if (normalized in CREDITS_MAP) return normalized;
+  return LEGACY_QUALITY_MAP[normalized] ?? "1k";
+}
 
 export async function POST(req: Request) {
   await cookies(); // ensure dynamic context
@@ -43,7 +60,7 @@ export async function POST(req: Request) {
 
   const {
     prompt,
-    quality = "balanced",
+    quality = "1k",
     style,
     width = 1024,
     height = 1024,
@@ -69,7 +86,8 @@ export async function POST(req: Request) {
     userId = session?.userId ?? null;
   } catch {}
 
-  const creditsUsed = CREDITS_MAP[quality] ?? 2;
+  const normalizedQuality = normalizeQualityTier(quality);
+  const creditsUsed = CREDITS_MAP[normalizedQuality] ?? 1;
 
   // Fetch user's saved brand kit from DB and merge with inline brand_kit
   // Inline brand_kit (from generate page URL import) wins over saved DB values
@@ -101,7 +119,7 @@ export async function POST(req: Request) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt: prompt.trim(),
-        quality,
+        quality: normalizedQuality,
         style,
         width,
         height,
@@ -169,7 +187,7 @@ export async function POST(req: Request) {
                         postGenSafetyPassed: true,
                         isDeleted: false,
                         creditsUsed,
-                        qualityTierUsed: quality,
+                        qualityTierUsed: normalizedQuality,
                         aestheticScore: null,
                       },
                     });

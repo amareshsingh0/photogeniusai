@@ -24,6 +24,7 @@ import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
+from app.services.smart.model_config import QualityTier, normalize_quality_tier
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["streaming"])
@@ -50,6 +51,7 @@ def _get_http_client() -> httpx.AsyncClient:
 
 
 _MODEL_LABELS = {
+    "flux_2_flex":       "Flux 2 Flex",
     "flux_2_pro":        "Flux 2 Pro",
     "flux_2_dev":        "Flux 2 Dev",
     "flux_2_turbo":      "Flux 2 Turbo",
@@ -59,6 +61,16 @@ _MODEL_LABELS = {
     "flux_dev":          "Flux 2 Dev",
     "flux_redux":        "Flux Redux",
     "flux_fill":         "Flux Fill",
+    "gemini_3_imagen":   "Gemini 3 Imagen",
+    "gemini_3_1_imagen": "Gemini 3.1 Imagen",
+    "imagen_4_base":     "Imagen 4 Base",
+    "imagen_4_fast":     "Imagen 4 Fast",
+    "imagen_4_ultra":    "Imagen 4 Ultra",
+    "grok_2_imagine":    "Grok 2 Imagine",
+    "ideogram_v3":       "Ideogram v3",
+    "recraft_v4_pro":    "Recraft v4 Pro",
+    "seedream_4_5":      "Seedream 4.5",
+    "wan_2_7":           "Wan 2.7",
     "ideogram_turbo":    "Ideogram v3 Turbo",
     "ideogram_quality":  "Ideogram v3 Quality",
     "recraft_v4":        "Recraft v4",
@@ -73,30 +85,38 @@ _MODEL_ALIASES = {
     "flux_dev": "flux_2_dev",
     "flux_schnell_fal": "flux_schnell",
     "flux_schnell_pixazo": "flux_schnell",
+    "fal_ai_flux_2_flex": "flux_2_flex",
+    "gemini_3_0_imagen": "gemini_3_imagen",
+    "hunyuan_image_v1": "hunyuan_image",
+    "fal_ai_bytedance_seedream_v4_5_text_to_image": "seedream_4_5",
+    "fal_ai_wan_v2_7_text_to_image": "wan_2_7",
+    "xai_grok_imagine_image": "grok_2_imagine",
+    "fal_ai_recraft_v4_pro_text_to_image": "recraft_v4_pro",
 }
 
 _QUALITY_SECONDS = {
-    "fast":     8,
-    "balanced": 25,
-    "quality":  45,
-    "ultra":    60,
+    QualityTier.RES_1K.value: 10,
+    QualityTier.RES_2K.value: 30,
+    QualityTier.RES_4K.value: 60,
 }
 
-# Per-quality inference steps (honoring all 4 tiers)
+# Per-tier inference steps
 _QUALITY_STEPS = {
-    "fast":     8,
-    "balanced": 20,
-    "quality":  35,
-    "ultra":    50,
+    QualityTier.RES_1K.value: 12,
+    QualityTier.RES_2K.value: 25,
+    QualityTier.RES_4K.value: 50,
 }
 
 # guidance_scale per model family
 _MODEL_GUIDANCE = {
+    "ideogram_v3":      3.0,
     "ideogram_turbo":   3.0,
     "ideogram_quality": 3.0,
+    "recraft_v4_pro":   4.0,
     "recraft_v4":       4.0,
     "recraft_v4_svg":   4.0,
     "hunyuan_image":    4.0,
+    "wan_2_7":          4.0,
 }
 _DEFAULT_GUIDANCE = 3.5
 
@@ -111,10 +131,10 @@ def _parse_bool_env(name: str, default: bool = True) -> bool:
 
 class StreamRequest(BaseModel):
     prompt: str = Field(..., min_length=3, max_length=2000)
-    quality: Optional[str] = Field(default="balanced")
+    quality: Optional[str] = Field(default=QualityTier.RES_1K.value)
     style: Optional[str] = Field(default=None)
-    width: int = Field(default=1024, ge=256, le=2048)
-    height: int = Field(default=1024, ge=256, le=2048)
+    width: int = Field(default=1024, ge=256, le=4096)
+    height: int = Field(default=1024, ge=256, le=4096)
     reference_image_url: Optional[str] = Field(default=None)
     negative_prompt: Optional[str] = Field(default=None)
     brand_kit: Optional[dict] = Field(default=None)
@@ -124,16 +144,13 @@ class StreamRequest(BaseModel):
     @field_validator("quality")
     @classmethod
     def validate_quality(cls, v: Optional[str]) -> str:
-        allowed = ("fast", "balanced", "quality", "ultra")
-        if not v or v.lower() not in allowed:
-            return "balanced"
-        return v.lower()
+        return normalize_quality_tier(v)
 
     @field_validator("width", "height")
     @classmethod
     def validate_resolution(cls, v: int) -> int:
         # Snap to nearest 64
-        return max(256, min(2048, round(v / 64) * 64))
+        return max(256, min(4096, round(v / 64) * 64))
 
 
 def _sse(event: str, data: dict) -> str:
@@ -161,7 +178,15 @@ def _pick_image_size(width: int, height: int) -> str:
 
 
 def _canonical_model_key(model_key: Optional[str], default: str = "flux_2_pro") -> str:
-    normalized = (model_key or "").strip().lower().replace(" ", "_").replace(".", "_").replace("-", "_")
+    normalized = (
+        (model_key or "")
+        .strip()
+        .lower()
+        .replace(" ", "_")
+        .replace(".", "_")
+        .replace("-", "_")
+        .replace("/", "_")
+    )
     if not normalized:
         return default
     return _MODEL_ALIASES.get(normalized, normalized)
@@ -269,7 +294,10 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         bucket = detect_capability_bucket(req.prompt)
         model_cfg = get_model_for_request(bucket, quality)
 
-        fal_model_key = _canonical_model_key(model_cfg.get("model"), default="flux_2_pro")
+        fal_model_key = _canonical_model_key(
+            model_cfg.get("model_key") or model_cfg.get("model"),
+            default="flux_2_pro",
+        )
         if not model_cfg.get("model"):
             fal_model_key = "flux_2_pro"
             logger.warning("[stream][%s] model_cfg missing 'model' key for bucket=%s quality=%s, falling back to flux_2_pro", trace_id, bucket, quality)
@@ -362,7 +390,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         if req.negative_prompt is not None:
             negative_prompt = f"{req.negative_prompt}, {negative_prompt}" if negative_prompt else req.negative_prompt
 
-        # Typography bucket — use model from config.py BUCKET_MODEL_MAP (no hardcoded override)
+        # Typography bucket — use model from model_config.py BUCKET_MODEL_MAP (no hardcoded override)
         if bucket == "typography":
             logger.info("[stream][%s] Typography bucket → using config model: %s", trace_id, fal_model_key)
 
@@ -400,10 +428,10 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         # ── Generation via multi-provider client (with keepalives) ─────────
         from app.services.external.multi_provider_client import multi_client
 
-        # Dual Variant (Phase 6): premium/ultra + creative_bible → Safe + Experimental in parallel
+        # Dual Variant (Phase 6): 2k/4k + creative_bible → Safe + Experimental in parallel
         _creative_bible = brief.get("creative_bible") or {}
         _run_dual = (
-            quality in ("quality", "ultra")
+            quality in (QualityTier.RES_2K.value, QualityTier.RES_4K.value)
             and bool(_creative_bible.get("visual_metaphors"))
         )
         _experimental_prompt: Optional[str] = None
@@ -496,7 +524,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         quality_gate_result = None
         creative_bible = brief.get("creative_bible") or {}
         _run_quality_gate = (
-            quality != "fast"
+            quality != QualityTier.RES_1K.value
             and bool(creative_bible.get("emotional_territory"))
         )
 
@@ -514,8 +542,8 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             try:
                 from app.services.smart.quality_critic import QualityCritic
 
-                # Map quality tier to critic tier
-                critic_tier = "standard" if quality == "quality" else quality
+                # Preserve legacy critic thresholds: middle tier uses standard, top tier uses ultra.
+                critic_tier = "standard" if quality == QualityTier.RES_2K.value else "ultra"
                 critic = QualityCritic(tier=critic_tier)
 
                 # Build design_brief for critic context
@@ -796,7 +824,7 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
             "testing_mode": True,
         })
 
-        # Get all testing-enabled models for this bucket
+        # Get all testing-enabled models.
         prisma = Prisma()
         await prisma.connect()
 
@@ -807,21 +835,18 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
             }
         )
 
-        # Filter by bucket
-        applicable_models = [m for m in models if bucket in m.buckets]
-
-        if not applicable_models:
+        if not models:
             await prisma.disconnect()
-            yield _sse("error", {"message": f"No testing models found for bucket: {bucket}"})
+            yield _sse("error", {"message": "No testing-enabled models found"})
             return
 
-        logger.info(f"[parallel][{trace_id}] Testing {len(applicable_models)} models: {[m.modelId for m in applicable_models]}")
+        logger.info(f"[parallel][{trace_id}] Testing {len(models)} models: {[m.modelId for m in models]}")
 
         await prisma.disconnect()
 
         # Generate from each model in parallel
         tasks = []
-        for model in applicable_models:
+        for model in models:
             task = _generate_with_model(req, model.modelId, trace_id)
             tasks.append(task)
 
@@ -841,7 +866,7 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
                 })
 
         yield _sse("testing_complete", {
-            "total_models": len(applicable_models),
+            "total_models": len(models),
             "trace_id": trace_id,
         })
 
@@ -866,19 +891,19 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
     start = time.time()
 
     try:
-        from app.services.external.multi_provider_client import MultiProviderClient
+        from app.services.external.multi_provider_client import multi_client
         from prisma import Prisma
 
-        client = MultiProviderClient()
-
         # Generate image
-        result = await client.generate_image_fal(
+        result = await multi_client.generate(
             prompt=req.prompt,
             model_key=model_id,
-            size_string=f"{req.width}x{req.height}",
+            image_size=_pick_image_size(req.width, req.height),
+            num_images=1,
             num_inference_steps=_QUALITY_STEPS.get(req.quality, 20),
             guidance_scale=_MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
-            negative_prompt=req.negative_prompt,
+            negative_prompt=req.negative_prompt or "",
+            reference_image_url=req.reference_image_url,
         )
 
         latency = time.time() - start

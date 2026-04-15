@@ -30,10 +30,32 @@ class ModelProvider(str, Enum):
     RECRAFT = "recraft"
 
 class QualityTier(str, Enum):
-    FAST = "fast"
-    STANDARD = "standard"
-    PREMIUM = "premium"
-    ULTRA = "ultra"
+    RES_1K = "1k"
+    RES_2K = "2k"
+    RES_4K = "4k"
+
+
+_LEGACY_TIER_MAP = {
+    "fast": QualityTier.RES_1K,
+    "standard": QualityTier.RES_2K,
+    "balanced": QualityTier.RES_2K,
+    "premium": QualityTier.RES_2K,
+    "quality": QualityTier.RES_2K,
+    "ultra": QualityTier.RES_4K,
+}
+
+
+def normalize_quality_tier(tier: Optional[str]) -> str:
+    """Normalize modern and legacy tier names to 1k/2k/4k."""
+    normalized = (tier or "").strip().lower()
+    if not normalized:
+        return QualityTier.RES_1K.value
+    if normalized in QualityTier._value2member_map_:
+        return normalized
+    legacy = _LEGACY_TIER_MAP.get(normalized)
+    if legacy:
+        return legacy.value
+    return QualityTier.RES_1K.value
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MODEL REGISTRY - Next-Gen Models (April 2026)
@@ -252,66 +274,58 @@ MODEL_REGISTRY = {
 BUCKET_MODEL_MAP = {
     # Typography/Poster → Ideogram v3 (best text rendering)
     "typography": {
-        QualityTier.FAST: "seedream_4_5",
-        QualityTier.STANDARD: "ideogram_v3",
-        QualityTier.PREMIUM: "ideogram_v3",
-        QualityTier.ULTRA: "imagen_4_ultra",
+        QualityTier.RES_1K: "ideogram_v3",
+        QualityTier.RES_2K: "gemini_3_1_imagen",
+        QualityTier.RES_4K: "imagen_4_ultra",
     },
 
     # Photorealism → Flux 2 Flex + Imagen 4
     "photorealism": {
-        QualityTier.FAST: "flux_2_flex",
-        QualityTier.STANDARD: "gemini_3_imagen",
-        QualityTier.PREMIUM: "imagen_4_base",
-        QualityTier.ULTRA: "imagen_4_ultra",
+        QualityTier.RES_1K: "flux_2_flex",
+        QualityTier.RES_2K: "imagen_4_base",
+        QualityTier.RES_4K: "imagen_4_ultra",
     },
 
     # Portrait → Hunyuan (best faces) + Imagen 4
     "photorealism_portrait": {
-        QualityTier.FAST: "hunyuan_image",
-        QualityTier.STANDARD: "gemini_3_imagen",
-        QualityTier.PREMIUM: "gemini_3_1_imagen",
-        QualityTier.ULTRA: "imagen_4_ultra",
+        QualityTier.RES_1K: "hunyuan_image",
+        QualityTier.RES_2K: "gemini_3_1_imagen",
+        QualityTier.RES_4K: "imagen_4_ultra",
     },
 
     # Product → Flux 2 Flex (clean, professional)
     "photorealism_product": {
-        QualityTier.FAST: "flux_2_flex",
-        QualityTier.STANDARD: "imagen_4_fast",
-        QualityTier.PREMIUM: "imagen_4_base",
-        QualityTier.ULTRA: "imagen_4_ultra",
+        QualityTier.RES_1K: "flux_2_flex",
+        QualityTier.RES_2K: "imagen_4_base",
+        QualityTier.RES_4K: "imagen_4_ultra",
     },
 
     # Artistic/Creative → Grok 2 + Wan 2.7
     "artistic": {
-        QualityTier.FAST: "wan_2_7",
-        QualityTier.STANDARD: "grok_2_imagine",
-        QualityTier.PREMIUM: "gemini_3_1_imagen",
-        QualityTier.ULTRA: "imagen_4_ultra",
+        QualityTier.RES_1K: "grok_2_imagine",
+        QualityTier.RES_2K: "gemini_3_1_imagen",
+        QualityTier.RES_4K: "imagen_4_ultra",
     },
 
     # Anime/Illustration → Wan 2.7 specialist
     "anime": {
-        QualityTier.FAST: "wan_2_7",
-        QualityTier.STANDARD: "wan_2_7",
-        QualityTier.PREMIUM: "grok_2_imagine",
-        QualityTier.ULTRA: "gemini_3_1_imagen",
+        QualityTier.RES_1K: "wan_2_7",
+        QualityTier.RES_2K: "gemini_3_1_imagen",
+        QualityTier.RES_4K: "imagen_4_ultra",
     },
 
     # Vector/Logo → Recraft v4 Pro
     "vector": {
-        QualityTier.FAST: "recraft_v4_pro",
-        QualityTier.STANDARD: "recraft_v4_pro",
-        QualityTier.PREMIUM: "recraft_v4_pro",
-        QualityTier.ULTRA: "recraft_v4_pro",
+        QualityTier.RES_1K: "ideogram_v3",
+        QualityTier.RES_2K: "recraft_v4_pro",
+        QualityTier.RES_4K: "imagen_4_ultra",
     },
 
     # Fast generation → Seedream 4.5
     "fast": {
-        QualityTier.FAST: "seedream_4_5",
-        QualityTier.STANDARD: "flux_2_flex",
-        QualityTier.PREMIUM: "imagen_4_fast",
-        QualityTier.ULTRA: "imagen_4_base",
+        QualityTier.RES_1K: "seedream_4_5",
+        QualityTier.RES_2K: "gemini_3_imagen",
+        QualityTier.RES_4K: "imagen_4_ultra",
     },
 }
 
@@ -320,10 +334,9 @@ BUCKET_MODEL_MAP = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 TIER_DEFAULT_MODELS = {
-    QualityTier.FAST: "seedream_4_5",        # Fastest + cheapest
-    QualityTier.STANDARD: "flux_2_flex",      # Good balance
-    QualityTier.PREMIUM: "gemini_3_1_imagen", # High quality
-    QualityTier.ULTRA: "imagen_4_ultra",      # Maximum quality
+    QualityTier.RES_1K: "flux_2_flex",
+    QualityTier.RES_2K: "imagen_4_base",
+    QualityTier.RES_4K: "imagen_4_ultra",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -340,17 +353,19 @@ def get_model_for_request(
 
     Args:
         bucket: Capability bucket (typography, photorealism, etc.)
-        tier: Quality tier (fast, standard, premium, ultra)
+        tier: Resolution tier (1k, 2k, 4k) or legacy quality tier
         provider_override: Force specific provider (optional)
 
     Returns:
         Model configuration dict compatible with generate_stream.py format:
         {"model": endpoint, "provider": provider, "num_images": num, ...}
     """
-    tier_enum = QualityTier(tier.lower())
+    normalized_tier = normalize_quality_tier(tier)
+    tier_enum = QualityTier(normalized_tier)
 
     # Provider override (force specific model)
     if provider_override and provider_override in MODEL_REGISTRY:
+        model_key = provider_override
         model_spec = MODEL_REGISTRY[provider_override]
     # Bucket-specific routing
     elif bucket in BUCKET_MODEL_MAP:
@@ -368,8 +383,11 @@ def get_model_for_request(
 
     # Convert to generate_stream.py compatible format
     result = {
+        "model_key": model_key,
         "model": model_spec["endpoint"],  # e.g. "fal-ai/flux-2-flex"
-        "provider": str(model_spec["provider"]),  # e.g. "fal"
+        "provider": model_spec["provider"].value,  # e.g. "fal"
+        "display_name": model_spec["display_name"],
+        "tier_used": normalized_tier,
         "cost_per_image": model_spec["cost_per_image"],
         "avg_latency": model_spec["avg_latency"],
         "max_resolution": model_spec["max_resolution"],

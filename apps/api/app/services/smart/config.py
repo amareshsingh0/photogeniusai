@@ -586,7 +586,7 @@ def get_brand(name: str = "default") -> BrandGuidelines:
 #
 # HOW TO UPDATE:
 #   1. Run monthly benchmark (same 10 prompts across all models)
-#   2. Update BUCKET_MODEL_MAP with new winners
+#   2. Update BUCKET_MODEL_MAP in model_config.py with new winners
 #   3. Never touch BUCKET_KEYWORDS — those are intent signals, not model names
 #
 # BUCKETS (capability-first, model-agnostic):
@@ -653,90 +653,9 @@ BUCKET_KEYWORDS: Dict[str, List[str]] = {
     "photorealism": [],
 }
 
-# ── Model mapping per bucket per tier ─────────────────────────────────────────
-# Format: { bucket: { tier: { "model": fal_model_key, "backend": "fal"|"ideogram"|"replicate" } } }
-# Update ONLY this section when model rankings change.
 
-BUCKET_MODEL_MAP: Dict[str, Dict[str, Dict]] = {
-    # ── Photorealism / Portrait / Product ─────────────────────────────────────
-    # Jury ONLY in ultra. ESRGAN applied in backend for standard/premium/ultra.
-    "photorealism": {
-        "fast":     {"model": "flux_schnell",  "provider": "multi"},
-        "standard": {"model": "flux_2_pro",    "provider": "multi"},
-        "premium":  {"model": "flux_2_max",    "provider": "multi"},
-        "ultra":    {"model": "flux_2_max",    "provider": "multi", "num_images": 3},
-    },
-    # ── Typography / Text in image / Posters / Ads ───────────────────────────
-    # Flux 2 Pro for ALL tiers — BEST text rendering accuracy in industry
-    # ($0.025/image via kie.ai, much cheaper + better than Ideogram's $0.09)
-    "typography": {
-        "fast":     {"model": "flux_2_pro", "provider": "multi"},
-        "standard": {"model": "flux_2_pro", "provider": "multi"},
-        "premium":  {"model": "flux_2_pro", "provider": "multi"},
-        "ultra":    {"model": "flux_2_pro", "provider": "multi", "num_images": 2},
-    },
-    # ── Artistic / Cinematic / Creative ───────────────────────────────────────
-    "artistic": {
-        "fast":     {"model": "flux_schnell",  "provider": "multi"},
-        "standard": {"model": "flux_2_dev",    "provider": "multi"},
-        "premium":  {"model": "flux_2_max",    "provider": "multi"},
-        "ultra":    {"model": "flux_2_max",    "provider": "multi", "num_images": 3},
-    },
-    # ── Anime / Manga / Asian art ─────────────────────────────────────────────
-    "anime": {
-        "fast":     {"model": "flux_schnell",   "provider": "multi"},
-        "standard": {"model": "hunyuan_image",  "provider": "multi"},
-        "premium":  {"model": "hunyuan_image",  "provider": "multi"},
-        "ultra":    {"model": "hunyuan_image",  "provider": "multi", "num_images": 3},
-    },
-    # ── Character Consistency / Same-person edits ─────────────────────────────
-    "character_consistency": {
-        "fast":     {"model": "flux_schnell",     "provider": "multi"},
-        "standard": {"model": "flux_kontext",     "provider": "multi"},
-        "premium":  {"model": "flux_kontext",     "provider": "multi"},
-        "ultra":    {"model": "flux_kontext_max", "provider": "multi", "num_images": 2},
-    },
-    # ── Image Editing / Inpainting / Outpainting ──────────────────────────────
-    "editing": {
-        "fast":     {"model": "flux_kontext",     "provider": "multi"},
-        "standard": {"model": "flux_kontext",     "provider": "multi"},
-        "premium":  {"model": "flux_kontext_max", "provider": "multi"},
-        "ultra":    {"model": "flux_kontext_max", "provider": "multi", "num_images": 2},
-    },
-    # ── Vector / SVG / Icons / Flat Design ───────────────────────────────────
-    "vector": {
-        "fast":     {"model": "recraft_v4",     "provider": "multi"},
-        "standard": {"model": "recraft_v4_svg", "provider": "multi"},
-        "premium":  {"model": "recraft_v4_svg", "provider": "multi"},
-        "ultra":    {"model": "recraft_v4_svg", "provider": "multi", "num_images": 2},
-    },
-    # ── Interior Design / Architecture ────────────────────────────────────────
-    "interior_arch": {
-        "fast":     {"model": "flux_schnell",  "provider": "multi"},
-        "standard": {"model": "flux_2_pro",    "provider": "multi"},
-        "premium":  {"model": "flux_2_max",    "provider": "multi"},
-        "ultra":    {"model": "flux_2_max",    "provider": "multi", "num_images": 2},
-    },
-    # ── Fast / Draft / Preview ────────────────────────────────────────────────
-    "fast": {
-        "fast":     {"model": "flux_schnell",  "provider": "multi"},
-        "standard": {"model": "flux_2_turbo",  "provider": "multi"},
-        "premium":  {"model": "flux_2_pro",    "provider": "multi"},
-        "ultra":    {"model": "flux_2_pro",    "provider": "multi", "num_images": 2},
-    },
-}
-
-# Tier aliases (web quality string → internal tier key)
-TIER_ALIASES: Dict[str, str] = {
-    "fast":      "fast",
-    "balanced":  "standard",
-    "quality":   "premium",
-    "ultra":     "ultra",
-    # GPU tier names (legacy compat)
-    "FAST":      "fast",
-    "STANDARD":  "standard",
-    "PREMIUM":   "premium",
-}
+# NOTE: BUCKET_MODEL_MAP moved to model_config.py (3-provider routing: fal.ai, Google Vertex, WaveSpeed)
+# config.py now only handles bucket detection (detect_capability_bucket)
 
 
 _PORTRAIT_KEYWORDS = [
@@ -895,16 +814,3 @@ def detect_capability_bucket(prompt: str) -> str:
     return "photorealism"
 
 
-def get_model_config(capability_bucket: str, tier: str) -> Dict:
-    """
-    Get the model config for a given bucket + tier.
-
-    Returns dict with keys: model, backend, and any extra kwargs.
-    Falls back gracefully: sub-buckets → photorealism, unknown bucket → photorealism,
-    unknown tier → standard.
-    """
-    resolved_tier = TIER_ALIASES.get(tier, "standard")
-    # Sub-buckets (e.g. photorealism_portrait) use the photorealism model map
-    base_bucket = capability_bucket.split("_")[0] if capability_bucket.startswith("photorealism_") else capability_bucket
-    bucket_map = BUCKET_MODEL_MAP.get(base_bucket, BUCKET_MODEL_MAP["photorealism"])
-    return bucket_map.get(resolved_tier, bucket_map.get("standard", {"model": "flux_2_pro", "provider": "multi"}))

@@ -14,7 +14,9 @@ import time
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.services.smart.model_config import QualityTier, normalize_quality_tier
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["edit"])
@@ -23,11 +25,16 @@ router = APIRouter(tags=["edit"])
 class EditRequest(BaseModel):
     image_url: str  = Field(..., description="URL of the image to edit")
     instruction: str = Field(..., min_length=3, max_length=1000)
-    quality:   Optional[str] = Field(default="balanced")
-    width:     int  = Field(default=1024, ge=256, le=2048)
-    height:    int  = Field(default=1024, ge=256, le=2048)
+    quality:   Optional[str] = Field(default=QualityTier.RES_1K.value)
+    width:     int  = Field(default=1024, ge=256, le=4096)
+    height:    int  = Field(default=1024, ge=256, le=4096)
     # Targeted edit — base64-encoded PNG mask (white=edit, black=keep)
     mask_data: Optional[str] = Field(default=None, description="base64 PNG mask for inpainting")
+
+    @field_validator("quality")
+    @classmethod
+    def validate_quality(cls, v: Optional[str]) -> str:
+        return normalize_quality_tier(v)
 
 
 class EditResponse(BaseModel):
@@ -93,7 +100,7 @@ async def edit_image(request: EditRequest):
                 mask_url=mask_url,
                 prompt=request.instruction,
                 image_size="square_hd",
-                num_inference_steps=28 if request.quality != "fast" else 12,
+                num_inference_steps=50 if request.quality == QualityTier.RES_4K.value else 28 if request.quality == QualityTier.RES_2K.value else 12,
                 guidance_scale=7.0,
             )
         except Exception as e:
@@ -117,7 +124,7 @@ async def edit_image(request: EditRequest):
         )
 
     # ── Global edit: no mask → Flux Kontext instruction editing ──────────────
-    model = "flux_kontext_max" if request.quality == "quality" else "flux_kontext"
+    model = "flux_kontext_max" if request.quality in (QualityTier.RES_2K.value, QualityTier.RES_4K.value) else "flux_kontext"
     logger.info("[EDIT/global] instruction=%r model=%s", request.instruction[:60], model)
 
     try:
