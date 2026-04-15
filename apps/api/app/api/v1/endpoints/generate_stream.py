@@ -263,10 +263,11 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         })
 
         # ── Capability routing ─────────────────────────────────────────────
-        from app.services.smart.config import detect_capability_bucket, get_model_config
+        from app.services.smart.config import detect_capability_bucket
+        from app.services.smart.model_config import get_model_for_request
 
         bucket = detect_capability_bucket(req.prompt)
-        model_cfg = get_model_config(bucket, quality)
+        model_cfg = get_model_for_request(bucket, quality)
 
         fal_model_key = _canonical_model_key(model_cfg.get("model"), default="flux_2_pro")
         if not model_cfg.get("model"):

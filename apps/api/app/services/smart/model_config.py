@@ -344,23 +344,39 @@ def get_model_for_request(
         provider_override: Force specific provider (optional)
 
     Returns:
-        Model configuration dict
+        Model configuration dict compatible with generate_stream.py format:
+        {"model": endpoint, "provider": provider, "num_images": num, ...}
     """
     tier_enum = QualityTier(tier.lower())
 
     # Provider override (force specific model)
     if provider_override and provider_override in MODEL_REGISTRY:
-        return MODEL_REGISTRY[provider_override]
-
+        model_spec = MODEL_REGISTRY[provider_override]
     # Bucket-specific routing
-    if bucket in BUCKET_MODEL_MAP:
+    elif bucket in BUCKET_MODEL_MAP:
         model_key = BUCKET_MODEL_MAP[bucket].get(tier_enum)
         if model_key:
-            return MODEL_REGISTRY[model_key]
+            model_spec = MODEL_REGISTRY[model_key]
+        else:
+            # Fallback to tier default
+            model_key = TIER_DEFAULT_MODELS[tier_enum]
+            model_spec = MODEL_REGISTRY[model_key]
+    else:
+        # Fallback to tier default
+        model_key = TIER_DEFAULT_MODELS[tier_enum]
+        model_spec = MODEL_REGISTRY[model_key]
 
-    # Fallback to tier default
-    model_key = TIER_DEFAULT_MODELS[tier_enum]
-    return MODEL_REGISTRY[model_key]
+    # Convert to generate_stream.py compatible format
+    result = {
+        "model": model_spec["endpoint"],  # e.g. "fal-ai/flux-2-flex"
+        "provider": str(model_spec["provider"]),  # e.g. "fal"
+        "cost_per_image": model_spec["cost_per_image"],
+        "avg_latency": model_spec["avg_latency"],
+        "max_resolution": model_spec["max_resolution"],
+        "num_images": 1,  # Always 1 image per model (admin testing mode handles multiple models)
+    }
+
+    return result
 
 def list_available_models(
     provider: Optional[ModelProvider] = None,
