@@ -404,7 +404,6 @@ class MultiProviderClient:
                            guidance_scale: float, seed, **kwargs) -> Dict:
         """Google Imagen 3 — via Google AI Studio REST API ($0.02/image)."""
         import asyncio
-        from app.services.smart.model_config import MODEL_REGISTRY
         start = time.time()
 
         api_key = self._keys.get("google", "")
@@ -413,8 +412,13 @@ class MultiProviderClient:
             return self._error(model_id, "GEMINI_API_KEY not set", 0.0)
 
         # Get the correct endpoint from model registry
-        endpoint = MODEL_REGISTRY.get(model_id, {}).get("endpoint", model_id)
-        logger.info("[google] model_id=%s → endpoint=%s", model_id, endpoint)
+        try:
+            from app.services.smart.model_config import MODEL_REGISTRY
+            endpoint = MODEL_REGISTRY.get(model_id, {}).get("endpoint", model_id)
+            print(f"[GOOGLE_DEBUG] model_id={model_id} → endpoint={endpoint}", flush=True)
+        except Exception as e:
+            print(f"[GOOGLE_DEBUG] Failed to load MODEL_REGISTRY: {e}", flush=True)
+            endpoint = model_id
 
         # Map image_size to aspect ratio
         aspect_map = {
