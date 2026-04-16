@@ -66,19 +66,19 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
         ("fal",      "fal-ai/flux-2-flex",                          0.015),
     ],
     "gemini_3_imagen": [
-        ("google",   "gemini-3.0-imagen",                           0.035),
+        ("google",   "gemini_3_imagen",                             0.035),
     ],
     "gemini_3_1_imagen": [
-        ("google",   "gemini-3.1-imagen",                           0.070),
+        ("google",   "gemini_3_1_imagen",                           0.070),
     ],
     "imagen_4_base": [
-        ("google",   "imagen-4-base",                               0.020),
+        ("google",   "imagen_4_base",                               0.020),
     ],
     "imagen_4_fast": [
-        ("google",   "imagen-4-fast",                               0.020),
+        ("google",   "imagen_4_fast",                               0.020),
     ],
     "imagen_4_ultra": [
-        ("google",   "imagen-4-ultra",                              0.060),
+        ("google",   "imagen_4_ultra",                              0.060),
     ],
     "grok_2_imagine": [
         ("fal",      "xai/grok-imagine-image",                      0.020),
@@ -415,9 +415,8 @@ class MultiProviderClient:
         try:
             from app.services.smart.model_config import MODEL_REGISTRY
             endpoint = MODEL_REGISTRY.get(model_id, {}).get("endpoint", model_id)
-            print(f"[GOOGLE_DEBUG] model_id={model_id} → endpoint={endpoint}", flush=True)
         except Exception as e:
-            print(f"[GOOGLE_DEBUG] Failed to load MODEL_REGISTRY: {e}", flush=True)
+            logger.error("[google] Failed to load MODEL_REGISTRY: %s", e)
             endpoint = model_id
 
         # Map image_size to aspect ratio
