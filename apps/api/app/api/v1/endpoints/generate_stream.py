@@ -937,7 +937,7 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
 
         generation = await prisma.generation.create(
             data={
-                "userId": "DEV_USER",  # Replace with actual user_id when auth implemented
+                "userId": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c",  # DEV_USER UUID
                 "mode": "REALISM",  # Default mode
                 "originalPrompt": req.prompt,
                 "enhancedPrompt": req.prompt,
@@ -945,7 +945,7 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
                 "guidanceScale": _MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
                 "width": req.width,
                 "height": req.height,
-                "outputUrls": [result.get("image_url")],
+                "outputUrls": {"urls": [result.get("image_url")]},  # JSON object with array
                 "selectedOutputUrl": result.get("image_url"),
                 "creditsUsed": 0,  # Testing mode = free
                 "qualityTierUsed": req.quality,
