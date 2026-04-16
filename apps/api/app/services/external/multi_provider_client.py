@@ -414,6 +414,7 @@ class MultiProviderClient:
 
         # Get the correct endpoint from model registry
         endpoint = MODEL_REGISTRY.get(model_id, {}).get("endpoint", model_id)
+        logger.info("[google] model_id=%s → endpoint=%s", model_id, endpoint)
 
         # Map image_size to aspect ratio
         aspect_map = {
