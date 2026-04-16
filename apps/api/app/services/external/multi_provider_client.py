@@ -404,12 +404,16 @@ class MultiProviderClient:
                            guidance_scale: float, seed, **kwargs) -> Dict:
         """Google Imagen 3 — via Google AI Studio REST API ($0.02/image)."""
         import asyncio
+        from app.services.smart.model_config import MODEL_REGISTRY
         start = time.time()
 
         api_key = self._keys.get("google", "")
         if not api_key:
             logger.error("[google] GEMINI_API_KEY not set")
             return self._error(model_id, "GEMINI_API_KEY not set", 0.0)
+
+        # Get the correct endpoint from model registry
+        endpoint = MODEL_REGISTRY.get(model_id, {}).get("endpoint", model_id)
 
         # Map image_size to aspect ratio
         aspect_map = {
@@ -428,7 +432,7 @@ class MultiProviderClient:
 
         try:
             # Google AI Studio REST API endpoint for Imagen 3
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateImages?key={api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{endpoint}:generateImages?key={api_key}"
 
             payload = {
                 "prompt": full_prompt,
