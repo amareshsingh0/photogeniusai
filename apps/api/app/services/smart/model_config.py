@@ -82,8 +82,8 @@ MODEL_REGISTRY = {
     # Batch API 50% off available
     "gemini_3_imagen": {
         "provider": ModelProvider.GOOGLE,
-        "endpoint": "gemini-3.0-imagen",
-        "display_name": "Gemini 3 Imagen",
+        "endpoint": "imagen-3.0-generate-001",
+        "display_name": "Imagen 3",
         "cost_per_image": 0.035,  # $0.035 (Batch API 50% off = $0.0175)
         "avg_latency": 4.0,  # Very Fast
         "max_resolution": 2048,
@@ -96,8 +96,8 @@ MODEL_REGISTRY = {
 
     "gemini_3_1_imagen": {
         "provider": ModelProvider.GOOGLE,
-        "endpoint": "gemini-3.1-imagen",
-        "display_name": "Gemini 3.1 Imagen",
+        "endpoint": "imagen-3.0-generate-001",
+        "display_name": "Imagen 3 Pro",
         "cost_per_image": 0.070,  # $0.070 (Batch API 50% off = $0.035)
         "avg_latency": 6.0,  # Fast
         "max_resolution": 2048,
@@ -108,14 +108,14 @@ MODEL_REGISTRY = {
         "rating": 9.0,
     },
 
-    # ═══ GOOGLE IMAGEN 4 (Google AI) ═══
+    # ═══ GOOGLE IMAGEN 3 VARIANTS (Google AI) ═══
     # Enterprise photoreal, high-res, Ultra = top photoreal (modal_list.md row 7)
     # Photo Quality: ⭐⭐⭐⭐⭐ | Text Quality: ⭐⭐⭐⭐ | Speed: Fast
     # Bulk discounts on Google AI routing
     "imagen_4_base": {
         "provider": ModelProvider.GOOGLE,
-        "endpoint": "imagen-4-base",
-        "display_name": "Imagen 4 Base",
+        "endpoint": "imagen-3.0-generate-001",
+        "display_name": "Imagen 3 Standard",
         "cost_per_image": 0.020,  # $0.020 (bulk discounts available)
         "avg_latency": 8.0,  # Fast
         "max_resolution": 2048,
@@ -128,8 +128,8 @@ MODEL_REGISTRY = {
 
     "imagen_4_fast": {
         "provider": ModelProvider.GOOGLE,
-        "endpoint": "imagen-4-fast",
-        "display_name": "Imagen 4 Fast",
+        "endpoint": "imagen-3.0-fast-generate-001",
+        "display_name": "Imagen 3 Fast",
         "cost_per_image": 0.020,  # $0.020
         "avg_latency": 5.0,  # Fast
         "max_resolution": 1024,
@@ -142,8 +142,8 @@ MODEL_REGISTRY = {
 
     "imagen_4_ultra": {
         "provider": ModelProvider.GOOGLE,
-        "endpoint": "imagen-4-ultra",
-        "display_name": "Imagen 4 Ultra",
+        "endpoint": "imagen-3.0-generate-001",
+        "display_name": "Imagen 3 Ultra",
         "cost_per_image": 0.060,  # $0.060 (top photoreal)
         "avg_latency": 15.0,  # Medium
         "max_resolution": 4096,
