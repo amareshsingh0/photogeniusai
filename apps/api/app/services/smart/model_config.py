@@ -474,39 +474,9 @@ PROVIDER_ENDPOINTS = {
         "auth_header": "x-goog-api-key",
         "auth_format": "{api_key}",
     },
-    ModelProvider.XAI: {
-        "base_url": "https://api.x.ai/v1",
-        "api_key_env": "XAI_API_KEY",
-        "auth_header": "Authorization",
-        "auth_format": "Bearer {api_key}",
-    },
-    ModelProvider.HUNYUAN: {
-        "base_url": "https://api.hunyuan.tencent.com/v1",
-        "api_key_env": "HUNYUAN_API_KEY",
-        "auth_header": "Authorization",
-        "auth_format": "Bearer {api_key}",
-    },
-    ModelProvider.FAL: {
-        "base_url": "https://api.ideogram.ai/v1",
-        "api_key_env": "IDEOGRAM_API_KEY",
-        "auth_header": "Api-Key",
-        "auth_format": "{api_key}",
-    },
-    ModelProvider.FAL: {
-        "base_url": "https://api.seedream.ai/v1",
-        "api_key_env": "SEEDREAM_API_KEY",
-        "auth_header": "Authorization",
-        "auth_format": "Bearer {api_key}",
-    },
-    ModelProvider.WAN: {
-        "base_url": "https://api.wan.ai/v1",
-        "api_key_env": "WAN_API_KEY",
-        "auth_header": "Authorization",
-        "auth_format": "Bearer {api_key}",
-    },
-    ModelProvider.FAL: {
-        "base_url": "https://external.api.recraft.ai/v1",
-        "api_key_env": "RECRAFT_API_KEY",
+    ModelProvider.WAVESPEED: {
+        "base_url": "https://api.wavespeed.ai/v1",
+        "api_key_env": "WAVESPEED_API_KEY",
         "auth_header": "Authorization",
         "auth_format": "Bearer {api_key}",
     },
