@@ -315,7 +315,7 @@ model Generation {
   downloadCount Int     @default(0)
   sharedCount   Int     @default(0)
   userRating    Int? // 1-5 optional rating for training quality
-  userReason    String? @db.Text // User feedback: why they chose this image
+  // userReason    String? @db.Text // User feedback: why they chose this image [COMMENTED OUT - column doesn't exist in DB yet]
 
   // Training data export (set from user consent at creation time; GDPR/CCPA)
   allowTrainingDataExport Boolean @default(false)
