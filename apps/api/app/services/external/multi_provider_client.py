@@ -47,23 +47,13 @@ logger = logging.getLogger(__name__)
 # ── Provider API configs ───────────────────────────────────────────────────────
 
 _FAL_BASE       = "https://fal.run"
-_FIREWORKS_BASE = "https://api.fireworks.ai/inference/v1"
-_TOGETHER_BASE  = "https://api.together.xyz/v1"
-_REPLICATE_BASE = "https://api.replicate.com/v1"
-_BFL_BASE       = "https://api.bfl.ai/v1"                  # Black Forest Labs official
-_KIE_BASE       = "https://api.kie.ai/api/v1/jobs"         # kie.ai — Flux 2 Pro $0.025
-_PIXAZO_BASE    = "https://gateway.pixazo.ai"              # Pixazo — Schnell $0.0012, 100 free/day
+_WAVESPEED_BASE = "https://api.wavespeed.ai/v1"
 
 # Provider → env var
 _PROVIDER_KEYS = {
-    "fal":       "FAL_KEY",
-    "fireworks": "FIREWORKS_API_KEY",
-    "together":  "TOGETHER_API_KEY",
-    "replicate": "REPLICATE_API_TOKEN",
-    "bfl":       "BFL_API_KEY",          # api.bfl.ai — flux-2-max official
-    "kie":       "KIE_API_KEY",          # kie.ai — Flux 2 Pro cheapest ($0.025)
-    "pixazo":    "PIXAZO_API_KEY",       # pixazo.ai — Flux Schnell cheapest ($0.0012)
-    "google":    "GEMINI_API_KEY",       # Google AI Studio — Imagen 3
+    "fal":       "FAL_KEY",              # fal.ai — Primary aggregator (Flux, Ideogram, Recraft, Seedream)
+    "google":    "GEMINI_API_KEY",       # Google AI Studio — Imagen models
+    "wavespeed": "WAVESPEED_API_KEY",    # WaveSpeed — Grok 2, Wan 2.7, Hunyuan
 }
 
 # ── Model routing table — ordered by cheapest provider ────────────────────────
@@ -378,22 +368,13 @@ class MultiProviderClient:
     # ── Provider-specific callers ─────────────────────────────────────────────
 
     async def _call_provider(self, provider: str, model_id: str, **kwargs) -> Dict:
+        """Route to appropriate provider client (fal.ai, Google Vertex, WaveSpeed only)."""
         if provider == "fal":
             return await self._call_fal(model_id, **kwargs)
-        elif provider == "fireworks":
-            return await self._call_fireworks(model_id, **kwargs)
-        elif provider == "together":
-            return await self._call_together(model_id, **kwargs)
-        elif provider == "replicate":
-            return await self._call_replicate(model_id, **kwargs)
-        elif provider == "bfl":
-            return await self._call_bfl(model_id, **kwargs)
-        elif provider == "kie":
-            return await self._call_kie(model_id, **kwargs)
-        elif provider == "pixazo":
-            return await self._call_pixazo(model_id, **kwargs)
         elif provider == "google":
             return await self._call_google(model_id, **kwargs)
+        elif provider == "wavespeed":
+            return await self._call_wavespeed(model_id, **kwargs)
         return self._error(model_id, f"Unknown provider: {provider}", 0.0)
 
     async def _call_fal(self, model_id: str, prompt: str, negative_prompt: str,
@@ -417,223 +398,6 @@ class MultiProviderClient:
             return self._ok(urls, model_id, "fal.ai", time.time() - start)
         except Exception as e:
             return self._error(model_id, str(e), time.time() - start)
-
-    async def _call_fireworks(self, model_id: str, prompt: str, negative_prompt: str,
-                              num_images: int, image_size: str, num_inference_steps: int,
-                              guidance_scale: float, seed, **kwargs) -> Dict:
-        """Fireworks AI — OpenAI-compatible images API."""
-        start = time.time()
-        client = self._get_client("fireworks")
-        # Fireworks uses OpenAI-compatible /images/generations
-        size_map = {
-            "square_hd": "1024x1024", "landscape_16_9": "1280x720",
-            "portrait_9_16": "720x1280", "landscape_4_3": "1024x768",
-        }
-        payload = {
-            "model": model_id,
-            "prompt": prompt,
-            "n": num_images,
-            "size": size_map.get(image_size, "1024x1024"),
-            "steps": min(num_inference_steps, 12),   # schnell max 12
-        }
-        if negative_prompt:
-            payload["negative_prompt"] = negative_prompt
-        if seed is not None:
-            payload["seed"] = seed
-        try:
-            resp = await client.post(f"{_FIREWORKS_BASE}/images/generations", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            urls = [item.get("url") for item in data.get("data", []) if item.get("url")]
-            if not urls:
-                raise ValueError(f"No images from Fireworks: {data}")
-            return self._ok(urls, model_id, "fireworks.ai", time.time() - start)
-        except Exception as e:
-            return self._error(model_id, str(e), time.time() - start)
-
-    async def _call_together(self, model_id: str, prompt: str, negative_prompt: str,
-                             num_images: int, image_size: str, num_inference_steps: int,
-                             guidance_scale: float, seed, **kwargs) -> Dict:
-        """Together AI — OpenAI-compatible images API."""
-        start = time.time()
-        client = self._get_client("together")
-        size_map = {
-            "square_hd": "1024x1024", "landscape_16_9": "1280x720",
-            "portrait_9_16": "720x1280",
-        }
-        payload = {
-            "model": model_id,
-            "prompt": prompt,
-            "n": num_images,
-            "size": size_map.get(image_size, "1024x1024"),
-            "steps": num_inference_steps,
-            "guidance_scale": guidance_scale,
-        }
-        if negative_prompt:
-            payload["negative_prompt"] = negative_prompt
-        if seed is not None:
-            payload["seed"] = seed
-        try:
-            resp = await client.post(f"{_TOGETHER_BASE}/images/generations", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            urls = [item.get("url") or item.get("b64_json")
-                    for item in data.get("data", []) if item]
-            urls = [u for u in urls if u]
-            if not urls:
-                raise ValueError(f"No images from Together: {data}")
-            return self._ok(urls, model_id, "together.ai", time.time() - start)
-        except Exception as e:
-            return self._error(model_id, str(e), time.time() - start)
-
-    async def _call_replicate(self, model_id: str, prompt: str, negative_prompt: str,
-                              num_images: int, image_size: str, num_inference_steps: int,
-                              guidance_scale: float, seed, **kwargs) -> Dict:
-        """Replicate — submit prediction + poll."""
-        import asyncio
-        start = time.time()
-        client = self._get_client("replicate")
-        size_map = {"square_hd": (1024, 1024), "landscape_16_9": (1280, 720),
-                    "portrait_9_16": (720, 1280)}
-        w, h = size_map.get(image_size, (1024, 1024))
-        input_data: Dict = {
-            "prompt": prompt,
-            "num_outputs": num_images,
-            "width": w, "height": h,
-            "num_inference_steps": num_inference_steps,
-            "guidance_scale": guidance_scale,
-        }
-        if negative_prompt:
-            input_data["negative_prompt"] = negative_prompt
-        if seed is not None:
-            input_data["seed"] = seed
-        try:
-            sub = await client.post(
-                f"{_REPLICATE_BASE}/models/{model_id}/predictions",
-                json={"input": input_data},
-            )
-            sub.raise_for_status()
-            prediction_id = sub.json()["id"]
-            poll_url = f"{_REPLICATE_BASE}/predictions/{prediction_id}"
-
-            waited = 0
-            while waited < 120:
-                await asyncio.sleep(3)
-                waited += 3
-                res = await client.get(poll_url)
-                res.raise_for_status()
-                pred = res.json()
-                status = pred.get("status", "")
-                if status == "succeeded":
-                    output = pred.get("output", [])
-                    urls = output if isinstance(output, list) else [output]
-                    urls = [u for u in urls if u]
-                    if not urls:
-                        raise ValueError("No output URLs from Replicate")
-                    return self._ok(urls, model_id, "replicate.com", time.time() - start)
-                elif status == "failed":
-                    raise RuntimeError(pred.get("error", "Replicate prediction failed"))
-
-            raise TimeoutError("Replicate timed out after 120s")
-        except Exception as e:
-            return self._error(model_id, str(e), time.time() - start)
-
-    async def _call_kie(self, model_id: str, prompt: str, negative_prompt: str,
-                        num_images: int, image_size: str, num_inference_steps: int,
-                        guidance_scale: float, seed, **kwargs) -> Dict:
-        """kie.ai — Flux 2 Pro cheapest ($0.025). Bearer token auth."""
-        import asyncio
-        start = time.time()
-        client = self._get_client("kie")
-        aspect_ratio = _kie_aspect_ratio_for_size(image_size)
-        payload: Dict = {
-            "model": model_id,
-            "taskType": "txt2img",
-            "input": {
-                "prompt": prompt,
-                "aspect_ratio": aspect_ratio,
-                "resolution": "1K",
-                "nsfw_checker": False,
-            }
-        }
-        try:
-            sub = await client.post(f"{_KIE_BASE}/createTask", json=payload)
-            sub.raise_for_status()
-            resp_data = sub.json()
-            task_id = (resp_data.get("data") or {}).get("taskId")
-            if not task_id:
-                raise ValueError(f"No taskId from kie.ai: {resp_data}")
-
-            waited = 0
-            while waited < 120:
-                await asyncio.sleep(3)
-                waited += 3
-                res = await client.get(f"{_KIE_BASE}/recordInfo", params={"taskId": task_id})
-                res.raise_for_status()
-                data = res.json().get("data", {})
-                status = str(data.get("state") or data.get("status") or "").lower()
-                if status == "success":
-                    urls = _extract_kie_urls(data)
-                    if not urls:
-                        raise ValueError(f"No output URLs from kie.ai: {data}")
-                    return self._ok(urls, model_id, "kie.ai", time.time() - start)
-                elif status == "fail":
-                    raise RuntimeError(f"kie.ai task failed: {data}")
-
-            raise TimeoutError("kie.ai timed out after 120s")
-        except Exception as e:
-            logger.error("[kie] error: %s", e)
-            return self._error(model_id, str(e), time.time() - start)
-
-    async def _call_pixazo(self, model_id: str, prompt: str, negative_prompt: str,
-                           num_images: int, image_size: str, num_inference_steps: int,
-                           guidance_scale: float, seed, **kwargs) -> Dict:
-        """pixazo.ai — Flux Schnell cheapest ($0.0012), 100 free/day. Subscription-key auth."""
-        start = time.time()
-        key = self._keys.get("pixazo", "")
-        # Pixazo uses Ocp-Apim-Subscription-Key header (not standard Bearer)
-        client = httpx.AsyncClient(
-            timeout=httpx.Timeout(connect=10, read=120, write=30, pool=5),
-            headers={"Ocp-Apim-Subscription-Key": key, "Content-Type": "application/json"},
-        )
-        size_map = {
-            "square_hd": {"width": 1024, "height": 1024},
-            "landscape_16_9": {"width": 1344, "height": 768},
-            "portrait_9_16": {"width": 768, "height": 1344},
-        }
-        dims = size_map.get(image_size, {"width": 1024, "height": 1024})
-        payload: Dict = {
-            "prompt": prompt,
-            "num_inference_steps": min(num_inference_steps, 12),  # schnell max 12
-            "num_images": num_images,
-            **dims,
-        }
-        if negative_prompt:
-            payload["negative_prompt"] = negative_prompt
-        if seed is not None:
-            payload["seed"] = seed
-        try:
-            resp = await client.post(f"{_PIXAZO_BASE}/generateT2I", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            # Pixazo returns images array with url or base64
-            images = data.get("images") or data.get("data") or []
-            urls = []
-            for img in images:
-                if isinstance(img, dict):
-                    url = img.get("url") or img.get("image_url")
-                    if url:
-                        urls.append(url)
-                elif isinstance(img, str) and img.startswith("http"):
-                    urls.append(img)
-            if not urls:
-                raise ValueError(f"No images from pixazo: {list(data.keys())}")
-            return self._ok(urls, model_id, "pixazo.ai", time.time() - start)
-        except Exception as e:
-            logger.error("[pixazo] error: %s", e)
-            return self._error(model_id, str(e), time.time() - start)
-        finally:
-            await client.aclose()
 
     async def _call_google(self, model_id: str, prompt: str, negative_prompt: str,
                            num_images: int, image_size: str, num_inference_steps: int,
@@ -701,13 +465,30 @@ class MultiProviderClient:
             logger.error("[google] Imagen 3 API error: %s", e)
             return self._error(model_id, str(e), time.time() - start)
 
-    async def _call_bfl(self, model_id: str, prompt: str, negative_prompt: str,
-                        num_images: int, image_size: str, num_inference_steps: int,
-                        guidance_scale: float, seed, **kwargs) -> Dict:
-        """Black Forest Labs official API — api.bfl.ai (flux-2-max, flux-kontext-max)."""
-        import asyncio
+    async def _call_wavespeed(self, model_id: str, prompt: str, negative_prompt: str,
+                              num_images: int, image_size: str, num_inference_steps: int,
+                              guidance_scale: float, seed, **kwargs) -> Dict:
+        """WaveSpeed API — Grok 2 Imagine (X.ai), Wan 2.7, Hunyuan Image."""
         start = time.time()
-        client = self._get_client("bfl")
+
+        api_key = self._keys.get("wavespeed", "")
+        if not api_key:
+            logger.error("[wavespeed] WAVESPEED_API_KEY not set")
+            return self._error(model_id, "WAVESPEED_API_KEY not set", 0.0)
+
+        # WaveSpeed model mapping
+        wavespeed_models = {
+            "grok_2_imagine": "xai/grok-2-imagine",
+            "wan_2_7": "wan/2.7",
+            "hunyuan_image": "tencent/hunyuan-image"
+        }
+
+        wavespeed_model = wavespeed_models.get(model_id)
+        if not wavespeed_model:
+            logger.error("[wavespeed] Unknown model: %s", model_id)
+            return self._error(model_id, f"Unknown WaveSpeed model: {model_id}", 0.0)
+
+        # Map image_size to dimensions
         size_map = {
             "square_hd": {"width": 1024, "height": 1024},
             "landscape_16_9": {"width": 1344, "height": 768},
@@ -715,45 +496,50 @@ class MultiProviderClient:
             "landscape_4_3": {"width": 1152, "height": 896},
         }
         dims = size_map.get(image_size, {"width": 1024, "height": 1024})
-        payload: Dict = {
+
+        payload = {
+            "model": wavespeed_model,
             "prompt": prompt,
             "width": dims["width"],
             "height": dims["height"],
+            "num_images": num_images,
             "steps": num_inference_steps,
-            "guidance": guidance_scale,
-            "output_format": "jpeg",
+            "guidance_scale": guidance_scale,
         }
+
         if negative_prompt:
             payload["negative_prompt"] = negative_prompt
         if seed is not None:
             payload["seed"] = seed
+
         try:
-            # BFL uses async polling: POST → get id → poll /get_result
-            sub = await client.post(f"{_BFL_BASE}/{model_id}", json=payload)
-            sub.raise_for_status()
-            task_id = sub.json().get("id")
-            if not task_id:
-                raise ValueError(f"No task id from BFL: {sub.json()}")
+            client = self._get_client("wavespeed")
+            resp = await client.post(
+                f"{_WAVESPEED_BASE}/generate",
+                json=payload,
+                timeout=120.0
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
-            waited = 0
-            while waited < 120:
-                await asyncio.sleep(3)
-                waited += 3
-                res = await client.get(f"{_BFL_BASE}/get_result", params={"id": task_id})
-                res.raise_for_status()
-                data = res.json()
-                status = data.get("status", "")
-                if status == "Ready":
-                    url = (data.get("result") or {}).get("sample")
-                    if not url:
-                        raise ValueError(f"No sample URL in BFL result: {data}")
-                    return self._ok([url], model_id, "api.bfl.ai", time.time() - start)
-                elif status in ("Error", "Failed", "Content Moderated"):
-                    raise RuntimeError(f"BFL task {status}: {data}")
+            # WaveSpeed returns {"images": [{"url": "..."}]}
+            images = data.get("images", [])
+            urls = []
+            for img in images:
+                if isinstance(img, dict):
+                    url = img.get("url")
+                    if url:
+                        urls.append(url)
+                elif isinstance(img, str):
+                    urls.append(img)
 
-            raise TimeoutError("BFL API timed out after 120s")
+            if not urls:
+                raise ValueError(f"No images from WaveSpeed: {list(data.keys())}")
+
+            return self._ok(urls, model_id, "wavespeed.ai", time.time() - start)
+
         except Exception as e:
-            logger.error("[bfl] error: %s", e)
+            logger.error("[wavespeed] API error: %s", e)
             return self._error(model_id, str(e), time.time() - start)
 
     async def _upscale_fal(self, image_url: str, scale: int) -> Dict:
@@ -770,33 +556,6 @@ class MultiProviderClient:
             return self._ok([url] if url else [], "fal-ai/real-esrgan", "fal.ai", time.time() - start)
         except Exception as e:
             return self._error("fal-ai/real-esrgan", str(e), time.time() - start)
-
-    async def _upscale_replicate(self, image_url: str, scale: int) -> Dict:
-        start = time.time()
-        client = self._get_client("replicate")
-        try:
-            import asyncio
-            sub = await client.post(
-                f"{_REPLICATE_BASE}/models/nightmareai/real-esrgan/predictions",
-                json={"input": {"image": image_url, "scale": scale, "face_enhance": False}},
-            )
-            sub.raise_for_status()
-            pid = sub.json()["id"]
-            waited = 0
-            while waited < 60:
-                await asyncio.sleep(3)
-                waited += 3
-                res = await client.get(f"{_REPLICATE_BASE}/predictions/{pid}")
-                pred = res.json()
-                if pred.get("status") == "succeeded":
-                    url = pred.get("output")
-                    return self._ok([url] if url else [], "nightmareai/real-esrgan",
-                                    "replicate.com", time.time() - start)
-                if pred.get("status") == "failed":
-                    break
-            raise RuntimeError("Replicate upscale failed/timed out")
-        except Exception as e:
-            return self._error("real-esrgan", str(e), time.time() - start)
 
     # ── Payload builder (fal.ai specific) ─────────────────────────────────────
 

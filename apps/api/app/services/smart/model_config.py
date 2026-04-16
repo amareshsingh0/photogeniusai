@@ -20,14 +20,10 @@ from typing import Dict, List, Optional
 from enum import Enum
 
 class ModelProvider(str, Enum):
+    """Only 3 providers: fal.ai (aggregator), Google Vertex AI, WaveSpeed."""
     FAL = "fal"
     GOOGLE = "google"
-    XAI = "xai"
-    HUNYUAN = "hunyuan"
-    IDEOGRAM = "ideogram"
-    SEEDREAM = "seedream"
-    WAN = "wan"
-    RECRAFT = "recraft"
+    WAVESPEED = "wavespeed"
 
 class QualityTier(str, Enum):
     RES_1K = "1k"
@@ -163,7 +159,7 @@ MODEL_REGISTRY = {
     # Photo Quality: ⭐⭐⭐⭐ | Text Quality: ⭐⭐⭐⭐ | Speed: Fast
     # fal.ai runtime path currently used
     "grok_2_imagine": {
-        "provider": ModelProvider.XAI,
+        "provider": ModelProvider.WAVESPEED,
         "endpoint": "grok-2-imagine",
         "display_name": "Grok 2 Imagine",
         "cost_per_image": 0.030,  # $0.03-$0.06 (fal.ai runtime)
@@ -181,7 +177,7 @@ MODEL_REGISTRY = {
     # Photo Quality: ⭐⭐⭐⭐ | Text Quality: ⭐⭐⭐⭐ | Speed: Medium
     # Good for bulk Asian content on the routed fal.ai path
     "hunyuan_image": {
-        "provider": ModelProvider.HUNYUAN,
+        "provider": ModelProvider.WAVESPEED,
         "endpoint": "hunyuan-image-v1",
         "display_name": "Hunyuan Image",
         "cost_per_image": 0.030,  # $0.03-$0.05 (fal.ai runtime)
@@ -199,7 +195,7 @@ MODEL_REGISTRY = {
     # Photo Quality: ⭐⭐⭐⭐ | Text Quality: ⭐⭐⭐⭐⭐ | Speed: Medium
     # Bulk safe on official API
     "ideogram_v3": {
-        "provider": ModelProvider.IDEOGRAM,
+        "provider": ModelProvider.FAL,
         "endpoint": "ideogram-v3",
         "display_name": "Ideogram v3.0",
         "cost_per_image": 0.030,  # $0.03-$0.09 (bulk official)
@@ -217,7 +213,7 @@ MODEL_REGISTRY = {
     # Photo Quality: ⭐⭐⭐⭐⭐ | Text Quality: ⭐⭐⭐ | Speed: Fast
     # Cheapest high-quality (fal.ai)
     "seedream_4_5": {
-        "provider": ModelProvider.SEEDREAM,
+        "provider": ModelProvider.FAL,
         "endpoint": "seedream-4.5",
         "display_name": "Seedream 4.5",
         "cost_per_image": 0.030,  # $0.03-$0.06 (fal.ai cheapest)
@@ -235,7 +231,7 @@ MODEL_REGISTRY = {
     # Photo Quality: ⭐⭐⭐⭐ | Text Quality: ⭐⭐⭐⭐ | Speed: Very Fast
     # Excellent for bulk on the routed fal.ai path
     "wan_2_7": {
-        "provider": ModelProvider.WAN,
+        "provider": ModelProvider.WAVESPEED,
         "endpoint": "wan-2.7",
         "display_name": "Wan 2.7",
         "cost_per_image": 0.020,  # $0.02-$0.04 (fal.ai runtime)
@@ -253,7 +249,7 @@ MODEL_REGISTRY = {
     # Photo Quality: ⭐⭐⭐ | Text Quality: ⭐⭐⭐⭐ | Speed: Fast
     # Vector safe commercial
     "recraft_v4_pro": {
-        "provider": ModelProvider.RECRAFT,
+        "provider": ModelProvider.FAL,
         "endpoint": "recraft-v4-pro",
         "display_name": "Recraft v4 Pro",
         "cost_per_image": 0.030,  # $0.03-$0.05
@@ -490,13 +486,13 @@ PROVIDER_ENDPOINTS = {
         "auth_header": "Authorization",
         "auth_format": "Bearer {api_key}",
     },
-    ModelProvider.IDEOGRAM: {
+    ModelProvider.FAL: {
         "base_url": "https://api.ideogram.ai/v1",
         "api_key_env": "IDEOGRAM_API_KEY",
         "auth_header": "Api-Key",
         "auth_format": "{api_key}",
     },
-    ModelProvider.SEEDREAM: {
+    ModelProvider.FAL: {
         "base_url": "https://api.seedream.ai/v1",
         "api_key_env": "SEEDREAM_API_KEY",
         "auth_header": "Authorization",
@@ -508,7 +504,7 @@ PROVIDER_ENDPOINTS = {
         "auth_header": "Authorization",
         "auth_format": "Bearer {api_key}",
     },
-    ModelProvider.RECRAFT: {
+    ModelProvider.FAL: {
         "base_url": "https://external.api.recraft.ai/v1",
         "api_key_env": "RECRAFT_API_KEY",
         "auth_header": "Authorization",
