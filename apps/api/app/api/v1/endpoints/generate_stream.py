@@ -929,49 +929,56 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
             return None
 
         # Save to database (Generation model)
-        prisma = Prisma()
-        await prisma.connect()
+        generation = None
+        model_config = None
+        try:
+            prisma = Prisma()
+            await prisma.connect()
 
-        from app.services.smart.config import detect_capability_bucket
-        bucket = detect_capability_bucket(req.prompt)
+            from app.services.smart.config import detect_capability_bucket
+            bucket = detect_capability_bucket(req.prompt)
 
-        generation = await prisma.generation.create(
-            data={
-                "userId": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c",  # DEV_USER UUID
-                "mode": "REALISM",  # Default mode
-                "originalPrompt": req.prompt,
-                "enhancedPrompt": req.prompt,
-                "numInferenceSteps": _QUALITY_STEPS.get(req.quality, 20),
-                "guidanceScale": _MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
-                "width": req.width,
-                "height": req.height,
-                "outputUrls": {"urls": [result.get("image_url")]},  # JSON object with array
-                "selectedOutputUrl": result.get("image_url"),
-                "creditsUsed": 0,  # Testing mode = free
-                "qualityTierUsed": req.quality,
-                "modelUsed": model_id,
-                "bucket": bucket,
-                "generationTimeSeconds": latency,
-            }
-        )
-
-        # Get model cost
-        model_config = await prisma.modelconfig.find_unique(
-            where={"modelId": model_id}
-        )
-        if not model_config and requested_model_id != model_id:
-            model_config = await prisma.modelconfig.find_unique(
-                where={"modelId": requested_model_id}
+            generation = await prisma.generation.create(
+                data={
+                    "userId": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c",  # DEV_USER UUID
+                    "mode": "REALISM",  # Default mode
+                    "originalPrompt": req.prompt,
+                    "enhancedPrompt": req.prompt,
+                    "numInferenceSteps": _QUALITY_STEPS.get(req.quality, 20),
+                    "guidanceScale": _MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
+                    "width": req.width,
+                    "height": req.height,
+                    "outputUrls": json.dumps([result.get("image_url")]),  # JSON string
+                    "selectedOutputUrl": result.get("image_url"),
+                    "creditsUsed": 0,  # Testing mode = free
+                    "qualityTierUsed": req.quality,
+                    "modelUsed": model_id,
+                    "bucket": bucket,
+                    "generationTimeSeconds": latency,
+                }
             )
 
-        await prisma.disconnect()
+            # Get model cost
+            model_config = await prisma.modelconfig.find_unique(
+                where={"modelId": model_id}
+            )
+            if not model_config and requested_model_id != model_id:
+                model_config = await prisma.modelconfig.find_unique(
+                    where={"modelId": requested_model_id}
+                )
 
+            await prisma.disconnect()
+
+        except Exception as db_error:
+            logger.warning(f"[parallel][{trace_id}][{model_id}] DB save failed: {db_error}")
+            generation_id = None
+        
         return {
-            "generation_id": generation.id,
+            "generation_id": generation.id if generation else None,
             "image_url": result.get("image_url"),
             "model_id": model_id,
             "latency": latency,
-            "cost": model_config.costPerImage if model_config else 0.0,
+            "cost": model_config.costPerImage if model_config and hasattr(model_config, "costPerImage") else 0.0,
         }
 
     except Exception as e:
