@@ -435,37 +435,46 @@ class MultiProviderClient:
             full_prompt = prompt
 
         try:
-            # Google AI Studio REST API endpoint for Imagen 3
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{endpoint}:generateImages?key={api_key}"
+            # Google AI Studio REST API endpoint for Imagen (uses :predict)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{endpoint}:predict"
 
             payload = {
-                "prompt": full_prompt,
-                "number_of_images": min(num_images, 4),  # Max 4 per API call
-                "aspect_ratio": aspect_ratio,
-                "safety_filter_level": "BLOCK_ONLY_HIGH",
-                "person_generation": "ALLOW_ADULT",
+                "instances": [
+                    {
+                        "prompt": full_prompt,
+                    }
+                ],
+                "parameters": {
+                    "sampleCount": min(num_images, 4),  # Max 4 per API call
+                    "aspectRatio": aspect_ratio,
+                    "safetyFilterLevel": "BLOCK_ONLY_HIGH",
+                    "personGeneration": "ALLOW_ADULT",
+                }
             }
 
+            headers = {
+                "x-goog-api-key": api_key,
+                "Content-Type": "application/json",
+            }
             client = self._get_client("google")
-            resp = await client.post(url, json=payload, timeout=120.0)
+            resp = await client.post(url, json=payload, headers=headers, timeout=120.0)
             resp.raise_for_status()
             data = resp.json()
 
-            # Extract image URLs or base64 data
+            # Extract image URLs or base64 data from :predict response
             urls = []
-            if "generatedImages" in data:
-                for img_data in data["generatedImages"]:
-                    # Imagen 3 returns base64 encoded images, not URLs
-                    if "image" in img_data:
-                        b64_data = img_data["image"].get("imageBytes", "")
-                        if b64_data:
-                            # Convert base64 to data URI for immediate use
-                            data_uri = f"data:image/png;base64,{b64_data}"
-                            urls.append(data_uri)
-                            logger.info("[google] Got base64 image (%d chars)", len(b64_data))
+            if "predictions" in data:
+                for prediction in data["predictions"]:
+                    # Imagen returns base64 encoded images
+                    b64_data = prediction.get("bytesBase64Encoded", "")
+                    if b64_data:
+                        # Convert base64 to data URI for immediate use
+                        data_uri = f"data:image/png;base64,{b64_data}"
+                        urls.append(data_uri)
+                        logger.info("[google] Got base64 image (%d chars)", len(b64_data))
 
             if not urls:
-                raise ValueError(f"No images from Imagen 3: {list(data.keys())}")
+                raise ValueError(f"No images from Imagen: {list(data.keys())}")
 
             return self._ok(urls, model_id, "google.ai", time.time() - start)
 
