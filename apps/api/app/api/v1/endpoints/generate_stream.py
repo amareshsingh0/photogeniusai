@@ -85,6 +85,8 @@ _MODEL_ALIASES = {
     "flux_dev": "flux_2_dev",
     "flux_schnell_fal": "flux_schnell",
     "flux_schnell_pixazo": "flux_schnell",
+    "imagen_4_standard": "imagen_4_base",
+    "gemini_flash_image": "gemini_3_imagen",
     "fal_ai_flux_2_flex": "flux_2_flex",
     "gemini_3_0_imagen": "gemini_3_imagen",
     "hunyuan_image_v1": "hunyuan_image",
@@ -840,14 +842,23 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
             yield _sse("error", {"message": "No testing-enabled models found"})
             return
 
-        logger.info(f"[parallel][{trace_id}] Testing {len(models)} models: {[m.modelId for m in models]}")
+        model_ids = []
+        seen_model_ids = set()
+        for model in models:
+            canonical_model_id = _canonical_model_key(model.modelId, default=model.modelId)
+            if canonical_model_id in seen_model_ids:
+                continue
+            seen_model_ids.add(canonical_model_id)
+            model_ids.append(canonical_model_id)
+
+        logger.info(f"[parallel][{trace_id}] Testing {len(model_ids)} models: {model_ids}")
 
         await prisma.disconnect()
 
         # Generate from each model in parallel
         tasks = []
-        for model in models:
-            task = _generate_with_model(req, model.modelId, trace_id)
+        for model_id in model_ids:
+            task = _generate_with_model(req, model_id, trace_id)
             tasks.append(task)
 
         # Stream results as they complete
@@ -866,7 +877,7 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
                 })
 
         yield _sse("testing_complete", {
-            "total_models": len(models),
+            "total_models": len(model_ids),
             "trace_id": trace_id,
         })
 
@@ -889,6 +900,8 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
         }
     """
     start = time.time()
+    requested_model_id = model_id
+    model_id = _canonical_model_key(model_id, default=model_id)
 
     try:
         from app.services.external.multi_provider_client import multi_client
@@ -909,7 +922,10 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
         latency = time.time() - start
 
         if not result.get("success"):
-            logger.warning(f"[parallel][{trace_id}][{model_id}] Generation failed: {result.get('error')}")
+            logger.warning(
+                f"[parallel][{trace_id}][{requested_model_id}->{model_id}] "
+                f"Generation failed: {result.get('error')}"
+            )
             return None
 
         # Save to database (Generation model)
@@ -943,6 +959,10 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
         model_config = await prisma.modelconfig.find_unique(
             where={"modelId": model_id}
         )
+        if not model_config and requested_model_id != model_id:
+            model_config = await prisma.modelconfig.find_unique(
+                where={"modelId": requested_model_id}
+            )
 
         await prisma.disconnect()
 

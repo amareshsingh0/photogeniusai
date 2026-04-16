@@ -4,13 +4,13 @@ Updated: April 11, 2026
 
 Selected Model Stack (Best Results - User Verified):
 - Flux 2 Flex → General photoreal + fast customization (fal.ai cheapest)
-- Gemini 3/3.1 → Speed + text king, Google ecosystem (Vertex AI)
-- Google Imagen 4 (base/fast/ultra) → Enterprise photoreal, top quality (Vertex AI)
-- Grok 2 Imagine → Creative, uncensored, fun styles (X.ai/WaveSpeedAI)
-- Hunyuan Image → Best Chinese/Asian text support (Tencent)
+- Gemini 3/3.1 → Speed + text king, Google ecosystem (Google AI routing)
+- Google Imagen 4 (base/fast/ultra) → Enterprise photoreal, top quality (Google AI routing)
+- Grok 2 Imagine → Creative, uncensored, fun styles (fal.ai runtime)
+- Hunyuan Image → Best Chinese/Asian text support (fal.ai runtime)
 - Ideogram v3.0 → Text rendering undisputed king for posters/logos
 - Seedream 4.5 → Top versatility 2026, cheapest high-quality (fal.ai)
-- Wan 2.7 → Fast Chinese-style, excellent for bulk Asian aesthetics
+- Wan 2.7 → Fast Chinese-style, excellent for bulk Asian aesthetics (fal.ai runtime)
 - Recraft v4 Pro → Vector/SVG king for logos/design assets
 
 Reference: Models\modal_list.md (rows 2,6,7,8,11,12,16,19,21)
@@ -80,7 +80,7 @@ MODEL_REGISTRY = {
         "rating": 8.5,
     },
 
-    # ═══ GEMINI 3/3.1 IMAGEN (Google Vertex AI) ═══
+    # ═══ GEMINI 3/3.1 IMAGEN (Google AI) ═══
     # Fast iteration, Google ecosystem, Speed + text king (modal_list.md row 6)
     # Photo Quality: ⭐⭐⭐⭐⭐ | Text Quality: ⭐⭐⭐⭐ | Speed: Very Fast
     # Batch API 50% off available
@@ -112,10 +112,10 @@ MODEL_REGISTRY = {
         "rating": 9.0,
     },
 
-    # ═══ GOOGLE IMAGEN 4 (Google Vertex AI) ═══
+    # ═══ GOOGLE IMAGEN 4 (Google AI) ═══
     # Enterprise photoreal, high-res, Ultra = top photoreal (modal_list.md row 7)
     # Photo Quality: ⭐⭐⭐⭐⭐ | Text Quality: ⭐⭐⭐⭐ | Speed: Fast
-    # Bulk discounts via Vertex AI
+    # Bulk discounts on Google AI routing
     "imagen_4_base": {
         "provider": ModelProvider.GOOGLE,
         "endpoint": "imagen-4-base",
@@ -158,15 +158,15 @@ MODEL_REGISTRY = {
         "rating": 9.2,
     },
 
-    # ═══ GROK 2 IMAGINE (X.ai / WaveSpeedAI) ═══
+    # ═══ GROK 2 IMAGINE (fal.ai runtime) ═══
     # Creative, uncensored, fun styles - Best value in mid-tier (modal_list.md row 8)
     # Photo Quality: ⭐⭐⭐⭐ | Text Quality: ⭐⭐⭐⭐ | Speed: Fast
-    # Aggregators best pricing (WaveSpeedAI)
+    # fal.ai runtime path currently used
     "grok_2_imagine": {
         "provider": ModelProvider.XAI,
         "endpoint": "grok-2-imagine",
         "display_name": "Grok 2 Imagine",
-        "cost_per_image": 0.030,  # $0.03-$0.06 (WaveSpeedAI cheaper)
+        "cost_per_image": 0.030,  # $0.03-$0.06 (fal.ai runtime)
         "avg_latency": 6.0,  # Fast
         "max_resolution": 1024,
         "supports_aspects": True,
@@ -176,15 +176,15 @@ MODEL_REGISTRY = {
         "rating": 8.0,
     },
 
-    # ═══ HUNYUAN IMAGE (Tencent / WaveSpeedAI) ═══
+    # ═══ HUNYUAN IMAGE (fal.ai runtime) ═══
     # Asian/CJK text, Best Chinese language support (modal_list.md row 11)
     # Photo Quality: ⭐⭐⭐⭐ | Text Quality: ⭐⭐⭐⭐ | Speed: Medium
-    # Good for bulk Asian content (WaveSpeedAI)
+    # Good for bulk Asian content on the routed fal.ai path
     "hunyuan_image": {
         "provider": ModelProvider.HUNYUAN,
         "endpoint": "hunyuan-image-v1",
         "display_name": "Hunyuan Image",
-        "cost_per_image": 0.030,  # $0.03-$0.05 (WaveSpeedAI)
+        "cost_per_image": 0.030,  # $0.03-$0.05 (fal.ai runtime)
         "avg_latency": 8.0,  # Medium
         "max_resolution": 1024,
         "supports_aspects": True,
@@ -230,15 +230,15 @@ MODEL_REGISTRY = {
         "rating": 9.0,
     },
 
-    # ═══ WAN 2.7 (WaveSpeedAI) ═══
+    # ═══ WAN 2.7 (fal.ai runtime) ═══
     # Fast Chinese-style, prompt-heavy - Good for bulk/Asian aesthetics (modal_list.md row 21)
     # Photo Quality: ⭐⭐⭐⭐ | Text Quality: ⭐⭐⭐⭐ | Speed: Very Fast
-    # Excellent for bulk (WaveSpeedAI)
+    # Excellent for bulk on the routed fal.ai path
     "wan_2_7": {
         "provider": ModelProvider.WAN,
         "endpoint": "wan-2.7",
         "display_name": "Wan 2.7",
-        "cost_per_image": 0.020,  # $0.02-$0.04 (WaveSpeedAI)
+        "cost_per_image": 0.020,  # $0.02-$0.04 (fal.ai runtime)
         "avg_latency": 4.0,  # Very Fast
         "max_resolution": 1024,
         "supports_aspects": True,

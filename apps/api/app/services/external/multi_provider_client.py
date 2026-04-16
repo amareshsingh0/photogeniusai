@@ -182,6 +182,8 @@ _MODEL_KEY_ALIASES = {
     "flux_dev": "flux_2_dev",
     "flux_schnell_fal": "flux_schnell",
     "flux_schnell_pixazo": "flux_schnell",
+    "imagen_4_standard": "imagen_4_base",
+    "gemini_flash_image": "gemini_3_imagen",
     "xai_grok_imagine_image": "grok_2_imagine",
     "fal_ai_ideogram_v3": "ideogram_v3",
     "fal_ai_recraft_v4_pro_text_to_image": "recraft_v4_pro",

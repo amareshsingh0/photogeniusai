@@ -654,7 +654,7 @@ BUCKET_KEYWORDS: Dict[str, List[str]] = {
 }
 
 
-# NOTE: BUCKET_MODEL_MAP moved to model_config.py (3-provider routing: fal.ai, Google Vertex, WaveSpeed)
+# NOTE: BUCKET_MODEL_MAP moved to model_config.py (runtime routing: fal.ai, Google AI, multi-provider aliases)
 # config.py now only handles bucket detection (detect_capability_bucket)
 
 
@@ -812,5 +812,4 @@ def detect_capability_bucket(prompt: str) -> str:
             return "photorealism_landscape"
 
     return "photorealism"
-
 

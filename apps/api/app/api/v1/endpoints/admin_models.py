@@ -8,7 +8,7 @@ Allows admins to:
 4. View model performance metrics (avg rating, cost, latency)
 """
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -58,23 +58,29 @@ class BulkModelUpdate(BaseModel):
 # ── Default Model Registry ───────────────────────────────────────────────────
 # These are seeded into database if not exists
 
+LEGACY_MODEL_ALIASES = {
+    "imagen_4_standard": "imagen_4_base",
+    "gemini_flash_image": "gemini_3_imagen",
+}
+
+
 DEFAULT_MODELS = [
     {
         "modelId": "flux_2_pro",
-        "provider": "wavespeed",
+        "provider": "kie.ai",
         "displayName": "Flux 2 Pro",
         "buckets": ["typography", "photorealism", "artistic", "humans"],
         "costPerImage": 0.025,
-        "isActive": False,  # WaveSpeed integration pending
+        "isActive": True,
         "isTestingEnabled": True,
     },
     {
         "modelId": "flux_2_max",
-        "provider": "wavespeed",
+        "provider": "api.bfl.ai",
         "displayName": "Flux 2 Max",
         "buckets": ["photorealism", "artistic", "humans"],
         "costPerImage": 0.055,
-        "isActive": False,  # WaveSpeed integration pending
+        "isActive": True,
         "isTestingEnabled": True,
     },
     {
@@ -115,11 +121,11 @@ DEFAULT_MODELS = [
     },
     {
         "modelId": "hunyuan_image",
-        "provider": "wavespeed",
+        "provider": "fal.ai",
         "displayName": "Hunyuan Image",
         "buckets": ["anime", "typography"],
         "costPerImage": 0.04,
-        "isActive": False,  # WaveSpeed integration pending
+        "isActive": True,
         "isTestingEnabled": True,
     },
     {
@@ -133,68 +139,159 @@ DEFAULT_MODELS = [
     },
     {
         "modelId": "grok_2_imagine",
-        "provider": "wavespeed",
+        "provider": "fal.ai",
         "displayName": "Grok 2 Imagine",
         "buckets": ["photorealism", "artistic", "typography", "humans", "multi_person"],
         "costPerImage": 0.05,
-        "isActive": False,  # Not integrated yet
+        "isActive": True,
         "isTestingEnabled": True,
     },
     {
         "modelId": "imagen_4_ultra",
-        "provider": "vertex",
+        "provider": "google.ai",
         "displayName": "Imagen 4 Ultra",
         "buckets": ["photorealism", "typography", "humans", "image_to_image"],
         "costPerImage": 0.18,
-        "isActive": False,  # Not integrated yet
+        "isActive": True,
         "isTestingEnabled": True,
     },
     {
         "modelId": "flux_2_flex",
-        "provider": "wavespeed",
+        "provider": "fal.ai",
         "displayName": "Flux 2 Flex",
         "buckets": ["photorealism", "artistic", "typography"],
         "costPerImage": 0.04,
-        "isActive": False,  # WaveSpeed integration pending
+        "isActive": True,
         "isTestingEnabled": True,
     },
     {
         "modelId": "wan_2_7",
-        "provider": "wavespeed",
+        "provider": "fal.ai",
         "displayName": "Wan 2.7",
         "buckets": ["photorealism", "artistic", "typography"],
         "costPerImage": 0.05,
-        "isActive": False,  # Not integrated yet
+        "isActive": True,
         "isTestingEnabled": True,
     },
     {
-        "modelId": "imagen_4_standard",
-        "provider": "vertex",
-        "displayName": "Imagen 4 Standard",
+        "modelId": "imagen_4_base",
+        "provider": "google.ai",
+        "displayName": "Imagen 4 Base",
         "buckets": ["photorealism", "typography", "humans"],
         "costPerImage": 0.08,
-        "isActive": False,  # Not integrated yet
+        "isActive": True,
         "isTestingEnabled": True,
     },
     {
         "modelId": "imagen_3",
-        "provider": "vertex",
+        "provider": "google.ai",
         "displayName": "Imagen 3",
         "buckets": ["photorealism", "typography"],
         "costPerImage": 0.04,
-        "isActive": False,  # Not integrated yet
+        "isActive": True,
         "isTestingEnabled": True,
     },
     {
-        "modelId": "gemini_flash_image",
-        "provider": "vertex",
-        "displayName": "Gemini 3.1 Flash Image (Nano Banana 2)",
+        "modelId": "imagen_4_fast",
+        "provider": "google.ai",
+        "displayName": "Imagen 4 Fast",
+        "buckets": ["photorealism", "typography", "humans", "image_to_image"],
+        "costPerImage": 0.06,
+        "isActive": True,
+        "isTestingEnabled": True,
+    },
+    {
+        "modelId": "gemini_3_imagen",
+        "provider": "google.ai",
+        "displayName": "Gemini 3 Imagen",
         "buckets": ["photorealism", "artistic", "typography", "image_to_image"],
-        "costPerImage": 0.01,
-        "isActive": False,  # Not integrated yet
+        "costPerImage": 0.035,
+        "isActive": True,
+        "isTestingEnabled": True,
+    },
+    {
+        "modelId": "gemini_3_1_imagen",
+        "provider": "google.ai",
+        "displayName": "Gemini 3.1 Imagen",
+        "buckets": ["photorealism", "artistic", "typography", "image_to_image"],
+        "costPerImage": 0.07,
+        "isActive": True,
         "isTestingEnabled": True,
     },
 ]
+
+DEFAULT_MODELS_BY_ID = {model["modelId"]: model for model in DEFAULT_MODELS}
+
+_LEGACY_MODEL_IDS_BY_CANONICAL: Dict[str, List[str]] = {}
+for legacy_model_id, canonical_model_id in LEGACY_MODEL_ALIASES.items():
+    _LEGACY_MODEL_IDS_BY_CANONICAL.setdefault(canonical_model_id, []).append(legacy_model_id)
+
+
+def _canonical_model_id(model_id: str) -> str:
+    return LEGACY_MODEL_ALIASES.get(model_id, model_id)
+
+
+def _equivalent_model_ids(model_id: str) -> List[str]:
+    canonical_model_id = _canonical_model_id(model_id)
+    return [canonical_model_id, *_LEGACY_MODEL_IDS_BY_CANONICAL.get(canonical_model_id, [])]
+
+
+def _default_model_config(model_id: str) -> Optional[dict]:
+    return DEFAULT_MODELS_BY_ID.get(_canonical_model_id(model_id))
+
+
+def _preferred_model_rows(models) -> Dict[str, object]:
+    preferred: Dict[str, object] = {}
+    for model in models:
+        canonical_model_id = _canonical_model_id(model.modelId)
+        current = preferred.get(canonical_model_id)
+        if current is None or (current.modelId in LEGACY_MODEL_ALIASES and model.modelId == canonical_model_id):
+            preferred[canonical_model_id] = model
+    return preferred
+
+
+def _merged_model_config(model) -> dict:
+    defaults = _default_model_config(model.modelId)
+    canonical_model_id = _canonical_model_id(model.modelId)
+    if defaults:
+        provider = defaults["provider"]
+        display_name = defaults["displayName"]
+        buckets = defaults["buckets"]
+        cost_per_image = defaults["costPerImage"]
+    else:
+        provider = model.provider
+        display_name = model.displayName
+        buckets = model.buckets
+        cost_per_image = model.costPerImage
+
+    return {
+        "id": model.id,
+        "modelId": canonical_model_id,
+        "provider": provider,
+        "displayName": display_name,
+        "buckets": buckets,
+        "isActive": model.isActive,
+        "isTestingEnabled": model.isTestingEnabled,
+        "costPerImage": cost_per_image,
+        "createdAt": model.createdAt.isoformat() if model.createdAt else None,
+        "updatedAt": model.updatedAt.isoformat() if model.updatedAt else None,
+    }
+
+
+async def _find_existing_model(prisma, model_id: str):
+    for candidate in _equivalent_model_ids(model_id):
+        existing = await prisma.modelconfig.find_unique(where={"modelId": candidate})
+        if existing:
+            return existing
+    return None
+
+
+def _syncable_model_fields(existing, canonical_model_data: dict) -> dict:
+    update_data = {}
+    for field in ("provider", "displayName", "buckets", "costPerImage"):
+        if getattr(existing, field) != canonical_model_data[field]:
+            update_data[field] = canonical_model_data[field]
+    return update_data
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -202,8 +299,8 @@ DEFAULT_MODELS = [
 @router.post("/admin/models/seed")
 async def seed_models():
     """
-    Seed default models into database (run once on first setup).
-    Safe to call multiple times - only creates missing models.
+    Seed and sync default models into database.
+    Safe to call multiple times - creates missing rows and repairs stale metadata.
     """
     try:
         from prisma import Prisma
@@ -211,6 +308,28 @@ async def seed_models():
         await prisma.connect()
 
         created_count = 0
+        updated_count = 0
+        migrated_count = 0
+
+        for legacy_model_id, canonical_model_id in LEGACY_MODEL_ALIASES.items():
+            legacy = await prisma.modelconfig.find_unique(where={"modelId": legacy_model_id})
+            canonical = await prisma.modelconfig.find_unique(where={"modelId": canonical_model_id})
+            canonical_model_data = DEFAULT_MODELS_BY_ID.get(canonical_model_id)
+
+            if legacy and not canonical and canonical_model_data:
+                await prisma.modelconfig.update(
+                    where={"modelId": legacy_model_id},
+                    data={
+                        "modelId": canonical_model_id,
+                        "provider": canonical_model_data["provider"],
+                        "displayName": canonical_model_data["displayName"],
+                        "buckets": canonical_model_data["buckets"],
+                        "costPerImage": canonical_model_data["costPerImage"],
+                    },
+                )
+                migrated_count += 1
+                logger.info("[seed] Migrated legacy model: %s -> %s", legacy_model_id, canonical_model_id)
+
         for model_data in DEFAULT_MODELS:
             # Check if model already exists
             existing = await prisma.modelconfig.find_unique(
@@ -221,12 +340,26 @@ async def seed_models():
                 await prisma.modelconfig.create(data=model_data)
                 created_count += 1
                 logger.info(f"[seed] Created model: {model_data['modelId']}")
+                continue
+
+            update_data = _syncable_model_fields(existing, model_data)
+            if update_data:
+                await prisma.modelconfig.update(
+                    where={"modelId": model_data["modelId"]},
+                    data=update_data,
+                )
+                updated_count += 1
+                logger.info("[seed] Synced model metadata: %s", model_data["modelId"])
 
         await prisma.disconnect()
 
         return {
             "success": True,
-            "message": f"Seeded {created_count} new models",
+            "message": (
+                f"Seeded {created_count} new models, "
+                f"updated {updated_count} existing models, "
+                f"migrated {migrated_count} legacy ids"
+            ),
             "total_models": len(DEFAULT_MODELS),
         }
 
@@ -255,13 +388,19 @@ async def get_all_models():
             order={"displayName": "asc"}
         )
 
+        display_models = sorted(
+            (_merged_model_config(model) for model in _preferred_model_rows(models).values()),
+            key=lambda model: model["displayName"].lower(),
+        )
+
         # Calculate stats for each model from Generation table
         models_data = []
-        for m in models:
+        for model in display_models:
+            model_ids = _equivalent_model_ids(model["modelId"])
             # Count generations for this model
             total_gens = await prisma.generation.count(
                 where={
-                    "modelUsed": m.modelId,
+                    "modelUsed": {"in": model_ids},
                     "isDeleted": False
                 }
             )
@@ -275,7 +414,7 @@ async def get_all_models():
             try:
                 rated_gens = await prisma.generation.find_many(
                     where={
-                        "modelUsed": m.modelId,
+                        "modelUsed": {"in": model_ids},
                         "userRating": {"not": None},
                         "isDeleted": False
                     }
@@ -292,23 +431,23 @@ async def get_all_models():
                     avg_latency = sum(latencies) / len(latencies) if latencies else None
             except Exception as e:
                 # Schema mismatch (userReason column doesn't exist) - skip averages for now
-                logger.warning(f"[admin_models] Could not calculate averages for {m.modelId}: {e}")
+                logger.warning(f"[admin_models] Could not calculate averages for {model['modelId']}: {e}")
 
             models_data.append({
-                "id": m.id,
-                "modelId": m.modelId,
-                "provider": m.provider,
-                "displayName": m.displayName,
-                "buckets": m.buckets,
-                "isActive": m.isActive,
-                "isTestingEnabled": m.isTestingEnabled,
+                "id": model["id"],
+                "modelId": model["modelId"],
+                "provider": model["provider"],
+                "displayName": model["displayName"],
+                "buckets": model["buckets"],
+                "isActive": model["isActive"],
+                "isTestingEnabled": model["isTestingEnabled"],
                 "totalGenerations": total_gens,
                 "avgRating": round(avg_rating, 2) if avg_rating else None,
                 "avgCost": round(avg_cost, 2) if avg_cost else None,
                 "avgLatency": round(avg_latency, 2) if avg_latency else None,
-                "costPerImage": m.costPerImage,
-                "createdAt": m.createdAt.isoformat() if m.createdAt else None,
-                "updatedAt": m.updatedAt.isoformat() if m.updatedAt else None,
+                "costPerImage": model["costPerImage"],
+                "createdAt": model["createdAt"],
+                "updatedAt": model["updatedAt"],
             })
 
         await prisma.disconnect()
@@ -340,24 +479,29 @@ async def get_active_models(bucket: Optional[str] = None):
             order={"displayName": "asc"}
         )
 
+        display_models = sorted(
+            (_merged_model_config(model) for model in _preferred_model_rows(models).values()),
+            key=lambda model: model["displayName"].lower(),
+        )
+
         # Filter by bucket if specified
         if bucket:
-            models = [m for m in models if bucket in m.buckets]
+            display_models = [model for model in display_models if bucket in model["buckets"]]
 
         await prisma.disconnect()
 
         return {
             "models": [
                 {
-                    "modelId": m.modelId,
-                    "provider": m.provider,
-                    "displayName": m.displayName,
-                    "buckets": m.buckets,
-                    "costPerImage": m.costPerImage,
+                    "modelId": model["modelId"],
+                    "provider": model["provider"],
+                    "displayName": model["displayName"],
+                    "buckets": model["buckets"],
+                    "costPerImage": model["costPerImage"],
                 }
-                for m in models
+                for model in display_models
             ],
-            "count": len(models),
+            "count": len(display_models),
         }
 
     except Exception as e:
@@ -384,15 +528,20 @@ async def get_testing_models(bucket: Optional[str] = None):
             order={"displayName": "asc"}
         )
 
+        display_models = sorted(
+            (_merged_model_config(model) for model in _preferred_model_rows(models).values()),
+            key=lambda model: model["displayName"].lower(),
+        )
+
         # Filter by bucket if specified
         if bucket:
-            models = [m for m in models if bucket in m.buckets]
+            display_models = [model for model in display_models if bucket in model["buckets"]]
 
         await prisma.disconnect()
 
         return {
-            "models": [m.modelId for m in models],
-            "count": len(models),
+            "models": [model["modelId"] for model in display_models],
+            "count": len(display_models),
         }
 
     except Exception as e:
@@ -428,9 +577,14 @@ async def update_model_config(update: ModelConfigUpdate):
             await prisma.disconnect()
             raise HTTPException(status_code=400, detail="No fields to update")
 
+        existing = await _find_existing_model(prisma, update.modelId)
+        if not existing:
+            await prisma.disconnect()
+            raise HTTPException(status_code=404, detail=f"Model not found: {update.modelId}")
+
         # Update model
         model = await prisma.modelconfig.update(
-            where={"modelId": update.modelId},
+            where={"modelId": existing.modelId},
             data=update_data
         )
 
@@ -440,15 +594,17 @@ async def update_model_config(update: ModelConfigUpdate):
 
         return {
             "success": True,
-            "message": f"Updated {update.modelId}",
+            "message": f"Updated {_canonical_model_id(update.modelId)}",
             "model": {
-                "modelId": model.modelId,
+                "modelId": _canonical_model_id(model.modelId),
                 "isActive": model.isActive,
                 "isTestingEnabled": model.isTestingEnabled,
                 "buckets": model.buckets,
             },
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[admin_models] Error updating model: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -479,8 +635,12 @@ async def bulk_update_models(request: BulkModelUpdate):
                     update_data["buckets"] = update.buckets
 
                 if update_data:
+                    existing = await _find_existing_model(prisma, update.modelId)
+                    if not existing:
+                        raise ValueError(f"Model not found: {update.modelId}")
+
                     await prisma.modelconfig.update(
-                        where={"modelId": update.modelId},
+                        where={"modelId": existing.modelId},
                         data=update_data
                     )
                     updated_count += 1
@@ -516,7 +676,7 @@ async def get_model_ratings(model_id: str):
         # Get all generations with ratings for this model (Python Prisma doesn't support select)
         generations = await prisma.generation.find_many(
             where={
-                "modelUsed": model_id,
+                "modelUsed": {"in": _equivalent_model_ids(model_id)},
                 "userRating": {"not": None}
             },
             order={"createdAt": "desc"},
@@ -526,7 +686,7 @@ async def get_model_ratings(model_id: str):
         await prisma.disconnect()
 
         return {
-            "model_id": model_id,
+            "model_id": _canonical_model_id(model_id),
             "total_ratings": len(generations),
             "ratings": [
                 {
