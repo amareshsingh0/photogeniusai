@@ -96,6 +96,17 @@ class LLMLinguaCompressor:
         if not prompt or len(prompt) < 50:
             return prompt  # Too short to compress meaningfully
 
+        # XLM-RoBERTa hard limit is 512 tokens. Passing more causes hang / bad output.
+        # Rough heuristic: ~4 chars per token → 2000 chars ≈ 500 tokens.
+        # Claude prompt caching already handles large static prompts efficiently,
+        # so skipping here is safe (costs are already minimized by cache hits).
+        if len(prompt) > 2000:
+            logger.warning(
+                "[llmlingua] Prompt too large for XLM-RoBERTa (%d chars, ~%d tokens > 512 limit) — skipping compression",
+                len(prompt), len(prompt) // 4,
+            )
+            return prompt
+
         try:
             # Build structured compression request
             contexts = [prompt]
