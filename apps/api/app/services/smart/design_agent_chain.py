@@ -142,6 +142,74 @@ def _extract_explicit_texts(prompt: str) -> Dict[str, str]:
     return result
 
 
+# ── Personal-intent detection ─────────────────────────────────────────────────
+# Distinguishes personal celebrations (birthday, wedding, anniversary, gift
+# cards, personal festival greetings) from commercial advertising. Personal
+# intent skips brand fabrication, CTA, features-grid, and commercial design
+# rooms ("device_light_stage" etc.) that contaminate the final image prompt.
+_PERSONAL_INTENT_PATTERNS = re.compile(
+    r"\b("
+    r"happy\s+(birthday|anniversary|wedding)|"
+    r"birthday\s+(poster|card|greeting|wish|for|of)|"
+    r"wedding\s+(card|invite|invitation|greeting)|"
+    r"anniversary\s+(card|greeting|wish|for)|"
+    r"baby\s+(shower|announcement)|"
+    r"gender\s+reveal|"
+    r"save\s+the\s+date|"
+    r"engagement\s+(card|invite|invitation)|"
+    r"graduation\s+(card|greeting|announcement)|"
+    r"retirement\s+(card|greeting|party)|"
+    r"farewell\s+(card|greeting|poster)|"
+    r"get\s+well\s+soon|"
+    r"congratulations\s+(card|poster)|"
+    r"thank\s+you\s+card|"
+    r"personal\s+(greeting|card|poster)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _detect_personal_intent(prompt: str) -> bool:
+    """True if the prompt is a personal celebration/greeting, not a commercial ad."""
+    if not prompt:
+        return False
+    return bool(_PERSONAL_INTENT_PATTERNS.search(prompt))
+
+
+def _apply_personal_intent_override(
+    triage: Dict, brand: Dict, creative: Dict, prompt: str
+) -> bool:
+    """
+    Post-process strategy output so personal celebrations don't get SaaS/brand
+    advertising treatment. Clears brand_name, tagline; forces industry to
+    "personal_celebration" so downstream copy + design room pick warm paths.
+    Returns True if the override was applied.
+    """
+    if not _detect_personal_intent(prompt):
+        return False
+
+    triage["_is_personal"] = True
+    triage["industry"] = "personal_celebration"
+    triage["goal"] = "celebration"
+    if triage.get("creative_type") in (None, "", "ad", "banner", "social_post"):
+        triage["creative_type"] = "poster"
+
+    # Strip fabricated brand identity — personal greetings have no "brand".
+    brand["brand_name"] = ""
+    brand["tagline"] = ""
+    brand["font_style"] = brand.get("font_style") or "expressive_display"
+
+    # Clear commercial layout archetype if it came back as a product layout.
+    if creative.get("layout_archetype") in (
+        "hero_top_features_bottom",
+        "split_60_40",
+        "product_grid",
+    ):
+        creative["layout_archetype"] = "typographic_led"
+
+    return True
+
+
 def _aspect_ratio_label(width: int, height: int) -> str:
     if width <= 0 or height <= 0:
         return "4:5"
@@ -694,6 +762,7 @@ def _backdrop_candidates_for_request(
     prompt_lower = str(triage.get("original_prompt") or "").lower()
     tone = str(brand.get("tone") or strategy.get("tone") or "").lower()
 
+    is_personal = bool(triage.get("_is_personal")) or industry == "personal_celebration"
     is_fashion = industry == "fashion" or any(
         token in prompt_lower for token in ("fashion", "couture", "runway", "collection", "model", "editorial")
     )
@@ -709,9 +778,72 @@ def _backdrop_candidates_for_request(
     is_fitness = industry == "fitness" or any(
         token in prompt_lower for token in ("gym", "fitness", "workout", "athlete", "training", "sport")
     )
-    is_tech = industry in ("tech", "saas", "finance", "education") or any(
+    # Personal branch MUST win over is_tech — "birthday poster" shouldn't land
+    # on "device light stage" just because no industry keyword matched.
+    is_tech = (not is_personal) and (industry in ("tech", "saas", "finance", "education") or any(
         token in prompt_lower for token in ("app", "software", "dashboard", "device", "tech", "startup", "platform")
-    )
+    ))
+
+    if is_personal:
+        return [
+            {
+                "id": "warm_celebration_glow",
+                "label": "Warm celebration glow",
+                "direction": (
+                    "Soft, warm celebratory atmosphere with bokeh party lights, festive confetti or balloons at the edges, "
+                    "and generous clean space in the upper/center area reserved for the greeting typography."
+                ),
+                "copy_space": "center",
+                "hero_placement": "center focus",
+                "subject_priority": 8,
+                "readability": 10,
+                "brand_fit": 6,
+                "novelty": 7,
+                "supports_sale": 2,
+                "supports_editorial": 7,
+                "environment_dominance": 4,
+                "vertical_friendly": 9,
+                "font_style": "expressive_display",
+            },
+            {
+                "id": "festive_typographic_canvas",
+                "label": "Festive typographic canvas",
+                "direction": (
+                    "Typography-led celebration layout: a richly coloured gradient or textured paper backdrop, subtle decorative "
+                    "motifs (stars, petals, confetti, ribbons) around the edges, and a wide-open centre for the headline name and wish."
+                ),
+                "copy_space": "center",
+                "hero_placement": "typographic centrepiece",
+                "subject_priority": 5,
+                "readability": 10,
+                "brand_fit": 5,
+                "novelty": 8,
+                "supports_sale": 1,
+                "supports_editorial": 8,
+                "environment_dominance": 3,
+                "vertical_friendly": 9,
+                "font_style": "expressive_display",
+            },
+            {
+                "id": "cake_and_candles_moment",
+                "label": "Cake and candles moment",
+                "direction": (
+                    "A single beautifully lit celebration cake (or the relevant ceremonial object — bouquet, rings, diya) as hero, "
+                    "with warm candlelight, soft shallow depth of field, and a dark elegant background so the greeting reads clearly."
+                ),
+                "copy_space": "top",
+                "hero_placement": "lower-third hero object",
+                "subject_priority": 9,
+                "readability": 9,
+                "brand_fit": 5,
+                "novelty": 6,
+                "supports_sale": 1,
+                "supports_editorial": 7,
+                "environment_dominance": 3,
+                "vertical_friendly": 9,
+                "font_style": "expressive_display",
+            },
+        ]
 
     if is_fashion or is_luxury:
         return [
@@ -2225,9 +2357,11 @@ async def _acall_claude(
                     "budget_tokens": thinking_budget
                 }
 
-            # Add 60 second timeout
+            # Add 60 second timeout. AsyncAnthropic.messages.create() returns a
+            # coroutine — must await it inside claude_call, else resp becomes
+            # the coroutine object itself and `resp.content` raises AttributeError.
             async def claude_call():
-                return client.messages.create(**request_params)
+                return await client.messages.create(**request_params)
 
             resp = await asyncio.wait_for(claude_call(), timeout=60.0)
 
@@ -3112,6 +3246,7 @@ async def _agent_copy_writer(
     strategy = _request_strategy(triage, prompt, brand)
     platform = triage.get("platform", "instagram")
     hl_max = {"instagram": 30, "instagram_story": 20, "linkedin": 50, "default": 40}.get(platform, 40)
+    is_personal = bool(triage.get("_is_personal"))
 
     # Tell the AI what the user explicitly typed — it should use these verbatim
     explicit_headline    = triage.get("explicit_headline", "").strip()
@@ -3275,22 +3410,45 @@ async def _agent_copy_writer(
     psycho_hint = f"\nPsychographic: {psychographic} — {psycho_map.get(psychographic, '')}"
     emotion_hint = f"\nTarget Emotion: {emotion_target.upper()} — trigger this emotion in headline."
 
-    system = (
-        f"You are a world-class Ad Copywriter (Ogilvy / Leo Burnett level).\n"
-        f"Platform: {platform}. Tone: {brand.get('tone','bold')}. "
-        f"Goal: {triage.get('goal','brand_awareness')}. Industry: {triage.get('industry','general')}.\n"
-        f"Think deeply about what this business needs. Write copy that converts.\n"
-        f"Commercial copy guardrails: {strategy['copy_guardrails']}\n"
-        f"HEADLINE max {hl_max} chars ALL CAPS.{festival_hint}{business_context_hint}{explicit_hint}{bible_hint}{psycho_hint}{emotion_hint}\n"
-        f"For features: generate 4 REAL, SPECIFIC benefits relevant to this industry — not generic placeholders.\n"
-        'Return ONLY valid JSON: {"brand_name":"","headline":"ALL CAPS",'
-        '"subheadline":"sentence case, compelling","body":"1-2 punchy sentences",'
-        '"cta":"2-4 WORDS ACTION","cta_url":"","tagline":"",'
-        '"features":[{"icon":"emoji","title":"specific benefit","desc":"one concrete line"},'
-        '{"icon":"emoji","title":"specific benefit","desc":"one concrete line"},'
-        '{"icon":"emoji","title":"specific benefit","desc":"one concrete line"},'
-        '{"icon":"emoji","title":"specific benefit","desc":"one concrete line"}]}'
-    )
+    if is_personal:
+        # Personal greeting path: no brand, no CTA, no features grid, no
+        # commercial "convert the customer" framing. The user wants a card,
+        # not an ad. Extract the recipient name from the prompt if present.
+        system = (
+            "You are writing a PERSONAL GREETING card (birthday / wedding / anniversary / "
+            "graduation / personal festival wish — NOT a commercial ad).\n"
+            f"Platform: {platform}.\n"
+            "RULES:\n"
+            "- This is a personal message FROM one human TO another. Warm, sincere, specific.\n"
+            "- DO NOT invent a brand, company, agency, shop, or event-planning business.\n"
+            "- DO NOT add a call-to-action like 'GET STARTED', 'SHOP NOW', 'LEARN MORE'. There is no product.\n"
+            "- DO NOT add features / benefits / product info — this is a greeting, not a pitch.\n"
+            "- Headline = the core wish (e.g. 'HAPPY BIRTHDAY RAHUL', 'HAPPY ANNIVERSARY', 'CONGRATULATIONS').\n"
+            "- Subheadline = short warm line (e.g. 'Many happy returns of the day').\n"
+            "- Body = optional 1 short sentence of warmth — or empty.\n"
+            "- brand_name, tagline, cta, cta_url, features MUST all be empty strings / empty list.\n"
+            f"HEADLINE max {hl_max} chars ALL CAPS.{explicit_hint}\n"
+            'Return ONLY valid JSON: {"brand_name":"","headline":"ALL CAPS GREETING",'
+            '"subheadline":"short warm line or empty","body":"one short sentence or empty",'
+            '"cta":"","cta_url":"","tagline":"","features":[]}'
+        )
+    else:
+        system = (
+            f"You are a world-class Ad Copywriter (Ogilvy / Leo Burnett level).\n"
+            f"Platform: {platform}. Tone: {brand.get('tone','bold')}. "
+            f"Goal: {triage.get('goal','brand_awareness')}. Industry: {triage.get('industry','general')}.\n"
+            f"Think deeply about what this business needs. Write copy that converts.\n"
+            f"Commercial copy guardrails: {strategy['copy_guardrails']}\n"
+            f"HEADLINE max {hl_max} chars ALL CAPS.{festival_hint}{business_context_hint}{explicit_hint}{bible_hint}{psycho_hint}{emotion_hint}\n"
+            f"For features: generate 4 REAL, SPECIFIC benefits relevant to this industry — not generic placeholders.\n"
+            'Return ONLY valid JSON: {"brand_name":"","headline":"ALL CAPS",'
+            '"subheadline":"sentence case, compelling","body":"1-2 punchy sentences",'
+            '"cta":"2-4 WORDS ACTION","cta_url":"","tagline":"",'
+            '"features":[{"icon":"emoji","title":"specific benefit","desc":"one concrete line"},'
+            '{"icon":"emoji","title":"specific benefit","desc":"one concrete line"},'
+            '{"icon":"emoji","title":"specific benefit","desc":"one concrete line"},'
+            '{"icon":"emoji","title":"specific benefit","desc":"one concrete line"}]}'
+        )
     context = (
         f"User request: {prompt}\n"
         f"Theme: {creative.get('theme','')}  Mood: {creative.get('mood','')}\n"
@@ -4055,6 +4213,7 @@ async def _agent_image_prompter(
     prompt_dna: Optional[Dict] = None,
 ) -> Dict:
     strategy = _request_strategy(triage, triage.get("original_prompt", ""), {"tone": creative.get("mood", "")})
+    is_personal = bool(triage.get("_is_personal"))
 
     # Beast-level intelligence extraction
     emotion_target = triage.get("emotion_target", "aspiration")
@@ -4370,6 +4529,33 @@ async def _agent_image_prompter(
         f"Return ONLY this JSON structure (no prose, no markdown):\n{_OUTPUT_SCHEMA}"
     )
 
+    if is_personal:
+        # Hard override for personal greetings — bypass commercial case studies
+        # and product/SaaS/restaurant framing. The scene must be a warm
+        # celebration moment, not an advertisement.
+        system = (
+            "You are a SENIOR PROMPT ENGINEER writing a scene prompt for a PERSONAL GREETING "
+            "card / poster (birthday, wedding, anniversary, graduation, personal festival wish).\n"
+            "\n"
+            "THIS IS NOT AN ADVERTISEMENT. Ignore any commercial / SaaS / product-launch / "
+            "restaurant-opening framing.\n"
+            "\n"
+            "HARD RULES:\n"
+            "- NO brand, logo, product, shop, app, device, interface, dashboard, or 'light stage'.\n"
+            "- NO people holding phones, no CTA buttons, no product packaging.\n"
+            "- Scene must be a warm, human celebration moment suited to the occasion:\n"
+            "    • birthday → cake with candles, balloons, soft bokeh party lights, warm glow\n"
+            "    • wedding → flowers, rings, elegant fabric, soft natural light\n"
+            "    • anniversary → roses, candles, warm golden ambience\n"
+            "    • graduation → cap, diploma, celebratory light\n"
+            "    • festival → authentic festival iconography (diyas, rangoli, lanterns, etc.)\n"
+            "- Composition MUST leave a large clean area (center or upper-third) for the greeting text overlay.\n"
+            "- ZERO text/letters/typography in the generated image.\n"
+            "- 60-90 words, scene-focused, sensory, warm. Start with the hero object (cake / bouquet / candles).\n"
+            "\n"
+            f"Return ONLY this JSON structure (no prose, no markdown):\n{_OUTPUT_SCHEMA}"
+        )
+
     context = (
         f"User's brief: {triage.get('original_prompt', '')}\n"
         f"Brand/Product: {str(copy.get('brand_name','') or triage.get('brand_hint','') or 'unbranded')}\n"
@@ -4593,6 +4779,12 @@ class DesignAgentChain:
                 creative["aspect_ratio"] = _aspect_ratio_label(resolved_width, resolved_height)
 
                 palette = creative.get("palette", {})
+
+            # Personal-intent override: strip brand fabrication for greetings
+            # (birthday, wedding, anniversary, etc). Runs for both Master
+            # Strategist and legacy paths, so downstream agents see clean state.
+            if _apply_personal_intent_override(triage, brand, creative, safe_prompt):
+                logger.info("[design_chain] Personal-intent override applied — industry=personal_celebration, brand_name cleared")
 
             # ── Stage 2b: Design Director — Visual System Decree ───────────
             # Issues composition law, grid system, type scale, color rules
