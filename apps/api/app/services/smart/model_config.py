@@ -268,9 +268,9 @@ MODEL_REGISTRY = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 BUCKET_MODEL_MAP = {
-    # Typography/Poster → Ideogram v3 (best text rendering)
+    # Typography/Poster → Seedream 4.5 (1K), Gemini 3.1 (2K), Imagen 4 Ultra (4K)
     "typography": {
-        QualityTier.RES_1K: "ideogram_v3",
+        QualityTier.RES_1K: "seedream_4_5",
         QualityTier.RES_2K: "gemini_3_1_imagen",
         QualityTier.RES_4K: "imagen_4_ultra",
     },
@@ -310,9 +310,9 @@ BUCKET_MODEL_MAP = {
         QualityTier.RES_4K: "imagen_4_ultra",
     },
 
-    # Vector/Logo → Recraft v4 Pro
+    # Vector/Logo → Recraft v4 Pro (all tiers)
     "vector": {
-        QualityTier.RES_1K: "ideogram_v3",
+        QualityTier.RES_1K: "recraft_v4_pro",
         QualityTier.RES_2K: "recraft_v4_pro",
         QualityTier.RES_4K: "imagen_4_ultra",
     },
@@ -324,6 +324,45 @@ BUCKET_MODEL_MAP = {
         QualityTier.RES_4K: "imagen_4_ultra",
     },
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BUCKET TESTING MODELS — Parallel admin testing mode
+# Each entry: (model_key, tier_to_test_at)
+# Rule: models with max_resolution <= 1024 → "1k"
+#       models with max_resolution <= 2048 → "2k"
+#       models with max_resolution == 4096 → "4k"
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Resolution tiers each model supports — derived from max_resolution in MODEL_REGISTRY.
+# Source of truth for which tiers a model can generate at in parallel testing mode.
+# 1K only  : max_resolution=1024
+# 1K + 2K  : max_resolution=2048
+# 1K+2K+4K : max_resolution=4096
+MODEL_SUPPORTED_TIERS: Dict[str, List[str]] = {
+    "flux_2_flex":       ["1k"],
+    "flux_2_pro":        ["1k"],
+    "flux_schnell":      ["1k"],
+    "flux_dev":          ["1k"],
+    "seedream_4_5":      ["1k"],
+    "ideogram_v3":       ["1k"],
+    "grok_2_imagine":    ["1k"],
+    "hunyuan_image":     ["1k"],
+    "wan_2_7":           ["1k"],
+    "imagen_4_fast":     ["1k"],
+    "recraft_v4_pro":    ["1k", "2k"],
+    "recraft_v4_svg":    ["1k", "2k"],
+    "gemini_3_imagen":   ["1k", "2k"],
+    "gemini_3_1_imagen": ["1k", "2k"],
+    "imagen_4_base":     ["1k", "2k"],
+    "imagen_3":          ["1k", "2k"],   # alias → gemini_3_imagen
+    "imagen_4_ultra":    ["1k", "2k", "4k"],
+}
+
+
+def get_model_supported_tiers(model_key: str) -> List[str]:
+    """Return list of quality tiers a model can generate at. Defaults to ['1k']."""
+    return MODEL_SUPPORTED_TIERS.get(model_key, ["1k"])
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TIER-BASED MODEL SELECTION (Fallback if no bucket match)

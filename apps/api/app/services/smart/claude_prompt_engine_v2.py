@@ -157,7 +157,7 @@ def _is_claude_enabled() -> bool:
 USE_CLAUDE_ENGINE: bool = _is_claude_enabled()
 
 # Model names (Claude Haiku 4.5 only - cost optimized)
-_CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")  # All stages use Haiku 4.5
+_CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")  # Haiku 4.5 with extended thinking
 
 # Buckets that get a critic agent on premium/ultra
 _HARD_BUCKETS = {"anime", "typography", "editing", "interior_arch", "character_consistency"}
@@ -1058,12 +1058,11 @@ Convert color intentions to exact percentages + hex + lighting/material terms.
 "30% amber" → specify as rim light color temperature (2700-3200K) + material surface
 
 TEXT HANDLING:
-If the brief has headline text, EXCLUDE it from the primary_output (flux) prompt.
-State this explicitly in text_handling.
-Create an ideogram_variant that renders the text graphically.
+If the brief has headline text, include it directly in the primary_output prompt as part of the scene description.
+Text should be described as 3D/native scene elements (e.g. "bold letters spelling X float in the scene with cinematic lighting").
 
 PARAMETERS:
-steps: 4 (schnell), 20 (dev/ideogram), 28-32 (flux_pro simple), 36-40 (flux_pro complex lighting)
+steps: 4 (schnell), 28-32 (flux_pro/seedream simple), 36-40 (gemini/flux_pro complex lighting)
 guidance: 2.5-3.0 (creative/loose), 3.5 (balanced), 4.0-4.5 (prompt-adherent)
 
 Return ONLY valid JSON matching this exact schema:
@@ -1077,7 +1076,7 @@ Return ONLY valid JSON matching this exact schema:
     "color_strategy": "3 hex values with % split + what each represents visually"
   },
   "translation_notes": "how the CD's emotional direction maps to specific photography/lighting/color language",
-  "text_handling": "whether text is excluded from primary and why, or included",
+  "text_handling": "how headline text is incorporated into the scene",
   "recommended_model": "model key from available list",
   "recommendation_reason": "one sentence: why this model is optimal for this specific visual challenge",
   "primary_output": {
@@ -1086,13 +1085,6 @@ Return ONLY valid JSON matching this exact schema:
     "negative_prompt": "specific and relevant, not generic",
     "parameters": {"steps": 32, "guidance": 3.5},
     "prompt_notes": "2-3 sentences explaining the key creative decisions in the prompt"
-  },
-  "ideogram_variant": {
-    "model": "ideogram_quality or ideogram_turbo",
-    "prompt": "typography-focused prompt with text in double quotes",
-    "negative_prompt": "...",
-    "parameters": {"steps": 20, "guidance": 3.0},
-    "prompt_notes": "why this typography direction"
   },
   "draft_variant": {
     "model": "flux_schnell",
@@ -1276,8 +1268,8 @@ def _build_contextual_hints(
 
 # Per-stage token limits (tuned to actual output sizes)
 _STAGE_MAX_TOKENS = {
-    "brief":  1500,
-    "params": 2000,  # CDI schema: primary_output.prompt (80-120w) + negatives + draft_variant = ~1400-1800 tokens
+    "brief":  12000,  # Must be > budget_tokens (10000) for extended thinking
+    "params": 8000,   # CDI schema has 3 variants (primary + ideogram + draft) — rich prompts can hit 5-6K tokens
     "critic":  400,
 }
 
@@ -1379,7 +1371,7 @@ class ClaudePromptEngine:
                 temperature=1.0,  # MUST be 1.0 for extended thinking (Claude requirement)
                 thinking={
                     "type": "enabled",
-                    "budget_tokens": 2000  # Allow Haiku to think deeply for creative briefs
+                    "budget_tokens": 10000  # INCREASED: Let Haiku think deeply like ChatGPT/Claude web (was 2000)
                 },
                 messages=[{"role": "user", "content": user}],
             )
@@ -1398,6 +1390,14 @@ class ClaudePromptEngine:
         for block in resp.content:
             if block.type == "text":
                 text_content += block.text
+
+        stop_reason = getattr(resp, "stop_reason", "unknown")
+        if stop_reason == "max_tokens":
+            logger.warning(
+                "[claude-engine] stage=%s TRUNCATED at max_tokens=%d — response=%d chars. "
+                "Increase _STAGE_MAX_TOKENS[%r].",
+                stage, max_tokens, len(text_content), stage,
+            )
 
         return text_content
 

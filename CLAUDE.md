@@ -1,0 +1,240 @@
+# PhotoGenius AI — Claude Code Agent Memory
+
+> Read this file completely before touching any code.
+> This is the single source of truth for all agents.
+
+---
+
+## IDENTITY
+
+**Product**: PhotoGenius AI — AI image generation platform for creatives
+**API**: `api.creatives.bimoraai.com` (FastAPI, port 8003, PM2)
+**Web**: `creatives.bimoraai.com` (Next.js 14, port 3002, PM2)
+**Admin**: `api.creatives.bimoraai.com/admin`
+**Server**: `ssh -i "C:\desktop\PhotoGenius AI\bimoraAI.pem" ubuntu@43.204.223.51`
+
+---
+
+## ABSOLUTE RULES — NEVER BREAK THESE
+
+1. **Package manager: pnpm ONLY** — never npm, never yarn, never bun
+2. **Prisma for ALL DB operations** — never raw SQL, never direct Supabase client in Python API
+3. **Never commit `.env` files** — secrets in `.env.local` or server environment only
+4. **Never change the 3-provider stack** — fal.ai · Google Vertex · WaveSpeed only
+5. **Never add a 4th provider** — Fireworks, Together, Replicate, BFL are REMOVED on purpose
+6. **Prompt caching: static system prompts BEFORE dynamic user input** — always
+7. **Resolution tiers: 1K / 2K / 4K ONLY** — legacy names (fast/balanced/quality/ultra) map via `normalize_quality_tier()`
+8. **Feature flags go in Admin Panel → Feature Config tab** — not hardcoded booleans
+9. **Admin user**: `dev@photogenius.local` / UUID: `ee10a6d4-a124-4fea-ac1f-395d4f3adb6c`
+10. **Deploy sequence**: `git pull → pnpm build --filter=web → pm2 restart all`
+
+---
+
+## STACK
+
+| Layer | Technology |
+|-------|-----------|
+| Monorepo | Turborepo + pnpm workspaces |
+| Frontend | Next.js 14 · TypeScript · Tailwind CSS · shadcn/ui |
+| Backend | FastAPI (Python 3.11) |
+| Database | Prisma ORM → Supabase PostgreSQL |
+| Auth | DEV_USER pattern (Clerk removed; JWT pending Sprint 8) |
+| Process | PM2 (both web + api) |
+| AI — Prompt Engine | Claude Haiku 4.5 (extended thinking for briefs, standard for params) |
+| AI — Copy Writer | Gemini 2.5 Flash |
+| AI — Quality Judge | Gemini Vision (12 dims) |
+
+---
+
+## 3-PROVIDER MODEL STACK
+
+### Provider 1: fal.ai (Primary Aggregator)
+- **Models**: Flux 2 Flex · Ideogram v3 · Recraft v4 Pro/SVG · Seedream 4.5 · Real-ESRGAN
+- **Client function**: `multi_provider_client.py` → `_call_fal()`
+- **Key**: `FAL_KEY`
+- **Cost**: $0.015–$0.055 per image (cheapest)
+
+### Provider 2: Google Vertex AI
+- **Models**: Gemini 3 Imagen · Gemini 3.1 Imagen · Imagen 4 Base/Fast/Ultra
+- **Client function**: `multi_provider_client.py` → `_call_google()`
+- **Key**: `GEMINI_API_KEY` (3 keys, round-robin)
+- **Best for**: Enterprise photoreal, 4K resolution, Imagen 4 Ultra = 9.2/10 quality
+
+### Provider 3: WaveSpeed (Aggregator)
+- **Models**: Grok 2 Imagine (X.ai) · Wan 2.7 · Hunyuan Image (Tencent)
+- **Client function**: `multi_provider_client.py` → `_call_wavespeed()`
+- **Key**: `WAVESPEED_API_KEY`
+- **Best for**: Creative/uncensored styles, Asian aesthetics, Chinese text
+
+### Resolution Routing (BUCKET_MODEL_MAP in model_config.py)
+| Bucket | 1K | 2K | 4K |
+|--------|----|----|-----|
+| typography | seedream_4_5 | ideogram_v3 | imagen_4_ultra |
+| photorealism | flux_2_flex | gemini_3_imagen | imagen_4_ultra |
+| artistic | wan_2_7 | grok_2_imagine | imagen_4_ultra |
+| anime | wan_2_7 | wan_2_7 | gemini_3_1_imagen |
+| vector | recraft_v4_pro | recraft_v4_pro | recraft_v4_pro |
+| fast | seedream_4_5 | flux_2_flex | imagen_4_base |
+
+---
+
+## 4-AGENT PIPELINE
+
+```
+USER PROMPT
+    ↓
+Intent Analyzer (Python) + Bucket Detection (config.py → detect_capability_bucket)
+    ↓
+[Typography bucket] → 4-Agent Chain (design_agent_chain.py):
+    1. Master Strategist — Claude Haiku 4.5 (extended thinking) — consolidates Triage+Brand+CD
+    2. Copy Writer — Gemini 2.5 Flash — parallel Best-of-N drafts
+    3. Image Prompter — Gemini 2.5 Flash ─┐ run in parallel
+    4. Layout Planner — Gemini 2.5 Flash ──┘
+    ↓
+[Other buckets] → Claude Prompt Engine v2 (claude_prompt_engine_v2.py):
+    Stage A: Claude Sonnet 4.6 → Creative Brief JSON
+    Stage B: Claude Haiku 4.5 → Generation Params JSON
+    Validator: schema + budget + bucket-rule check
+    ↓
+Multi-Provider Generation (multi_provider_client.py — cheapest-first routing)
+    ↓
+Quality Gate (quality_critic.py — Gemini Vision, 12 dims + 10 Beast gates)
+    ↓
+FINAL IMAGE → SSE stream to frontend
+```
+
+---
+
+## KEY FILE LOCATIONS
+
+### Python API (`apps/api/app/`)
+| File | Purpose |
+|------|---------|
+| `services/external/multi_provider_client.py` | 3-provider client (fal, Google, WaveSpeed) |
+| `services/smart/model_config.py` | Model registry (10 models) + BUCKET_MODEL_MAP |
+| `services/smart/config.py` | Central config — typography, styles, bucket detection |
+| `services/smart/design_agent_chain.py` | 4-agent typography chain (2690 lines) |
+| `services/smart/master_strategist.py` | Unified Master Strategist (1400+ lines) |
+| `services/smart/claude_prompt_engine_v2.py` | Claude prompt engine (Stage A/B/Validator) |
+| `services/smart/quality_critic.py` | 12-dim quality scorer |
+| `services/smart/generation_router.py` | Generation routing logic |
+| `services/smart/beast_router_2026.py` | BEAST routing (2026 architecture) |
+| `services/smart/smart_cache.py` | Smart caching layer |
+| `api/v1/endpoints/generate_stream.py` | SSE pipeline + parallel testing mode |
+| `api/v1/endpoints/admin.py` | Admin endpoints |
+| `api/v1/endpoints/admin_config.py` | Feature flag endpoints |
+
+### Next.js Web (`apps/web/`)
+| File | Purpose |
+|------|---------|
+| `app/(dashboard)/generate/page.tsx` | Main generate page |
+| `app/api/generate/stream/route.ts` | SSE proxy + DB save |
+| `app/admin/page.tsx` | Admin dashboard (6 tabs) |
+| `lib/auth.ts` | DEV_USER (UUID: ee10a6d4-a124-4fea-ac1f-395d4f3adb6c) |
+
+---
+
+## FEATURE FLAGS (Admin Panel → Feature Config)
+
+```
+USE_MASTER_STRATEGIST=true       — 4-agent chain for typography
+USE_CLAUDE_ENGINE=true           — Claude prompt engine (vs heuristic)
+USE_IDEOGRAM=false               — Ideogram direct (disabled)
+USE_DETERMINISTIC_LAYOUT=false   — CV-based layout planner
+USE_HYBRID_QUALITY_CRITIC=false  — VLM + Python gates
+USE_PROMPT_CACHING=true          — Anthropic prefix caching
+USE_SMART_CACHE=true             — Smart response cache
+USE_LLMLINGUA_COMPRESSION=true   — Prompt compression
+```
+
+---
+
+## BEAST ARCHITECTURE (All 4 Phases Complete)
+- **Phase 2**: Master Strategist — 58% faster, 60% token savings
+- **Phase 3**: Deterministic Layout — CV-based, 100% reliable
+- **Phase 4**: Hybrid Quality Critic — VLM + Python gates, 95% accuracy
+
+---
+
+## ADMIN PANEL (6 Tabs)
+`Overview` | `Users` | `Generations` | `Models` | `Feature Config (16 flags)` | `Settings (auto-restart)`
+
+**Parallel Testing Mode**: Admin user sees multi-model results grid. Normal users see single result. Zero UI changes for normal users.
+
+---
+
+## AUTHENTICATION
+- Clerk: **REMOVED**
+- DEV_USER pattern: currently active
+- Custom JWT: **pending Sprint 8**
+- Admin check: `email === "dev@photogenius.local"`
+
+---
+
+## KNOWN WORKING PATTERNS
+
+### Correct: DB operation
+```python
+# Always Prisma, never raw Supabase client
+user = await prisma.user.find_unique(where={"email": email})
+```
+
+### Correct: Adding a feature flag
+```python
+# In config.py or env
+USE_NEW_FEATURE = os.getenv("USE_NEW_FEATURE", "false").lower() == "true"
+# Then expose in admin_config.py endpoint
+```
+
+### Correct: Prompt caching structure
+```python
+messages = [
+    {"role": "user", "content": [
+        {"type": "text", "text": STATIC_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": f"User input: {dynamic_user_input}"}
+    ]}
+]
+```
+
+### Correct: Resolution tier
+```python
+from app.services.smart.model_config import normalize_quality_tier
+tier = normalize_quality_tier(user_input_tier)  # Always normalizes to 1k/2k/4k
+```
+
+---
+
+## SPRINT STATUS (as of 2026-04-17)
+
+| Sprint | Feature | Status |
+|--------|---------|--------|
+| Sprint 8 | Custom JWT Auth | IN PROGRESS |
+| Sprint 3 | Canvas Editor | BACKLOG |
+| Sprint 4 | Brand Kit | BACKLOG |
+| Sprint 5 | Batch Generation | BACKLOG |
+| Sprint 6 | Advanced Auth | BACKLOG |
+
+---
+
+## DEPLOY COMMANDS
+
+```bash
+# SSH to server
+ssh -i "C:\desktop\PhotoGenius AI\bimoraAI.pem" ubuntu@43.204.223.51
+
+# Full deploy
+git pull origin main
+pnpm install --frozen-lockfile
+pnpm build --filter=web
+pm2 restart all
+pm2 save
+
+# Check logs
+pm2 logs photogenius-api --lines 100
+pm2 logs photogenius-web --lines 50
+pm2 status
+
+# Python API only
+cd apps/api && source venv/bin/activate
+pm2 restart photogenius-api
+```

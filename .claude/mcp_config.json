@@ -1,0 +1,41 @@
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "FILL_THIS_github.com_→_Settings_→_Developer_Settings_→_Personal_Access_Tokens"
+      }
+    },
+    "supabase": {
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server-supabase@latest"],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "FILL_THIS_supabase.com_→_Account_→_Access_Tokens",
+        "SUPABASE_URL": "https://whefwzleeyimflfcunqt.supabase.co"
+      }
+    },
+    "sentry": {
+      "command": "npx",
+      "args": ["-y", "@sentry/mcp-server@latest"],
+      "env": {
+        "SENTRY_AUTH_TOKEN": "FILL_THIS_sentry.io_→_Settings_→_Auth_Tokens"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:/desktop/PhotoGenius AI"
+      ]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "postgresql://postgres:m9w9SBlS96oGwO8n@db.whefwzleeyimflfcunqt.supabase.co:5432/postgres"
+      }
+    }
+  }
+}

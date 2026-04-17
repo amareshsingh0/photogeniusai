@@ -811,74 +811,97 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
     """
     Parallel multi-model generation for admin testing.
 
-    Generates from ALL active testing-enabled models simultaneously,
-    streaming results as each model completes.
+    Flow:
+    1. Detect bucket from prompt
+    2. Fetch DB models: isActive=True, isTestingEnabled=True, bucket in model.buckets
+    3. For each model, get all tiers it supports from MODEL_SUPPORTED_TIERS
+    4. Generate (model, tier) pair in parallel — each at all tiers it supports
     """
     try:
         from prisma import Prisma
         from app.services.smart.config import detect_capability_bucket
+        from app.services.smart.model_config import get_model_supported_tiers
 
-        # Detect bucket
+        # Detect bucket from prompt
         bucket = detect_capability_bucket(req.prompt)
+        # Normalize sub-bucket for DB lookup (photorealism_landscape → photorealism)
+        db_bucket = bucket.split("_")[0] if "_" in bucket else bucket
+
         yield _sse("intent_ready", {
             "bucket": bucket,
             "trace_id": trace_id,
             "testing_mode": True,
         })
 
-        # Get all testing-enabled models.
+        # Fetch active testing-enabled models from DB, filtered by bucket
         prisma = Prisma()
         await prisma.connect()
-
-        models = await prisma.modelconfig.find_many(
-            where={
-                "isActive": True,
-                "isTestingEnabled": True,
-            }
+        all_models = await prisma.modelconfig.find_many(
+            where={"isActive": True, "isTestingEnabled": True}
         )
-
-        if not models:
-            await prisma.disconnect()
-            yield _sse("error", {"message": "No testing-enabled models found"})
-            return
-
-        model_ids = []
-        seen_model_ids = set()
-        for model in models:
-            canonical_model_id = _canonical_model_key(model.modelId, default=model.modelId)
-            if canonical_model_id in seen_model_ids:
-                continue
-            seen_model_ids.add(canonical_model_id)
-            model_ids.append(canonical_model_id)
-
-        logger.info(f"[parallel][{trace_id}] Testing {len(model_ids)} models: {model_ids}")
-
         await prisma.disconnect()
 
-        # Generate from each model in parallel
-        tasks = []
-        for model_id in model_ids:
-            task = _generate_with_model(req, model_id, trace_id)
-            tasks.append(task)
+        # Filter: keep models whose buckets list includes this bucket
+        bucket_models = [
+            m for m in all_models
+            if bucket in (m.buckets or []) or db_bucket in (m.buckets or [])
+        ]
 
-        # Stream results as they complete
+        if not bucket_models:
+            yield _sse("error", {"message": f"No testing-enabled models found for bucket: {bucket}"})
+            return
+
+        # Build (model_key, tier) pairs — each model at every tier it supports
+        test_pairs = []
+        seen = set()
+        for m in bucket_models:
+            model_key = _canonical_model_key(m.modelId, default=m.modelId)
+            for tier in get_model_supported_tiers(model_key):
+                pair = (model_key, tier)
+                if pair not in seen:
+                    seen.add(pair)
+                    test_pairs.append(pair)
+
+        logger.info(
+            "[parallel][%s] bucket=%s — %d models × tiers = %d generations: %s",
+            trace_id, bucket, len(bucket_models), len(test_pairs), test_pairs,
+        )
+
+        yield _sse("testing_started", {
+            "bucket":       bucket,
+            "total":        len(test_pairs),
+            "models":       list({m for m, _ in test_pairs}),
+            "trace_id":     trace_id,
+        })
+
+        # Launch all (model, tier) pairs in parallel
+        tasks = [
+            _generate_with_model(req, model_id, trace_id, quality_override=tier)
+            for model_id, tier in test_pairs
+        ]
+
+        completed = 0
         for coro in asyncio.as_completed(tasks):
             result = await coro
-
+            completed += 1
             if result:
-                # Yield model_result event (model name HIDDEN from user, saved in DB)
                 yield _sse("model_result", {
                     "generationId": result.get("generation_id"),
-                    "imageUrl": result.get("image_url"),
-                    "modelId": result.get("model_id"),  # Admin only, not shown to user
-                    "latency": result.get("latency"),
-                    "cost": result.get("cost"),
-                    "trace_id": trace_id,
+                    "imageUrl":     result.get("image_url"),
+                    "modelId":      result.get("model_id"),
+                    "tier":         result.get("tier"),
+                    "latency":      result.get("latency"),
+                    "cost":         result.get("cost"),
+                    "completed":    completed,
+                    "total":        len(test_pairs),
+                    "trace_id":     trace_id,
                 })
 
         yield _sse("testing_complete", {
-            "total_models": len(model_ids),
-            "trace_id": trace_id,
+            "total":     len(test_pairs),
+            "completed": completed,
+            "bucket":    bucket,
+            "trace_id":  trace_id,
         })
 
     except Exception as e:
@@ -886,9 +909,18 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
         yield _sse("error", {"message": str(e)})
 
 
-async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str) -> dict:
+async def _generate_with_model(
+    req: StreamRequest,
+    model_id: str,
+    trace_id: str,
+    quality_override: Optional[str] = None,
+) -> dict:
     """
     Generate with a specific model.
+
+    Args:
+        quality_override: If set, use this tier instead of req.quality.
+                          Used in testing mode so each model generates at its own max resolution.
 
     Returns:
         {
@@ -902,6 +934,7 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
     start = time.time()
     requested_model_id = model_id
     model_id = _canonical_model_key(model_id, default=model_id)
+    effective_quality = quality_override or req.quality
 
     try:
         from app.services.external.multi_provider_client import multi_client
@@ -913,7 +946,7 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
             model_key=model_id,
             image_size=_pick_image_size(req.width, req.height),
             num_images=1,
-            num_inference_steps=_QUALITY_STEPS.get(req.quality, 20),
+            num_inference_steps=_QUALITY_STEPS.get(effective_quality, 20),
             guidance_scale=_MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
             negative_prompt=req.negative_prompt or "",
             reference_image_url=req.reference_image_url,
@@ -944,14 +977,14 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
                     "mode": "REALISM",  # Default mode
                     "originalPrompt": req.prompt,
                     "enhancedPrompt": req.prompt,
-                    "numInferenceSteps": _QUALITY_STEPS.get(req.quality, 20),
+                    "numInferenceSteps": _QUALITY_STEPS.get(effective_quality, 20),
                     "guidanceScale": _MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
                     "width": req.width,
                     "height": req.height,
                     "outputUrls": json.dumps([result.get("image_url")]),  # JSON string
                     "selectedOutputUrl": result.get("image_url"),
                     "creditsUsed": 0,  # Testing mode = free
-                    "qualityTierUsed": req.quality,
+                    "qualityTierUsed": effective_quality,
                     "modelUsed": model_id,
                     "bucket": bucket,
                     "generationTimeSeconds": latency,
@@ -977,6 +1010,7 @@ async def _generate_with_model(req: StreamRequest, model_id: str, trace_id: str)
             "generation_id": generation.id if generation else None,
             "image_url": result.get("image_url"),
             "model_id": model_id,
+            "tier": effective_quality,
             "latency": latency,
             "cost": model_config.costPerImage if model_config and hasattr(model_config, "costPerImage") else 0.0,
         }
