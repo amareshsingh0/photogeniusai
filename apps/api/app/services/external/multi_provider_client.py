@@ -47,7 +47,14 @@ logger = logging.getLogger(__name__)
 # ── Provider API configs ───────────────────────────────────────────────────────
 
 _FAL_BASE       = "https://fal.run"
-_WAVESPEED_BASE = "https://api.wavespeed.ai/v1"
+_WAVESPEED_BASE = "https://api.wavespeed.ai/api/v3"
+
+# WaveSpeed model UUID paths (official v3 docs, Apr 2026)
+_WAVESPEED_MODEL_PATHS = {
+    "grok_2_imagine": "x-ai/grok-imagine-image/text-to-image",
+    "wan_2_7":        "alibaba/wan-2.7/text-to-image",
+    "hunyuan_image":  "wavespeed-ai/hunyuan-image-3",
+}
 
 # Provider → env var
 _PROVIDER_KEYS = {
@@ -81,7 +88,7 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
         ("google",   "imagen_4_ultra",                              0.060),
     ],
     "grok_2_imagine": [
-        ("fal",      "xai/grok-imagine-image",                      0.020),
+        ("wavespeed", "grok_2_imagine",                              0.020),
     ],
     "ideogram_v3": [
         ("fal",      "fal-ai/ideogram/v3",                          0.030),
@@ -90,7 +97,7 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
         ("fal",      "fal-ai/bytedance/seedream/v4.5/text-to-image", 0.030),
     ],
     "wan_2_7": [
-        ("fal",      "fal-ai/wan/v2.7/text-to-image",               0.030),
+        ("wavespeed", "wan_2_7",                                     0.030),
     ],
     "recraft_v4_pro": [
         ("fal",      "fal-ai/recraft/v4/pro/text-to-image",         0.030),
@@ -152,13 +159,13 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
     "recraft_v4_svg": [
         ("fal",      "fal-ai/recraft/v4/text-to-vector",    0.080),
     ],
-    # ── Hunyuan Image — anime/Asian styles — fal.ai
+    # ── Hunyuan Image — anime/Asian styles — WaveSpeed
     "hunyuan_image": [
-        ("fal",      "fal-ai/hunyuan/image",           0.030),
+        ("wavespeed", "hunyuan_image",                  0.030),
     ],
     # ── Google Imagen 3 — Google AI Studio (best text rendering)
     "imagen_3": [
-        ("google",   "imagen-3.0-generate-001",        0.020),  # $0.02/image (1024x1024)
+        ("google",   "imagen_3",                        0.020),  # $0.02/image (1024x1024)
     ],
     # ── Real-ESRGAN upscale — fal.ai
     "real_esrgan": [
@@ -485,7 +492,12 @@ class MultiProviderClient:
     async def _call_wavespeed(self, model_id: str, prompt: str, negative_prompt: str,
                               num_images: int, image_size: str, num_inference_steps: int,
                               guidance_scale: float, seed, **kwargs) -> Dict:
-        """WaveSpeed API — Grok 2 Imagine (X.ai), Wan 2.7, Hunyuan Image."""
+        """WaveSpeed v3 async API — Grok Imagine, Wan 2.7, Hunyuan Image.
+
+        Flow: POST /api/v3/{model_path} → task id → poll /predictions/{id}/result
+        until status=completed (or failed/error).
+        """
+        import asyncio
         start = time.time()
 
         api_key = self._keys.get("wavespeed", "")
@@ -493,71 +505,112 @@ class MultiProviderClient:
             logger.error("[wavespeed] WAVESPEED_API_KEY not set")
             return self._error(model_id, "WAVESPEED_API_KEY not set", 0.0)
 
-        # WaveSpeed model mapping
-        wavespeed_models = {
-            "grok_2_imagine": "xai/grok-2-imagine",
-            "wan_2_7": "wan/2.7",
-            "hunyuan_image": "tencent/hunyuan-image"
-        }
-
-        wavespeed_model = wavespeed_models.get(model_id)
-        if not wavespeed_model:
+        model_path = _WAVESPEED_MODEL_PATHS.get(model_id)
+        if not model_path:
             logger.error("[wavespeed] Unknown model: %s", model_id)
             return self._error(model_id, f"Unknown WaveSpeed model: {model_id}", 0.0)
 
-        # Map image_size to dimensions
+        # Map image_size → WaveSpeed "WIDTH*HEIGHT" string (Wan/Hunyuan format)
         size_map = {
-            "square_hd": {"width": 1024, "height": 1024},
-            "landscape_16_9": {"width": 1344, "height": 768},
-            "portrait_9_16": {"width": 768, "height": 1344},
-            "landscape_4_3": {"width": 1152, "height": 896},
+            "square_hd":       "1024*1024",
+            "landscape_16_9":  "1344*768",
+            "portrait_9_16":   "768*1344",
+            "landscape_4_3":   "1152*896",
         }
-        dims = size_map.get(image_size, {"width": 1024, "height": 1024})
+        size_str = size_map.get(image_size, "1024*1024")
 
-        payload = {
-            "model": wavespeed_model,
-            "prompt": prompt,
-            "width": dims["width"],
-            "height": dims["height"],
-            "num_images": num_images,
-            "steps": num_inference_steps,
-            "guidance_scale": guidance_scale,
+        # Aspect ratio for Grok (different param shape)
+        aspect_map = {
+            "square_hd": "1:1",
+            "landscape_16_9": "16:9",
+            "portrait_9_16": "9:16",
+            "landscape_4_3": "4:3",
         }
+        aspect_ratio = aspect_map.get(image_size, "1:1")
 
-        if negative_prompt:
-            payload["negative_prompt"] = negative_prompt
-        if seed is not None:
-            payload["seed"] = seed
+        # Per-model payload (each endpoint accepts different params)
+        if model_id == "grok_2_imagine":
+            payload = {
+                "prompt": prompt,
+                "aspect_ratio": aspect_ratio,
+                "num_images": max(1, min(num_images, 4)),
+                "output_format": "jpeg",
+            }
+        else:  # wan_2_7, hunyuan_image
+            payload = {
+                "prompt": prompt,
+                "size": size_str,
+                "seed": seed if seed is not None else -1,
+            }
+
+        submit_url = f"{_WAVESPEED_BASE}/{model_path}"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
         try:
             client = self._get_client("wavespeed")
-            resp = await client.post(
-                f"{_WAVESPEED_BASE}/generate",
-                json=payload,
-                timeout=120.0
-            )
+
+            # 1) Submit task
+            resp = await client.post(submit_url, json=payload, headers=headers, timeout=60.0)
             resp.raise_for_status()
-            data = resp.json()
+            submit_data = resp.json()
+            task = submit_data.get("data") or {}
+            task_id = task.get("id")
+            if not task_id:
+                raise ValueError(f"No task id from submit: {submit_data}")
 
-            # WaveSpeed returns {"images": [{"url": "..."}]}
-            images = data.get("images", [])
-            urls = []
-            for img in images:
-                if isinstance(img, dict):
-                    url = img.get("url")
-                    if url:
-                        urls.append(url)
-                elif isinstance(img, str):
-                    urls.append(img)
+            # Some models may return output immediately
+            if task.get("status") in ("completed", "succeeded"):
+                urls = self._extract_wavespeed_urls(task)
+                if urls:
+                    return self._ok(urls, model_id, "wavespeed.ai", time.time() - start)
 
-            if not urls:
-                raise ValueError(f"No images from WaveSpeed: {list(data.keys())}")
+            # 2) Poll result
+            poll_url = f"{_WAVESPEED_BASE}/predictions/{task_id}/result"
+            poll_headers = {"Authorization": f"Bearer {api_key}"}
+            max_polls = 60  # ~120s ceiling @ 2s interval
+            for _ in range(max_polls):
+                await asyncio.sleep(2.0)
+                poll_resp = await client.get(poll_url, headers=poll_headers, timeout=30.0)
+                poll_resp.raise_for_status()
+                result = (poll_resp.json() or {}).get("data") or {}
+                status = (result.get("status") or "").lower()
+                if status in ("completed", "succeeded"):
+                    urls = self._extract_wavespeed_urls(result)
+                    if not urls:
+                        raise ValueError(f"No images from WaveSpeed: {list(result.keys())}")
+                    return self._ok(urls, model_id, "wavespeed.ai", time.time() - start)
+                if status in ("failed", "error"):
+                    raise ValueError(f"WaveSpeed task failed: {result.get('error') or result}")
 
-            return self._ok(urls, model_id, "wavespeed.ai", time.time() - start)
+            raise TimeoutError(f"WaveSpeed task {task_id} timed out after {max_polls * 2}s")
 
         except Exception as e:
             logger.error("[wavespeed] API error: %s", e)
             return self._error(model_id, str(e), time.time() - start)
+
+    def _extract_wavespeed_urls(self, task: Dict) -> List[str]:
+        """Pull image URLs out of a WaveSpeed task result (shape varies by model)."""
+        urls: List[str] = []
+        outputs = task.get("outputs") or task.get("output") or []
+        if isinstance(outputs, list):
+            for item in outputs:
+                if isinstance(item, str):
+                    urls.append(item)
+                elif isinstance(item, dict):
+                    u = item.get("url") or item.get("image_url")
+                    if u:
+                        urls.append(u)
+        elif isinstance(outputs, dict):
+            u = outputs.get("url") or outputs.get("image_url")
+            if u:
+                urls.append(u)
+        # Some models put it under data.images
+        for img in (task.get("images") or []):
+            if isinstance(img, dict) and img.get("url"):
+                urls.append(img["url"])
+            elif isinstance(img, str):
+                urls.append(img)
+        return urls
 
     async def _upscale_fal(self, image_url: str, scale: int) -> Dict:
         start = time.time()

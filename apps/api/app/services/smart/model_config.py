@@ -13,7 +13,7 @@ Selected Model Stack (Best Results - User Verified):
 - Wan 2.7 → Fast Chinese-style, excellent for bulk Asian aesthetics (fal.ai runtime)
 - Recraft v4 Pro → Vector/SVG king for logos/design assets
 
-Reference: Models\modal_list.md (rows 2,6,7,8,11,12,16,19,21)
+Reference: Models/modal_list.md (rows 2,6,7,8,11,12,16,19,21)
 """
 
 from typing import Dict, List, Optional
@@ -260,6 +260,21 @@ MODEL_REGISTRY = {
         "strengths": ["vector_svg_king", "scalable", "clean_lines", "commercial_safe"],
         "tier": "Mid",
         "rating": 7.9,
+    },
+
+    # ═══ IMAGEN 3 (Google AI) — Legacy alias ═══
+    "imagen_3": {
+        "provider": ModelProvider.GOOGLE,
+        "endpoint": "imagen-4.0-generate-001",
+        "display_name": "Imagen 3",
+        "cost_per_image": 0.020,
+        "avg_latency": 8.0,
+        "max_resolution": 2048,
+        "supports_aspects": True,
+        "best_for": ["text_rendering", "photoreal"],
+        "strengths": ["text_accuracy", "photorealism"],
+        "tier": "Premium",
+        "rating": 8.5,
     },
 }
 
