@@ -1426,11 +1426,20 @@ def _build_design_room(triage: Dict, brand: Dict, creative: Dict, copy: Dict) ->
             ),
         },
     ]
-    summary = (
-        f"Winner: {winner.get('label', 'fallback backdrop')} with score {winner.get('score_total', 0)}. "
-        f"Prioritize {winner.get('hero_placement', 'hero clarity')}, preserve {copy_space} copy space, "
-        f"and keep the composition commercially strong before decorative detail."
-    )
+    is_personal_room = bool(triage.get("_is_personal")) or \
+        str(triage.get("industry") or "").lower() == "personal_celebration"
+    if is_personal_room:
+        summary = (
+            f"Winner: {winner.get('label', 'fallback backdrop')} with score {winner.get('score_total', 0)}. "
+            f"Prioritize {winner.get('hero_placement', 'hero clarity')}, preserve {copy_space} copy space, "
+            f"and keep the mood warm, personal, and celebratory — no brand or commercial framing."
+        )
+    else:
+        summary = (
+            f"Winner: {winner.get('label', 'fallback backdrop')} with score {winner.get('score_total', 0)}. "
+            f"Prioritize {winner.get('hero_placement', 'hero clarity')}, preserve {copy_space} copy space, "
+            f"and keep the composition commercially strong before decorative detail."
+        )
     return {
         "strategy": strategy,
         "copy_space": copy_space,
@@ -3741,6 +3750,33 @@ async def _enforce_char_limits(copy_blocks: Dict, platform: str) -> Dict:
     return result
 
 
+def _dedupe_layout_elements(elements: List[Dict]) -> List[Dict]:
+    """
+    Gemini occasionally emits two elements for the same slot (e.g. body_copy AND
+    body_text with identical content). Keep the first occurrence per
+    (size_role | id-family, content) combo.
+    """
+    if not elements:
+        return elements
+
+    seen: set = set()
+    kept: List[Dict] = []
+    for el in elements:
+        if not isinstance(el, dict):
+            continue
+        raw_id = str(el.get("id") or "").lower()
+        # Collapse body_copy / body_text → "body", cta_button / cta_text → "cta", etc.
+        family = re.sub(r"_(copy|text|button|label|shape|bg|bar)$", "", raw_id) or raw_id
+        role = str((el.get("style") or {}).get("size_role") or "").lower()
+        content = str(el.get("content") or "").strip().lower()
+        key = (family or role, role, content)
+        if key in seen and content:
+            continue
+        seen.add(key)
+        kept.append(el)
+    return kept
+
+
 async def _agent_layout_planner(
     triage: Dict,
     creative: Dict,
@@ -3851,6 +3887,7 @@ async def _agent_layout_planner(
 
     elements = _try_parse_elements(raw)
     if elements:
+        elements = _dedupe_layout_elements(elements)
         logger.info("[layout_planner] Gemini placed %d elements", len(elements))
         return elements
 
@@ -3859,6 +3896,7 @@ async def _agent_layout_planner(
     if arr_match:
         elements = _try_parse_elements(arr_match.group())
         if elements:
+            elements = _dedupe_layout_elements(elements)
             logger.info("[layout_planner] Gemini placed %d elements (extracted)", len(elements))
             return elements
 

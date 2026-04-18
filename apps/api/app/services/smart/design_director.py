@@ -185,13 +185,20 @@ class DesignDirector:
 
         # Deterministic decree for known archetypes
         if archetype_data:
-            # Select type scale based on platform + brand personality
-            type_scale_key = beast_config.select_scale_by_platform(platform)
-            # Override with brand personality if available
-            if brand_palette.get("font_personality"):
-                type_scale_key = beast_config.select_scale_by_brand_personality(
-                    brand_palette.get("font_personality")
-                )
+            # Personal celebration (birthday, wedding, anniversary) uses
+            # poster_impact scale — bold event-poster typography, NOT SaaS/dashboard.
+            is_personal = (industry or "").lower() == "personal_celebration"
+
+            if is_personal:
+                type_scale_key = "poster_impact"
+            else:
+                # Select type scale based on platform + brand personality
+                type_scale_key = beast_config.select_scale_by_platform(platform)
+                # Override with brand personality if available
+                if brand_palette.get("font_personality"):
+                    type_scale_key = beast_config.select_scale_by_brand_personality(
+                        brand_palette.get("font_personality")
+                    )
 
             # Load type scale from BeastConfig (with legacy fallback)
             type_scale_data = beast_config.get_type_scale(type_scale_key)
@@ -257,6 +264,17 @@ class DesignDirector:
                     "description": type_scale_data.get("description", "Type scale")
                 }
 
+            # Strip CTA / brand / logo entries for personal greetings — no commerce
+            if is_personal:
+                hierarchy = [
+                    h for h in hierarchy
+                    if not any(token in str(h).lower() for token in (
+                        "cta", "brand", "logo", "button"
+                    ))
+                ]
+                if not hierarchy:
+                    hierarchy = ["headline", "subheadline", "hero_image"]
+
             # Build decree
             decree = {
                 "composition_law": comp_archetype,
@@ -291,14 +309,24 @@ class DesignDirector:
 
                 "whitespace_philosophy": whitespace,
 
-                "forbidden_violations": [
-                    "Centered everything (must use asymmetry unless full_bleed)",
-                    "Equal-sized text (must show clear hierarchy)",
-                    "Rainbow colors (max 3 + neutrals enforced)",
-                    "Text over busy areas (preserve copy space)",
-                    "Logo as afterthought (integrate naturally)",
-                    "Generic stock aesthetic (must feel intentional)"
-                ],
+                "forbidden_violations": (
+                    [
+                        "Any brand logo, company name, or commercial mark",
+                        "Any CTA button, 'get started', 'buy now', 'shop now'",
+                        "SaaS dashboards, app UI, device mockups, feature grids",
+                        "Equal-sized text (must show clear hierarchy)",
+                        "Rainbow colors (max 3 + neutrals enforced)",
+                        "Text over busy areas (preserve copy space)",
+                        "Generic stock-photo aesthetic (feel authentic, warm)"
+                    ] if is_personal else [
+                        "Centered everything (must use asymmetry unless full_bleed)",
+                        "Equal-sized text (must show clear hierarchy)",
+                        "Rainbow colors (max 3 + neutrals enforced)",
+                        "Text over busy areas (preserve copy space)",
+                        "Logo as afterthought (integrate naturally)",
+                        "Generic stock aesthetic (must feel intentional)"
+                    ]
+                ),
 
                 "platform_constraints": self._get_platform_constraints(platform),
 

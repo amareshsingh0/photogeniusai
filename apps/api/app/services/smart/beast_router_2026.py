@@ -279,8 +279,28 @@ Output valid JSON ONLY in this exact format:
             logger.error("[judge] Failed to parse judgment, using first variant")
             return variants[0]
 
-        # Find winner
-        winner_id = judgment.get("winner_id", 1)
+        # Find winner — model sometimes returns null or out-of-range id
+        winner_id = judgment.get("winner_id")
+        if not isinstance(winner_id, int) or winner_id < 1:
+            # Pick best variant by evaluation scores (high > medium > low)
+            rank = {"high": 3, "medium": 2, "low": 1, "pass": 2, "fail": 0}
+            best_score = -1
+            best_id = variants[0]["variant_id"]
+            for ev in judgment.get("evaluations", []) or []:
+                vid = ev.get("variant_id")
+                if not isinstance(vid, int):
+                    continue
+                score = 0
+                for dim_key in ("hook_efficacy", "persuasion_density",
+                                "brand_consistency", "constraint_adherence"):
+                    dim = ev.get(dim_key) or {}
+                    sval = str(dim.get("score") or "").lower()
+                    score += rank.get(sval, 0)
+                if score > best_score:
+                    best_score, best_id = score, vid
+            winner_id = best_id
+            logger.warning(f"[judge] winner_id missing/invalid, derived from evaluations: {winner_id}")
+
         winner_variant = next((v for v in variants if v["variant_id"] == winner_id), variants[0])
 
         # Attach judgment metadata
