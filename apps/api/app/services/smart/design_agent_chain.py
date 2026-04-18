@@ -402,6 +402,8 @@ _AGENT_MAX_TOKENS = {
     "layout_planner":   2500,  # More elements for restaurant ads (name, dates, address, etc)
     "reconcile":        400,
     "char_guard":       600,
+    "semantic_judge":   3500,  # CoT rationale + JSON evaluations for N variants (was 2500, truncated)
+    "router":           400,
 }
 
 _COPY_SPACE_PROMPT_HINTS_OLD = {
@@ -2261,29 +2263,35 @@ def _extract_json(text: str) -> Dict:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
-    # Regex: find outermost {...} (handles surrounding prose)
-    match = re.search(r"\{[\s\S]*\}", text)
-    if match:
-        candidate = match.group()
+    # Regex: find outermost {...} (handles surrounding prose). Try the LAST
+    # opening brace first — LLMs often prepend CoT / markdown analysis before
+    # emitting the final JSON, so the trailing block is the real payload.
+    candidates: List[str] = []
+    brace_starts = [m.start() for m in re.finditer(r"\{", text)]
+    for start in reversed(brace_starts):
+        candidates.append(text[start:])
+    # Also keep the original greedy match as final fallback
+    greedy = re.search(r"\{[\s\S]*\}", text)
+    if greedy:
+        candidates.append(greedy.group())
+
+    for candidate in candidates:
         # Apply same double-quote key fix on the candidate
         candidate = re.sub(r'""([a-zA-Z_][a-zA-Z0-9_]*)"\s*:', r'"\1":', candidate)
-
-        # Fix common truncation issues BEFORE parsing:
-        # 1. Trailing comma before closing brace
+        # Trailing comma before closing brace
         candidate = re.sub(r',(\s*[}\]])', r'\1', candidate)
-        # 2. Missing closing brace (count mismatch)
+        # Missing closing brace (count mismatch) — pad
         if candidate.count('{') > candidate.count('}'):
-            candidate += '}'
+            candidate = candidate + '}' * (candidate.count('{') - candidate.count('}'))
 
         try:
             return json.loads(candidate)
         except json.JSONDecodeError:
-            # Try to repair truncated JSON: close open strings/objects/arrays
             try:
                 repaired = _repair_truncated_json(candidate)
                 return json.loads(repaired)
             except Exception:
-                pass
+                continue
     # Log more context to debug truncation issues
     logger.warning("[design_chain] _extract_json failed. Full text length: %d chars", len(text))
     logger.warning("[design_chain] First 500 chars: %r", text[:500])
@@ -4125,13 +4133,22 @@ def _remove_copy_text_from_prompt(prompt: str, values: List[str]) -> str:
 
 
 def _ensure_text_negatives(negative_prompt: str) -> str:
-    terms = [t.strip() for t in str(negative_prompt or "").split(",") if t.strip()]
-    seen = {t.lower() for t in terms}
+    raw_terms = [t.strip() for t in str(negative_prompt or "").split(",") if t.strip()]
+    # Dedupe input terms against each other (LLMs often emit "text, words,
+    # letters..." plus our base negatives, producing a bloated duplicate list).
+    seen: set = set()
+    deduped: List[str] = []
+    for t in raw_terms:
+        key = t.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(t)
     for term in _TEXT_NEGATIVE_TERMS:
         if term.lower() not in seen:
-            terms.append(term)
+            deduped.append(term)
             seen.add(term.lower())
-    return ", ".join(terms)
+    return ", ".join(deduped)
 
 
 def _sync_layout_elements(copy: Dict, creative: Dict, elements: List[Dict], aspect_ratio: float) -> List[Dict]:
@@ -4207,6 +4224,7 @@ def _apply_typography_direction_to_elements(
     elements: List[Dict],
     typography_direction: Optional[Dict],
     copy: Dict,
+    palette: Optional[Dict] = None,
 ) -> List[Dict]:
     direction = typography_direction or {}
     align = str(direction.get("copy_alignment") or "center")
@@ -4230,6 +4248,19 @@ def _apply_typography_direction_to_elements(
         "body_text": str(direction.get("body_effect") or "soft_shadow"),
         "cta_text": str(direction.get("cta_treatment") or "pill"),
     }
+    # Enforce readable text color — Gemini layout planner sometimes emits
+    # primary/accent as text color, causing pink-on-pink illegibility.
+    pal = palette or {}
+    text_primary = _safe_hex(pal.get("text_primary"), "#FFFFFF")
+    text_secondary = _safe_hex(pal.get("text_secondary"), "#CCCCDD")
+    color_overrides = {
+        "brand_name": text_primary,
+        "headline": text_primary,
+        "subheadline": text_secondary,
+        "body_text": text_secondary,
+        "cta_text": text_primary,
+        "tagline": text_secondary,
+    }
 
     result: List[Dict] = []
     for element in elements:
@@ -4242,6 +4273,8 @@ def _apply_typography_direction_to_elements(
             style["font"] = font_overrides[element_id]
         if updated.get("type") == "text":
             style["align"] = "center" if element_id == "brand_name" else align
+            if element_id in color_overrides:
+                style["color"] = color_overrides[element_id]
         if element_id in effect_overrides:
             style["effect"] = effect_overrides[element_id]
         updated["style"] = style
@@ -4343,7 +4376,10 @@ def _agent_reconcile_outputs(
         img_final["draft_variant"] = draft_variant
 
     synced_elements = _sync_layout_elements(copy_final, creative, elements, aspect_ratio)
-    synced_elements = _apply_typography_direction_to_elements(synced_elements, typography_direction, copy_final)
+    synced_elements = _apply_typography_direction_to_elements(
+        synced_elements, typography_direction, copy_final,
+        palette=creative.get("palette", {}),
+    )
 
     design_updates = {
         "has_feature_grid": bool(copy_final.get("features")),
