@@ -250,8 +250,8 @@ def _request_strategy(triage: Dict, prompt: str, brand: Optional[Dict] = None) -
                 "whichever fits the occasion. Leave a clean copy-safe area for the greeting typography."
             ),
             "image_guardrails": (
-                "Warm, festive, human. Single celebration hero object anchors the frame. No people holding phones, "
-                "no dashboards, no product packaging, no 'light stage'. Generous clean area for greeting text."
+                "Warm, festive, human. Single celebration hero object anchors the frame. "
+                "Generous clean area reserved for greeting text."
             ),
             "copy_guardrails": (
                 "Personal greeting copy only — headline is the wish itself, subheadline is a warm line, "
@@ -4136,6 +4136,40 @@ def _ensure_text_negatives(negative_prompt: str) -> str:
 
 def _sync_layout_elements(copy: Dict, creative: Dict, elements: List[Dict], aspect_ratio: float) -> List[Dict]:
     base = [dict(el) for el in elements if isinstance(el, dict)] if isinstance(elements, list) else []
+
+    # Normalize Gemini-generated ids to canonical ones so per-id sync below
+    # finds them and doesn't append a duplicate from the fallback layout.
+    # e.g. headline_1 → headline, body_copy / body_1 → body_text, cta_btn → cta_text
+    _id_alias = {
+        "body": "body_text", "body_copy": "body_text", "body_content": "body_text",
+        "cta": "cta_text", "cta_button_text": "cta_text", "cta_btn": "cta_text",
+        "sub": "subheadline", "subtitle": "subheadline",
+        "brand": "brand_name", "logo_text": "brand_name",
+    }
+    _canonical = {"brand_name", "brand_bar", "headline", "subheadline",
+                  "body_text", "cta_text", "cta_button", "tagline"}
+    canonical_content: Dict[str, List[Dict]] = {}
+    for el in base:
+        raw_id = str(el.get("id") or "").strip()
+        key_lower = raw_id.lower()
+        canon = _id_alias.get(key_lower, key_lower)
+        canon = re.sub(r"_\d+$", "", canon)  # headline_1 → headline
+        if canon in _canonical:
+            el["id"] = canon
+        # Track by canonical id so we can drop duplicates
+        canonical_content.setdefault(canon, []).append(el)
+
+    # Drop duplicates — keep the first element per canonical id that has real content
+    deduped: List[Dict] = []
+    seen: set = set()
+    for el in base:
+        cid = str(el.get("id") or "")
+        if cid in seen:
+            continue
+        seen.add(cid)
+        deduped.append(el)
+    base = deduped
+
     fallback = _layout_fallback(copy, creative, aspect_ratio)
     by_id = {str(el.get("id")): el for el in base if el.get("id")}
     fallback_by_id = {str(el.get("id")): el for el in fallback if el.get("id")}
@@ -5128,8 +5162,12 @@ class DesignAgentChain:
             # gemini_prompt_engine compatibility
             brief["visual_concept"] = img["background_prompt"]
             brief["mood"]           = creative.get("mood", "")
-            brief["lighting"]       = "cinematic dramatic lighting"
-            brief["camera"]         = "professional photography"
+            if bool(triage.get("_is_personal")) or str(triage.get("industry") or "").lower() == "personal_celebration":
+                brief["lighting"] = "warm golden festive lighting, soft bokeh, gentle glow"
+                brief["camera"]   = "expressive illustration, no camera framing"
+            else:
+                brief["lighting"] = "cinematic dramatic lighting"
+                brief["camera"]   = "professional photography"
 
             # Platform / routing + triage-recommended dimensions
             brief["platform"]             = triage.get("platform", "instagram_portrait")

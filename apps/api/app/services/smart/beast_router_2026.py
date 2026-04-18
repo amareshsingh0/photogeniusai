@@ -299,6 +299,9 @@ Output valid JSON ONLY in this exact format:
                 if score > best_score:
                     best_score, best_id = score, vid
             winner_id = best_id
+            judgment["winner_id"] = winner_id
+            if not judgment.get("winner_reasoning"):
+                judgment["winner_reasoning"] = "Derived from per-dimension scores (judge omitted winner_id)"
             logger.warning(f"[judge] winner_id missing/invalid, derived from evaluations: {winner_id}")
 
         winner_variant = next((v for v in variants if v["variant_id"] == winner_id), variants[0])
