@@ -56,6 +56,13 @@ FEATURE_FLAGS = [
         "default": "true",
     },
     {
+        "key": "USE_SIMPLE_ENGINE",
+        "category": "Core Architecture",
+        "description": "Single-call Haiku enrichment (skips agent chain + Stage A/B). Overrides everything else when on.",
+        "type": "boolean",
+        "default": "false",
+    },
+    {
         "key": "USE_BEAST_2026_ROUTER",
         "category": "Core Architecture",
         "description": "Predictive routing + Best-of-N generation",

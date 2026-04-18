@@ -359,6 +359,9 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         num_images = model_cfg.get("num_images", 1)
 
         # ── Stage A: Creative Brief ────────────────────────────────────────
+        # Simple engine path — single Haiku call, skips agent chain + Stage A/B engine.
+        # Toggle: USE_SIMPLE_ENGINE=true. When on, bypass everything else.
+        use_simple = os.getenv("USE_SIMPLE_ENGINE", "false").lower() == "true"
         # Import prompt engine based on env flag
         use_claude = os.getenv("USE_CLAUDE_ENGINE", "true").lower() != "false"
         if use_claude:
@@ -367,7 +370,38 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             from app.services.smart.gemini_prompt_engine import gemini_prompt_engine as prompt_engine
         brief: dict
 
-        if bucket == "typography":
+        if use_simple:
+            from app.services.smart.simple_prompt_engine import simple_engine
+            simple_out = await simple_engine.enrich(
+                user_prompt=req.prompt,
+                bucket=bucket,
+                tier=quality,
+                width=req.width,
+                height=req.height,
+                style=req.style,
+                brand_kit=req.brand_kit,
+            )
+            logger.info(
+                "[stream][%s] SimpleEngine done in %.2fs intent=%s aspect=%s",
+                trace_id, simple_out.get("_elapsed", 0),
+                simple_out.get("intent"), simple_out.get("aspect_hint"),
+            )
+            # Synthesize a brief shape compatible with downstream code.
+            brief = {
+                "_source":          simple_out.get("_source", "simple_engine"),
+                "_elapsed":         simple_out.get("_elapsed", 0),
+                "visual_concept":   simple_out["prompt"][:200],
+                "subject":          simple_out.get("intent", "general"),
+                "lighting":         "",
+                "camera":           "",
+                "mood":             "",
+                "color_palette":    "",
+                "style_refs":       [],
+                "ad_copy":          simple_out.get("ad_copy"),
+                "poster_design":    None,
+                "_simple_payload":  simple_out,   # consumed below to skip Stage B
+            }
+        elif bucket == "typography":
             try:
                 from app.services.smart.design_agent_chain import design_agent_chain
                 # design_agent_chain.arun() is fully async now
@@ -413,7 +447,19 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         brief.setdefault("poster_design", None)
         effective_width = req.width
         effective_height = req.height
-        if req.width == 1024 and req.height == 1024:
+        # Simple engine: use aspect_hint to pick canvas when caller left default 1024².
+        _simple_payload = brief.get("_simple_payload")
+        if _simple_payload and req.width == 1024 and req.height == 1024:
+            _ASPECT_DIMS = {
+                "square_hd":      (1024, 1024),
+                "portrait_4_3":   (832, 1216),
+                "landscape_4_3":  (1216, 832),
+                "portrait_9_16":  (768, 1344),
+                "landscape_16_9": (1344, 768),
+            }
+            _w, _h = _ASPECT_DIMS.get(_simple_payload.get("aspect_hint", "square_hd"), (1024, 1024))
+            effective_width, effective_height = _w, _h
+        elif req.width == 1024 and req.height == 1024:
             effective_width = int(brief.get("resolved_width") or brief.get("recommended_width") or req.width)
             effective_height = int(brief.get("resolved_height") or brief.get("recommended_height") or req.height)
 
@@ -431,7 +477,17 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         })
 
         # ── Stage B: CDI — Creative Director Integration ──────────────────
-        params = await prompt_engine.build_params(brief, model_label, bucket)
+        # Simple engine path: skip Stage B; the enriched prompt IS the final prompt.
+        if _simple_payload:
+            params = {
+                "prompt":          _simple_payload["prompt"],
+                "negative_prompt": _simple_payload.get("negative_prompt", ""),
+                "parameters":      {},
+                "style_notes":     _simple_payload.get("intent", "")[:80],
+                "recommendation_reason": "simple_engine: single-call enrichment",
+            }
+        else:
+            params = await prompt_engine.build_params(brief, model_label, bucket)
         enhanced_prompt = params.get("prompt") or req.prompt
         negative_prompt = params.get("negative_prompt", "")
         if req.negative_prompt is not None:
