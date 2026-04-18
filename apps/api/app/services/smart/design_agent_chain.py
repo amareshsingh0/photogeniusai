@@ -234,6 +234,31 @@ def _request_strategy(triage: Dict, prompt: str, brand: Optional[Dict] = None) -
     industry = str(triage.get("industry") or "general").lower()
     goal = str(triage.get("goal") or "brand_awareness").lower()
     tone = str((brand or {}).get("tone") or "").lower()
+    is_personal = bool(triage.get("_is_personal")) or industry == "personal_celebration"
+
+    if is_personal:
+        return {
+            "font_style": "expressive_display",
+            "tone": "joyful",
+            "layout_archetype": "typographic_led",
+            "hero_occupies": "center_40",
+            "visual_style": "warm_illustration",
+            "detail_budget": "Use 60-90 words. One hero celebration object (cake, bouquet, diyas, rings). Warm, sensory, scene-focused.",
+            "creative_guardrails": (
+                "This is a personal greeting, not a commercial ad. No brand, no product, no CTA, no features grid. "
+                "Choose warm celebration imagery: soft bokeh party lights, flowers, candles, confetti, balloons, cake — "
+                "whichever fits the occasion. Leave a clean copy-safe area for the greeting typography."
+            ),
+            "image_guardrails": (
+                "Warm, festive, human. Single celebration hero object anchors the frame. No people holding phones, "
+                "no dashboards, no product packaging, no 'light stage'. Generous clean area for greeting text."
+            ),
+            "copy_guardrails": (
+                "Personal greeting copy only — headline is the wish itself, subheadline is a warm line, "
+                "body is optional. NO CTA, NO features, NO tagline, NO brand name."
+            ),
+            "negative_guardrails": "brand logo, product packaging, ui dashboard, device, phone, app interface, corporate stock photo",
+        }
 
     is_fashion = industry == "fashion" or any(
         token in prompt_lower for token in ("fashion", "couture", "runway", "collection", "model", "editorial", "vogue")
@@ -633,6 +658,7 @@ def _build_native_text_instructions(
     industry: str = "general",
     goal: str = "",
     prompt_lower: str = "",
+    is_personal: bool = False,
 ) -> str:
     """
     BEAST-LEVEL COMPOSITION INTELLIGENCE v3 (Apr 8, 2026)
@@ -652,6 +678,17 @@ def _build_native_text_instructions(
     """
     if not headline or not headline.strip():
         return ""
+
+    if is_personal or industry == "personal_celebration":
+        # Greeting card — no "advertising poster", no CTA phrasing.
+        parts = [f"headline '{headline.strip()}'"]
+        if subheadline and subheadline.strip():
+            parts.append(f"subheadline '{subheadline.strip()}'")
+        return (
+            f"Warm personal greeting card composition with {', '.join(parts)}. "
+            f"Clean readable festive typography in the open copy area. "
+            f"Decorative elements frame the text without crowding it."
+        )
 
     # STEP 1: Analyze what kind of image will be generated
     scene_type = _analyze_scene_complexity(prompt_lower, industry)
@@ -1467,6 +1504,7 @@ def _build_typography_direction(
     goal = str(triage.get("goal") or "brand_awareness").lower()
     copy_space = str(design_room.get("copy_space") or "bottom").lower()
     font_style = str(design_room.get("font_style") or brand.get("font_style") or "bold_tech")
+    is_personal = bool(triage.get("_is_personal")) or industry == "personal_celebration"
 
     is_event = goal == "event" or any(
         token in prompt_lower for token in ("festival", "concert", "gig", "party", "live", "dj", "music")
@@ -1508,7 +1546,27 @@ def _build_typography_direction(
         "cta_wrap_hint": _designer_wrap_hint(copy.get("cta", ""), 16, 2),
     }
 
-    if is_luxury:
+    if is_personal:
+        # Expressive, warm display fonts for greeting cards — pacifico/satisfy
+        # for the headline; satisfy / dancing for supporting copy. No CTA pill.
+        direction.update({
+            "headline_font": "pacifico",
+            "subheadline_font": "satisfy",
+            "body_font": "montserrat_bold",
+            "cta_font": "pacifico",
+            "tagline_font": "satisfy",
+            "headline_effect": "soft_shadow",
+            "subheadline_effect": "minimal",
+            "body_effect": "minimal",
+            "cta_treatment": "ghost",
+            "headline_max_chars_per_line": 14,
+            "headline_max_lines": 2,
+            "subheadline_max_chars_per_line": 22,
+            "body_max_chars_per_line": 28,
+            "show_body": True,
+            "show_accent_rule": False,
+        })
+    elif is_luxury:
         direction.update({
             "headline_font": "playfair",
             "subheadline_font": "raleway_bold",
@@ -3527,32 +3585,38 @@ async def _agent_copy_writer(
     features = [f for f in raw_features if isinstance(f, dict) and f.get("title")
                 and "Feature" not in f.get("title","") and "Key benefit" not in f.get("desc","")][:4]
 
-    # If AI returned placeholder garbage, ask again with zero temperature
-    if len(features) < 2:
-        logger.warning("[copy_writer] AI returned placeholder features, retrying")
-        retry_system = (
-            f"Write 4 specific feature benefits for a {triage.get('industry','general')} business ad.\n"
-            f"Context: {prompt}\n"
-            "Each feature must be concrete and industry-relevant. NO generic text like 'Key benefit'.\n"
-            'Return ONLY: [{"icon":"emoji","title":"specific title","desc":"specific one-liner"}] — 4 items.'
-        )
-        retry_raw = await _acall_gemini(retry_system, f"Industry: {triage.get('industry')} Request: {prompt}",
-                                        temperature=0.0, agent_name="copy_writer")
-        retry_r = _extract_json(retry_raw)
-        if isinstance(retry_r, list):
-            features = [f for f in retry_r if isinstance(f, dict) and f.get("title")][:4]
-        elif isinstance(retry_r.get("features"), list):
-            features = retry_r["features"][:4]
+    if is_personal:
+        # Personal greetings have no features grid, no CTA, no tagline, no brand.
+        features = []
+    else:
+        # If AI returned placeholder garbage, ask again with zero temperature
+        if len(features) < 2:
+            logger.warning("[copy_writer] AI returned placeholder features, retrying")
+            retry_system = (
+                f"Write 4 specific feature benefits for a {triage.get('industry','general')} business ad.\n"
+                f"Context: {prompt}\n"
+                "Each feature must be concrete and industry-relevant. NO generic text like 'Key benefit'.\n"
+                'Return ONLY: [{"icon":"emoji","title":"specific title","desc":"specific one-liner"}] — 4 items.'
+            )
+            retry_raw = await _acall_gemini(retry_system, f"Industry: {triage.get('industry')} Request: {prompt}",
+                                            temperature=0.0, agent_name="copy_writer")
+            retry_r = _extract_json(retry_raw)
+            if isinstance(retry_r, list):
+                features = [f for f in retry_r if isinstance(f, dict) and f.get("title")][:4]
+            elif isinstance(retry_r.get("features"), list):
+                features = retry_r["features"][:4]
 
-    # Last resort: AI generates 4 sensible defaults from scratch
-    while len(features) < 4:
-        features.append({"icon": "⭐", "title": f"Feature {len(features)+1}", "desc": "Coming soon"})
+        # Last resort: AI generates 4 sensible defaults from scratch
+        while len(features) < 4:
+            features.append({"icon": "⭐", "title": f"Feature {len(features)+1}", "desc": "Coming soon"})
 
     # Explicit user text ALWAYS wins — even if Gemini failed entirely
     if explicit_headline:
         headline = explicit_headline.upper()
     else:
-        headline = str(r.get("headline") or "").strip().upper() or "MAKE IT HAPPEN"
+        headline = str(r.get("headline") or "").strip().upper()
+        if not headline:
+            headline = _personal_headline_fallback(prompt) if is_personal else "MAKE IT HAPPEN"
         if len(headline) > hl_max:
             headline = headline[:hl_max].rsplit(" ", 1)[0]
 
@@ -3562,20 +3626,56 @@ async def _agent_copy_writer(
     else:
         subheadline = str(r.get("subheadline") or "").strip()
 
-    cta = str(r.get("cta") or "GET STARTED").upper()
     if explicit_cta:
         cta = explicit_cta.upper()
+    elif is_personal:
+        # No CTA on personal greetings. 'GET STARTED' on a birthday = absurd.
+        cta = ""
+    else:
+        cta = str(r.get("cta") or "GET STARTED").upper()
 
     return {
-        "brand_name":  str(r.get("brand_name") or brand.get("brand_name", "") or ""),
+        "brand_name":  "" if is_personal else str(r.get("brand_name") or brand.get("brand_name", "") or ""),
         "headline":    headline,
         "subheadline": subheadline,
         "body":        str(r.get("body") or ""),
         "cta":         cta,
-        "cta_url":     str(r.get("cta_url") or ""),
-        "tagline":     str(r.get("tagline") or brand.get("tagline", "") or ""),
+        "cta_url":     "" if is_personal else str(r.get("cta_url") or ""),
+        "tagline":     "" if is_personal else str(r.get("tagline") or brand.get("tagline", "") or ""),
         "features":    features,
     }
+
+
+def _personal_headline_fallback(prompt: str) -> str:
+    """Build a sensible all-caps greeting headline when the AI returns nothing."""
+    p = (prompt or "").lower()
+    if "birthday" in p:
+        base = "HAPPY BIRTHDAY"
+    elif "anniversary" in p:
+        base = "HAPPY ANNIVERSARY"
+    elif "wedding" in p:
+        base = "CONGRATULATIONS"
+    elif "graduation" in p:
+        base = "CONGRATULATIONS GRADUATE"
+    elif "engagement" in p:
+        base = "HAPPY ENGAGEMENT"
+    elif "retirement" in p:
+        base = "HAPPY RETIREMENT"
+    elif "farewell" in p:
+        base = "FAREWELL"
+    elif "thank you" in p:
+        base = "THANK YOU"
+    elif "get well" in p:
+        base = "GET WELL SOON"
+    elif "baby shower" in p:
+        base = "BABY SHOWER"
+    else:
+        base = "BEST WISHES"
+    # Try to extract a recipient name after "for " (e.g. "birthday poster for Rahul").
+    m = re.search(r"\bfor\s+([A-Z][a-zA-Z]{1,20})\b", prompt or "")
+    if m:
+        return f"{base} {m.group(1).upper()}"
+    return base
 
 
 _PLATFORM_CHAR_LIMITS = {
@@ -4139,6 +4239,7 @@ def _agent_reconcile_outputs(
         industry=triage.get("industry", "general"),
         goal=triage.get("goal", ""),
         prompt_lower=str(triage.get("original_prompt", "")).lower(),
+        is_personal=bool(triage.get("_is_personal")),
     )
     if native_text_instructions:
         bg_prompt = f"{bg_prompt}. {native_text_instructions}".strip(". ")
