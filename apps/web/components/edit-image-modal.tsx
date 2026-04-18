@@ -1,23 +1,41 @@
 "use client"
 
 /**
- * EditImageModal
+ * EditImageModal — 7-operation image editor.
  *
- * Two-tab advanced image editor:
- *  Tab 1 — Targeted Edit: draw a mask with Brush / Circle / Rectangle / Eraser
- *           then type an instruction → Flux Fill inpainting
- *  Tab 2 — Global Edit:   plain text instruction → Flux Kontext editing
+ * Operations (ChatGPT/Gemini-style):
+ *   Edit             — natural-language instruction edit
+ *   Remix            — restyle with a new prompt
+ *   Inpaint          — mask + prompt → repaint masked region
+ *   Compose          — blend multiple images
+ *   Add Text         — replace/add text in the image
+ *   Remove Object    — remove an object cleanly
+ *   Background Swap  — change background, keep subject
+ *
+ * The backend auto-picks the capable model per operation — model names are
+ * never exposed to the user.
  */
 
 import React, {
   useRef, useState, useEffect, useCallback, MouseEvent, TouchEvent,
 } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Brush, Circle, Square, Eraser, Trash2, Loader2, Wand2, RotateCcw } from "lucide-react"
+import {
+  X, Brush, Circle, Square, Eraser, Trash2, Loader2, Wand2,
+  Sparkles, Layers, Type, Eraser as RemoveIcon, Image as BgIcon, Plus,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 type Tool = "brush" | "circle" | "rect" | "eraser"
+type EditMode =
+  | "instruction_edit"
+  | "style_remix"
+  | "inpaint_mask"
+  | "compose"
+  | "text_replace"
+  | "object_remove"
+  | "background_swap"
 
 interface Props {
   imageUrl: string
@@ -25,29 +43,151 @@ interface Props {
   onResult: (newImageUrl: string) => void
 }
 
+interface OpDef {
+  id: EditMode
+  label: string
+  icon: React.ReactNode
+  hint: string
+  placeholder: string
+  suggestions: string[]
+}
+
+const OPERATIONS: OpDef[] = [
+  {
+    id: "instruction_edit",
+    label: "Edit",
+    icon: <Wand2 className="h-3.5 w-3.5" />,
+    hint: "Describe the change in plain language.",
+    placeholder: "e.g. make the sky purple, add dramatic lighting...",
+    suggestions: [
+      "Make it golden hour",
+      "Add dramatic cinematic lighting",
+      "Turn it into night scene",
+    ],
+  },
+  {
+    id: "style_remix",
+    label: "Remix",
+    icon: <Sparkles className="h-3.5 w-3.5" />,
+    hint: "Restyle the image with a new creative direction.",
+    placeholder: "e.g. make it anime, oil painting, cyberpunk...",
+    suggestions: [
+      "Make it look like an anime still",
+      "Render as watercolor painting",
+      "Cyberpunk neon style",
+    ],
+  },
+  {
+    id: "inpaint_mask",
+    label: "Inpaint",
+    icon: <Brush className="h-3.5 w-3.5" />,
+    hint: "Draw on the area to change, then describe the replacement.",
+    placeholder: "e.g. a bouquet of roses, a silver watch...",
+    suggestions: [
+      "A bouquet of roses",
+      "A cup of coffee",
+      "Clean white wall",
+    ],
+  },
+  {
+    id: "compose",
+    label: "Compose",
+    icon: <Layers className="h-3.5 w-3.5" />,
+    hint: "Combine this image with one or more reference images.",
+    placeholder: "e.g. put the subject into the reference scene...",
+    suggestions: [
+      "Place the subject into the reference scene",
+      "Blend the style of the references",
+      "Combine elements from all images",
+    ],
+  },
+  {
+    id: "text_replace",
+    label: "Add Text",
+    icon: <Type className="h-3.5 w-3.5" />,
+    hint: 'Describe the text to add or replace. Tip: put exact text in "quotes".',
+    placeholder: 'e.g. Replace the title with "GRAND OPENING"',
+    suggestions: [
+      'Replace the title with "GRAND OPENING"',
+      'Add the text "SALE 50% OFF" at the top',
+      'Change the brand name to "ACME"',
+    ],
+  },
+  {
+    id: "object_remove",
+    label: "Remove Object",
+    icon: <RemoveIcon className="h-3.5 w-3.5" />,
+    hint: "Name the object to remove cleanly.",
+    placeholder: "e.g. the car in the background, the watermark...",
+    suggestions: [
+      "The person in the background",
+      "The watermark in the corner",
+      "All text from the image",
+    ],
+  },
+  {
+    id: "background_swap",
+    label: "Background",
+    icon: <BgIcon className="h-3.5 w-3.5" />,
+    hint: "Describe the new background — subject stays the same.",
+    placeholder: "e.g. studio white, sunset beach, neon city street...",
+    suggestions: [
+      "Clean studio white",
+      "Sunset beach with soft waves",
+      "Neon-lit Tokyo street at night",
+    ],
+  },
+]
+
 const BRUSH_SIZES = [8, 16, 28, 44]
+const MAX_EXTRAS = 3
 
 export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
-  const [tab, setTab] = useState<"targeted" | "global">("targeted")
+  const [mode, setMode] = useState<EditMode>("instruction_edit")
   const [tool, setTool] = useState<Tool>("brush")
   const [brushSize, setBrushSize] = useState(16)
   const [instruction, setInstruction] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasMask, setHasMask] = useState(false)
+  const [extras, setExtras] = useState<string[]>([])   // data: URLs
+
+  const op = OPERATIONS.find(o => o.id === mode)!
+  const showMaskTools = mode === "inpaint_mask"
+  const showExtraImages = mode === "compose"
 
   const containerRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
   const displayCanvasRef = useRef<HTMLCanvasElement>(null)
+  const extraFileRef = useRef<HTMLInputElement>(null)
 
-  // Drawing state
   const isDrawing = useRef(false)
   const circleStart = useRef<{ x: number; y: number } | null>(null)
   const rectStart = useRef<{ x: number; y: number } | null>(null)
-  const snapshotRef = useRef<ImageData | null>(null)  // for live circle/rect preview
+  const snapshotRef = useRef<ImageData | null>(null)
 
-  // ── Setup canvas size when image loads ──────────────────────────────────
+  // ── Canvas setup ─────────────────────────────────────────────────────────
+  const redrawDisplay = useCallback(() => {
+    const mask = maskCanvasRef.current
+    const display = displayCanvasRef.current
+    if (!mask || !display) return
+    const dCtx = display.getContext("2d")!
+    const w = display.width; const h = display.height
+    dCtx.clearRect(0, 0, w, h)
+    const mData = mask.getContext("2d")!.getImageData(0, 0, w, h)
+    const dData = dCtx.createImageData(w, h)
+    for (let i = 0; i < mData.data.length; i += 4) {
+      if (mData.data[i] > 128) {
+        dData.data[i]     = 255
+        dData.data[i + 1] = 50
+        dData.data[i + 2] = 50
+        dData.data[i + 3] = 140
+      }
+    }
+    dCtx.putImageData(dData, 0, 0)
+  }, [])
+
   const setupCanvases = useCallback(() => {
     const img = imgRef.current
     const mask = maskCanvasRef.current
@@ -56,14 +196,14 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
     const w = img.clientWidth
     const h = img.clientHeight
     if (w === 0 || h === 0) return
-    mask.width    = w;  mask.height    = h
+    mask.width = w;  mask.height = h
     display.width = w;  display.height = h
-    // Clear
     const mCtx = mask.getContext("2d")!
     mCtx.fillStyle = "black"
     mCtx.fillRect(0, 0, w, h)
+    setHasMask(false)
     redrawDisplay()
-  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [redrawDisplay])
 
   useEffect(() => {
     const img = imgRef.current
@@ -72,35 +212,12 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
     img.onload = setupCanvases
   }, [imageUrl, setupCanvases])
 
-  // Re-setup on window resize
   useEffect(() => {
     window.addEventListener("resize", setupCanvases)
     return () => window.removeEventListener("resize", setupCanvases)
   }, [setupCanvases])
 
-  // ── Draw red overlay on display canvas from mask ─────────────────────────
-  const redrawDisplay = useCallback(() => {
-    const mask    = maskCanvasRef.current
-    const display = displayCanvasRef.current
-    if (!mask || !display) return
-    const dCtx = display.getContext("2d")!
-    const w = display.width; const h = display.height
-    dCtx.clearRect(0, 0, w, h)
-    // Painted (white) areas → red semi-transparent
-    const mData = mask.getContext("2d")!.getImageData(0, 0, w, h)
-    const dData = dCtx.createImageData(w, h)
-    for (let i = 0; i < mData.data.length; i += 4) {
-      if (mData.data[i] > 128) {          // white pixel in mask
-        dData.data[i]     = 255            // R
-        dData.data[i + 1] = 50             // G
-        dData.data[i + 2] = 50             // B
-        dData.data[i + 3] = 140            // A (semi-transparent)
-      }
-    }
-    dCtx.putImageData(dData, 0, 0)
-  }, [])
-
-  // ── Pointer coordinates relative to canvas ───────────────────────────────
+  // ── Drawing handlers (only active in inpaint mode) ───────────────────────
   const getPos = (e: MouseEvent | TouchEvent): { x: number; y: number } => {
     const canvas = maskCanvasRef.current!
     const rect = canvas.getBoundingClientRect()
@@ -111,7 +228,6 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
     }
   }
 
-  // ── Paint white circle at pos (brush/eraser) ─────────────────────────────
   const paintAt = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, erase: boolean) => {
     ctx.beginPath()
     ctx.arc(x, y, size / 2, 0, Math.PI * 2)
@@ -119,21 +235,18 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
     ctx.fill()
   }
 
-  // ── Mouse/touch handlers ──────────────────────────────────────────────────
   const onPointerDown = (e: MouseEvent | TouchEvent) => {
     e.preventDefault()
     isDrawing.current = true
     const pos = getPos(e)
     const mCtx = maskCanvasRef.current!.getContext("2d")!
-
     if (tool === "brush" || tool === "eraser") {
       paintAt(mCtx, pos.x, pos.y, brushSize, tool === "eraser")
       setHasMask(true)
       redrawDisplay()
-    } else if (tool === "circle" || tool === "rect") {
+    } else {
       circleStart.current = pos
-      rectStart.current   = pos
-      // Snapshot current mask for live preview
+      rectStart.current = pos
       const w = maskCanvasRef.current!.width
       const h = maskCanvasRef.current!.height
       snapshotRef.current = mCtx.getImageData(0, 0, w, h)
@@ -145,13 +258,11 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
     e.preventDefault()
     const pos = getPos(e)
     const mCtx = maskCanvasRef.current!.getContext("2d")!
-
     if (tool === "brush" || tool === "eraser") {
       paintAt(mCtx, pos.x, pos.y, brushSize, tool === "eraser")
       setHasMask(true)
       redrawDisplay()
     } else if (tool === "circle" && circleStart.current) {
-      // Live preview: restore snapshot then draw circle
       mCtx.putImageData(snapshotRef.current!, 0, 0)
       const cx = (circleStart.current.x + pos.x) / 2
       const cy = (circleStart.current.y + pos.y) / 2
@@ -174,18 +285,15 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
     }
   }
 
-  const onPointerUp = (e: MouseEvent | TouchEvent) => {
+  const onPointerUp = () => {
     if (!isDrawing.current) return
     isDrawing.current = false
-    if (tool === "circle" || tool === "rect") {
-      setHasMask(true)
-    }
+    if (tool === "circle" || tool === "rect") setHasMask(true)
     circleStart.current = null
-    rectStart.current   = null
+    rectStart.current = null
     snapshotRef.current = null
   }
 
-  // ── Clear mask ────────────────────────────────────────────────────────────
   const clearMask = () => {
     const mask = maskCanvasRef.current!
     const mCtx = mask.getContext("2d")!
@@ -195,43 +303,85 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
     redrawDisplay()
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // ── Extra image upload (compose) ─────────────────────────────────────────
+  const addExtraFiles = async (files: FileList | null) => {
+    if (!files) return
+    const dataUrls: string[] = []
+    for (const f of Array.from(files)) {
+      if (extras.length + dataUrls.length >= MAX_EXTRAS) break
+      if (!f.type.startsWith("image/")) continue
+      const du = await new Promise<string>((res, rej) => {
+        const r = new FileReader()
+        r.onload = () => res(r.result as string)
+        r.onerror = () => rej(new Error("Read failed"))
+        r.readAsDataURL(f)
+      })
+      dataUrls.push(du)
+    }
+    if (dataUrls.length) setExtras(prev => [...prev, ...dataUrls].slice(0, MAX_EXTRAS))
+  }
+
+  const removeExtra = (i: number) => setExtras(prev => prev.filter((_, idx) => idx !== i))
+
+  // ── Reset mode-specific state when switching ─────────────────────────────
+  useEffect(() => {
+    setError(null)
+    // Don't wipe instruction — user may want to reuse across modes
+    if (mode !== "inpaint_mask" && hasMask) {
+      // Clear mask so it doesn't linger
+      const m = maskCanvasRef.current
+      if (m) {
+        const ctx = m.getContext("2d")!
+        ctx.fillStyle = "black"
+        ctx.fillRect(0, 0, m.width, m.height)
+        setHasMask(false)
+        redrawDisplay()
+      }
+    }
+    if (mode !== "compose") setExtras([])
+  }, [mode])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!instruction.trim() || instruction.trim().length < 3) {
-      setError("Please describe what you want to change (at least 3 characters)")
+    const trimmed = instruction.trim()
+    if (trimmed.length < 3) {
+      setError("Please describe what you want (at least 3 characters).")
       return
     }
-    if (tab === "targeted" && !hasMask) {
-      setError("Draw on the area you want to edit first, then describe the change")
+    if (mode === "inpaint_mask" && !hasMask) {
+      setError("Draw on the area you want to edit first.")
+      return
+    }
+    if (mode === "compose" && extras.length === 0) {
+      setError("Add at least one reference image for Compose.")
       return
     }
     setError(null)
     setIsSubmitting(true)
 
     try {
-      let maskData: string | undefined
-
-      if (tab === "targeted") {
-        // Export mask canvas as PNG base64
-        maskData = maskCanvasRef.current!.toDataURL("image/png")
+      const body: Record<string, unknown> = {
+        image_url: imageUrl,
+        instruction: trimmed,
+        quality: "1k",
+        edit_mode: mode,
+      }
+      if (mode === "inpaint_mask") {
+        body.mask_data = maskCanvasRef.current!.toDataURL("image/png")
+      }
+      if (mode === "compose" && extras.length) {
+        body.extra_image_urls = extras
       }
 
       const res = await fetch("/api/generate/edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          image_url:   imageUrl,
-          instruction: instruction.trim(),
-          quality:     "balanced",
-          mask_data:   maskData,
-        }),
+        body: JSON.stringify(body),
       })
-
       const data = await res.json()
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Edit failed (${res.status})`)
       }
-
       onResult(data.image_url)
       onClose()
     } catch (err: unknown) {
@@ -255,36 +405,40 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ duration: 0.18 }}
-        className="relative w-full max-w-4xl bg-[#0d0d0d] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-5xl bg-[#0d0d0d] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
         style={{ maxHeight: "95vh" }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
           <div className="flex items-center gap-2.5">
-            <Wand2 className="h-4.5 w-4.5 text-primary" />
+            <Wand2 className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-white">Edit Image</span>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Tabs */}
-            <div className="flex gap-1 bg-white/[0.04] rounded-lg p-1 mr-2">
-              {(["targeted", "global"] as const).map(t => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={cn(
-                    "px-3 py-1 rounded-md text-xs font-medium transition-all",
-                    tab === t
-                      ? "bg-primary text-white"
-                      : "text-muted-foreground hover:text-white"
-                  )}
-                >
-                  {t === "targeted" ? "🎯 Targeted" : "✦ Global"}
-                </button>
-              ))}
-            </div>
-            <button onClick={onClose} className="text-muted-foreground hover:text-white p-1 rounded-lg hover:bg-white/[0.06] transition-colors">
-              <X className="h-4 w-4" />
-            </button>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-white p-1 rounded-lg hover:bg-white/[0.06] transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Operation picker */}
+        <div className="px-5 pt-3 pb-2 border-b border-white/[0.04] overflow-x-auto">
+          <div className="flex gap-1.5 min-w-max">
+            {OPERATIONS.map(o => (
+              <button
+                key={o.id}
+                onClick={() => setMode(o.id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap border",
+                  mode === o.id
+                    ? "bg-primary/15 border-primary/50 text-primary"
+                    : "bg-white/[0.02] border-white/[0.06] text-muted-foreground hover:text-white hover:border-white/15"
+                )}
+              >
+                {o.icon} {o.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -297,39 +451,35 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
               className="relative select-none"
               style={{ touchAction: "none" }}
             >
-              {/* Source image */}
               <img
                 ref={imgRef}
                 src={imageUrl}
                 alt="Edit target"
-                className="rounded-xl max-h-[65vh] max-w-full block"
+                className="rounded-xl max-h-[60vh] max-w-full block"
                 onLoad={setupCanvases}
                 draggable={false}
               />
-              {/* Mask overlay (invisible mask canvas for data) */}
               <canvas
                 ref={maskCanvasRef}
                 className="absolute inset-0 opacity-0 pointer-events-none"
                 style={{ borderRadius: "inherit" }}
               />
-              {/* Display canvas (red overlay) */}
               <canvas
                 ref={displayCanvasRef}
                 className={cn(
                   "absolute inset-0 rounded-xl",
-                  tab === "targeted" ? "cursor-crosshair" : "pointer-events-none"
+                  showMaskTools ? "cursor-crosshair" : "pointer-events-none"
                 )}
-                onMouseDown={tab === "targeted" ? onPointerDown : undefined}
-                onMouseMove={tab === "targeted" ? onPointerMove : undefined}
-                onMouseUp={tab === "targeted" ? onPointerUp : undefined}
-                onMouseLeave={tab === "targeted" ? onPointerUp : undefined}
-                onTouchStart={tab === "targeted" ? onPointerDown : undefined}
-                onTouchMove={tab === "targeted" ? onPointerMove : undefined}
-                onTouchEnd={tab === "targeted" ? onPointerUp : undefined}
+                onMouseDown={showMaskTools ? onPointerDown : undefined}
+                onMouseMove={showMaskTools ? onPointerMove : undefined}
+                onMouseUp={showMaskTools ? onPointerUp : undefined}
+                onMouseLeave={showMaskTools ? onPointerUp : undefined}
+                onTouchStart={showMaskTools ? onPointerDown : undefined}
+                onTouchMove={showMaskTools ? onPointerMove : undefined}
+                onTouchEnd={showMaskTools ? onPointerUp : undefined}
               />
 
-              {/* Targeted hint overlay */}
-              {tab === "targeted" && !hasMask && (
+              {showMaskTools && !hasMask && (
                 <div className="absolute inset-0 flex items-end justify-center pb-4 pointer-events-none rounded-xl">
                   <div className="bg-black/70 text-white/80 text-xs px-3 py-1.5 rounded-full backdrop-blur-sm">
                     Draw on the part you want to edit
@@ -340,124 +490,138 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
           </div>
 
           {/* Right panel */}
-          <div className="w-64 shrink-0 flex flex-col border-l border-white/[0.06] p-4 gap-4 overflow-y-auto">
-            <AnimatePresence mode="wait">
-              {tab === "targeted" ? (
-                <motion.div
-                  key="targeted"
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  className="flex flex-col gap-4"
-                >
-                  {/* Tools */}
+          <div className="w-72 shrink-0 flex flex-col border-l border-white/[0.06] p-4 gap-3 overflow-y-auto">
+            <p className="text-[11px] text-muted-foreground/80 leading-relaxed">{op.hint}</p>
+
+            {/* Inpaint tools */}
+            {showMaskTools && (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-2">Drawing Tool</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {TOOLS.map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => setTool(t.id)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2 py-2 rounded-lg border text-xs font-medium transition-all",
+                          tool === t.id
+                            ? "border-primary/60 bg-primary/15 text-primary"
+                            : "border-white/[0.06] bg-white/[0.02] text-muted-foreground hover:text-white hover:border-white/15"
+                        )}
+                      >
+                        {t.icon} {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {(tool === "brush" || tool === "eraser") && (
                   <div>
-                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-2">Drawing Tool</p>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {TOOLS.map(t => (
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-2">Brush Size</p>
+                    <div className="flex gap-1.5">
+                      {BRUSH_SIZES.map(s => (
                         <button
-                          key={t.id}
-                          onClick={() => setTool(t.id)}
+                          key={s}
+                          onClick={() => setBrushSize(s)}
                           className={cn(
-                            "flex items-center gap-1.5 px-2 py-2 rounded-lg border text-xs font-medium transition-all",
-                            tool === t.id
-                              ? "border-primary/60 bg-primary/15 text-primary"
-                              : "border-white/[0.06] bg-white/[0.02] text-muted-foreground hover:text-white hover:border-white/15"
+                            "flex-1 aspect-square rounded-lg border flex items-center justify-center transition-all",
+                            brushSize === s
+                              ? "border-primary/60 bg-primary/15"
+                              : "border-white/[0.06] bg-white/[0.02] hover:border-white/15"
                           )}
                         >
-                          {t.icon} {t.label}
+                          <div
+                            className="rounded-full bg-white/70"
+                            style={{ width: Math.max(4, s / 3), height: Math.max(4, s / 3) }}
+                          />
                         </button>
                       ))}
                     </div>
                   </div>
+                )}
 
-                  {/* Brush size (only for brush/eraser) */}
-                  {(tool === "brush" || tool === "eraser") && (
-                    <div>
-                      <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-2">Brush Size</p>
-                      <div className="flex gap-1.5">
-                        {BRUSH_SIZES.map(s => (
-                          <button
-                            key={s}
-                            onClick={() => setBrushSize(s)}
-                            className={cn(
-                              "flex-1 aspect-square rounded-lg border flex items-center justify-center transition-all",
-                              brushSize === s
-                                ? "border-primary/60 bg-primary/15"
-                                : "border-white/[0.06] bg-white/[0.02] hover:border-white/15"
-                            )}
-                          >
-                            <div
-                              className="rounded-full bg-white/70"
-                              style={{ width: Math.max(4, s / 3), height: Math.max(4, s / 3) }}
-                            />
-                          </button>
-                        ))}
-                      </div>
+                {hasMask && (
+                  <button
+                    onClick={clearMask}
+                    className="flex items-center gap-1.5 text-xs text-red-400/70 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 className="h-3 w-3" /> Clear mask
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Compose: extra image uploader */}
+            {showExtraImages && (
+              <div>
+                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-2">
+                  Reference Images ({extras.length}/{MAX_EXTRAS})
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {extras.map((u, i) => (
+                    <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-white/[0.06]">
+                      <img src={u} alt={`ref ${i + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => removeExtra(i)}
+                        className="absolute top-1 right-1 p-0.5 bg-black/70 rounded hover:bg-red-500/70 transition-colors"
+                      >
+                        <X className="h-3 w-3 text-white" />
+                      </button>
                     </div>
-                  )}
-
-                  {/* Clear */}
-                  {hasMask && (
+                  ))}
+                  {extras.length < MAX_EXTRAS && (
                     <button
-                      onClick={clearMask}
-                      className="flex items-center gap-1.5 text-xs text-red-400/70 hover:text-red-400 transition-colors"
+                      onClick={() => extraFileRef.current?.click()}
+                      className="aspect-square rounded-lg border border-dashed border-white/15 hover:border-primary/50 hover:bg-primary/5 flex items-center justify-center transition-all text-muted-foreground/70 hover:text-primary"
                     >
-                      <Trash2 className="h-3 w-3" /> Clear mask
+                      <Plus className="h-4 w-4" />
                     </button>
                   )}
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="global"
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                >
-                  <p className="text-xs text-muted-foreground/80">
-                    Describe what to change globally — no mask needed.
-                  </p>
-                  <div className="mt-3 space-y-1.5">
-                    {[
-                      "Change background to studio white",
-                      "Make it sunset golden hour",
-                      "Remove all text from image",
-                      "Add dramatic cinematic lighting",
-                    ].map(s => (
-                      <button
-                        key={s}
-                        onClick={() => setInstruction(s)}
-                        className="w-full text-left text-[11px] text-muted-foreground/60 hover:text-white px-2 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors border border-transparent hover:border-white/[0.06]"
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
+                <input
+                  ref={extraFileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={e => {
+                    addExtraFiles(e.target.files)
+                    if (e.target) e.target.value = ""
+                  }}
+                />
+              </div>
+            )}
 
-            {/* Instruction */}
+            {/* Suggestions */}
+            {op.suggestions.length > 0 && (
+              <div>
+                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-1.5">Quick ideas</p>
+                <div className="space-y-1">
+                  {op.suggestions.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setInstruction(s)}
+                      className="w-full text-left text-[11px] text-muted-foreground/70 hover:text-white px-2 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors border border-transparent hover:border-white/[0.06]"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Instruction + submit */}
             <div className="mt-auto flex flex-col gap-2">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest">
-                {tab === "targeted" ? "What to do to selected area" : "Edit instruction"}
-              </p>
+              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest">Instruction</p>
               <textarea
                 value={instruction}
                 onChange={e => setInstruction(e.target.value)}
-                placeholder={
-                  tab === "targeted"
-                    ? "e.g. make it red, remove this, add bokeh blur..."
-                    : "e.g. change background to white, add snow..."
-                }
+                placeholder={op.placeholder}
                 rows={3}
                 className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/40 resize-none"
               />
-
-              {error && (
-                <p className="text-[11px] text-red-400">{error}</p>
-              )}
-
+              {error && <p className="text-[11px] text-red-400">{error}</p>}
               <Button
                 onClick={handleSubmit}
                 disabled={isSubmitting || !instruction.trim()}
@@ -466,12 +630,12 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    {tab === "targeted" ? "Applying targeted edit..." : "Applying edit..."}
+                    Applying {op.label.toLowerCase()}...
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
                     <Wand2 className="h-3.5 w-3.5" />
-                    Apply Edit
+                    Apply {op.label}
                   </span>
                 )}
               </Button>

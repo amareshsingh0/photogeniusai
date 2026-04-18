@@ -189,6 +189,7 @@ _MODEL_KEY_ALIASES = {
 # Models that need special payload handling
 _SCHNELL_IDS  = {"fal-ai/flux/schnell", "accounts/fireworks/models/flux-1-schnell-fp8"}
 _IDEOGRAM_IDS = {"fal-ai/ideogram/v3"}
+_IDEOGRAM_REMIX_IDS = {"fal-ai/ideogram/v3/remix"}            # img2img variant
 _RECRAFT_IDS  = {
     "fal-ai/recraft/v4/text-to-image",
     "fal-ai/recraft/v4/text-to-vector",
@@ -196,8 +197,17 @@ _RECRAFT_IDS  = {
 }
 _KONTEXT_IDS  = {"fal-ai/flux-pro/kontext", "fal-ai/flux-pro/kontext/max"}
 _SEEDREAM_IDS = {"fal-ai/bytedance/seedream/v4.5/text-to-image"}
+_SEEDREAM_EDIT_IDS = {"fal-ai/bytedance/seedream/v4/edit"}    # img2img variant
 _WAN_IDS      = {"fal-ai/wan/v2.7/text-to-image"}
 _GROK_IDS     = {"xai/grok-imagine-image"}
+
+# Img2Img endpoint swap — when reference_image_url is provided, _call_fal
+# rewrites the model_id to the model's edit/remix variant (which actually
+# accepts an input image). Text-to-image payloads silently drop image_url.
+_FAL_I2I_ENDPOINT_MAP = {
+    "fal-ai/bytedance/seedream/v4.5/text-to-image": "fal-ai/bytedance/seedream/v4/edit",
+    "fal-ai/ideogram/v3":                           "fal-ai/ideogram/v3/remix",
+}
 _KIE_ASPECT_RATIO_MAP = {
     "square_hd": "1:1",
     "landscape_16_9": "16:9",
@@ -300,6 +310,7 @@ class MultiProviderClient:
         guidance_scale: float = 3.5,
         seed: Optional[int] = None,
         reference_image_url: Optional[str] = None,
+        extra_image_urls: Optional[List[str]] = None,
         rendering_speed: str = "BALANCED",
         style: Optional[str] = None,
     ) -> Dict:
@@ -335,6 +346,7 @@ class MultiProviderClient:
                 guidance_scale=guidance_scale,
                 seed=seed,
                 reference_image_url=reference_image_url,
+                extra_image_urls=extra_image_urls,
                 rendering_speed=rendering_speed,
                 style=style,
             )
@@ -387,13 +399,22 @@ class MultiProviderClient:
     async def _call_fal(self, model_id: str, prompt: str, negative_prompt: str,
                         num_images: int, image_size: str, num_inference_steps: int,
                         guidance_scale: float, seed, reference_image_url,
-                        rendering_speed: str, style) -> Dict:
+                        extra_image_urls: Optional[List[str]] = None,
+                        rendering_speed: str = "BALANCED", style=None) -> Dict:
         start = time.time()
         client = self._get_client("fal")
+
+        # Img2Img endpoint swap — text-to-image endpoints silently drop image_url,
+        # so route to the model's edit/remix variant when a reference is supplied.
+        if reference_image_url and model_id in _FAL_I2I_ENDPOINT_MAP:
+            original_id = model_id
+            model_id = _FAL_I2I_ENDPOINT_MAP[model_id]
+            logger.info("[fal] Img2Img endpoint swap: %s → %s", original_id, model_id)
+
         payload = self._build_fal_payload(
             model_id, prompt, negative_prompt, num_images, image_size,
             num_inference_steps, guidance_scale, seed, reference_image_url,
-            rendering_speed, style
+            rendering_speed, style, extra_image_urls
         )
         try:
             resp = await client.post(f"https://fal.run/{model_id}", json=payload)
@@ -408,10 +429,17 @@ class MultiProviderClient:
 
     async def _call_google(self, model_id: str, prompt: str, negative_prompt: str,
                            num_images: int, image_size: str, num_inference_steps: int,
-                           guidance_scale: float, seed, **kwargs) -> Dict:
+                           guidance_scale: float, seed, reference_image_url: Optional[str] = None,
+                           **kwargs) -> Dict:
         """Google Imagen 3 — via Google AI Studio REST API ($0.02/image)."""
         import asyncio
         start = time.time()
+
+        if reference_image_url:
+            logger.warning(
+                "[google] reference_image_url dropped: Imagen text-to-image REST path "
+                "does not accept image input. Route to flux_kontext for img2img."
+            )
 
         api_key = self._keys.get("google", "")
         if not api_key:
@@ -491,7 +519,8 @@ class MultiProviderClient:
 
     async def _call_wavespeed(self, model_id: str, prompt: str, negative_prompt: str,
                               num_images: int, image_size: str, num_inference_steps: int,
-                              guidance_scale: float, seed, **kwargs) -> Dict:
+                              guidance_scale: float, seed, reference_image_url: Optional[str] = None,
+                              **kwargs) -> Dict:
         """WaveSpeed v3 async API — Grok Imagine, Wan 2.7, Hunyuan Image.
 
         Flow: POST /api/v3/{model_path} → task id → poll /predictions/{id}/result
@@ -499,6 +528,12 @@ class MultiProviderClient:
         """
         import asyncio
         start = time.time()
+
+        if reference_image_url:
+            logger.warning(
+                "[wavespeed] reference_image_url dropped: text-to-image paths for "
+                "Grok/Wan/Hunyuan don't accept image input. Route to flux_kontext for img2img."
+            )
 
         api_key = self._keys.get("wavespeed", "")
         if not api_key:
@@ -632,7 +667,52 @@ class MultiProviderClient:
     @staticmethod
     def _build_fal_payload(model_id, prompt, negative_prompt, num_images, image_size,
                            steps, guidance, seed, reference_image_url,
-                           rendering_speed, style) -> Dict:
+                           rendering_speed, style, extra_image_urls=None) -> Dict:
+        # Set of model IDs that DO honor reference_image_url (either natively
+        # in their t2i payload, or via the i2i endpoint swap above).
+        _i2i_ok = (
+            _KONTEXT_IDS
+            | _SEEDREAM_EDIT_IDS
+            | _IDEOGRAM_REMIX_IDS
+            | {"fal-ai/flux-2-flex", "fal-ai/flux-2", "fal-ai/flux-2-pro",
+               "fal-ai/flux-2-max", "fal-ai/flux-2/turbo", "fal-ai/flux/schnell"}
+        )
+        if reference_image_url and model_id not in _i2i_ok:
+            logger.warning(
+                "[fal] reference_image_url dropped: model=%s has no img2img path. "
+                "Route to flux_kontext / flux_kontext_max for reference-guided gen.",
+                model_id,
+            )
+
+        # ── Img2Img variants ──────────────────────────────────────────────
+        if model_id in _SEEDREAM_EDIT_IDS:
+            refs = [reference_image_url] if reference_image_url else []
+            if extra_image_urls:
+                refs.extend([u for u in extra_image_urls if u])
+            p = {
+                "prompt": prompt,
+                "image_urls": refs,
+                "image_size": image_size,
+                "num_images": num_images,
+                "max_images": num_images,
+                "enable_safety_checker": True,
+            }
+            return p
+
+        if model_id in _IDEOGRAM_REMIX_IDS:
+            p = {
+                "prompt": prompt,
+                "image_url": reference_image_url,
+                "image_size": image_size,
+                "num_images": num_images,
+                "rendering_speed": rendering_speed,
+                "image_weight": 60,  # 1-100; 60 = balanced (preserve ref structure, allow prompt influence)
+                "style_type": "REALISTIC",
+            }
+            if negative_prompt:
+                p["negative_prompt"] = negative_prompt
+            return p
+
         if model_id in _IDEOGRAM_IDS:
             p: Dict = {
                 "prompt": prompt, "image_size": image_size,
@@ -685,7 +765,12 @@ class MultiProviderClient:
 
         if model_id in _KONTEXT_IDS:
             p = {"prompt": prompt, "image_size": image_size, "num_images": num_images}
-            if reference_image_url:
+            # Kontext Max supports multi-image compose via image_urls; Kontext Pro uses image_url.
+            if extra_image_urls and model_id == "fal-ai/flux-pro/kontext/max":
+                urls = [reference_image_url] if reference_image_url else []
+                urls.extend([u for u in extra_image_urls if u])
+                p["image_urls"] = urls
+            elif reference_image_url:
                 p["image_url"] = reference_image_url
             return p
 

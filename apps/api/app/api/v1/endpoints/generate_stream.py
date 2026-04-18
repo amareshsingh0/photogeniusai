@@ -122,6 +122,37 @@ _MODEL_GUIDANCE = {
 }
 _DEFAULT_GUIDANCE = 3.5
 
+# Models that actually honor `reference_image_url` end-to-end. Either:
+#  (a) Native: standard Flux + Kontext payloads include `image_url`
+#  (b) Endpoint swap: `_FAL_I2I_ENDPOINT_MAP` rewrites t2i URL → edit/remix URL
+#      when a reference is present (Seedream → /v4/edit, Ideogram → /v3/remix)
+# Everything else silently drops the reference, so the router falls back to
+# Flux Kontext for those.
+_IMG2IMG_CAPABLE_MODELS = {
+    # Native fal Flux family
+    "flux_kontext",
+    "flux_kontext_max",
+    "flux_2_flex",
+    "flux_2_pro",
+    "flux_2_dev",
+    "flux_2_turbo",
+    "flux_2_max",
+    # Endpoint-swap models (typography heavyweights — text rendering kings)
+    "seedream_4_5",   # → fal-ai/bytedance/seedream/v4/edit
+    "ideogram_v3",    # → fal-ai/ideogram/v3/remix
+}
+
+
+def _pick_img2img_model(quality: str) -> str:
+    """Choose the best reference-aware model for a given quality tier.
+
+    Kontext is purpose-built for instruction/guided edits and is the only
+    model across our 3 providers with verified reference-image plumbing.
+    """
+    if quality in (QualityTier.RES_2K.value, QualityTier.RES_4K.value):
+        return "flux_kontext_max"
+    return "flux_kontext"
+
 
 def _parse_bool_env(name: str, default: bool = True) -> bool:
     """Parse env flag: false/0/no/off → False, anything else → True."""
@@ -309,6 +340,20 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         if not use_ideogram and fal_model_key in ("ideogram_turbo", "ideogram_quality"):
             fal_model_key = "flux_2_pro"
             logger.info("[stream][%s] Ideogram disabled (USE_IDEOGRAM=false), using flux_2_pro", trace_id)
+
+        # ── Img2Img override ───────────────────────────────────────────────
+        # If a reference image was uploaded, the selected text-to-image model
+        # will silently drop it (Seedream/Ideogram/Recraft/Wan/Grok payloads
+        # don't wire `image_url`, and Google/WaveSpeed providers don't accept
+        # references at all). Force Flux Kontext, which is purpose-built for
+        # reference-guided editing, so the upload actually influences output.
+        if req.reference_image_url and fal_model_key not in _IMG2IMG_CAPABLE_MODELS:
+            _prev_model = fal_model_key
+            fal_model_key = _pick_img2img_model(quality)
+            logger.info(
+                "[stream][%s] Img2Img override: %s → %s (reference image provided)",
+                trace_id, _prev_model, fal_model_key,
+            )
 
         model_label = _MODEL_LABELS.get(fal_model_key, fal_model_key)
         num_images = model_cfg.get("num_images", 1)
@@ -851,6 +896,53 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
             yield _sse("error", {"message": f"No testing-enabled models found for bucket: {bucket}"})
             return
 
+        # Img2Img filter — when a reference image is provided, only run models
+        # that actually wire `image_url` through to the provider. Everything
+        # else would silently drop the reference (Seedream/Ideogram/Recraft/
+        # Wan/Grok payloads + Google + WaveSpeed). For typography this means
+        # showing parallel results from Flux family models that respect the ref.
+        if req.reference_image_url:
+            before = len(bucket_models)
+            bucket_models = [
+                m for m in bucket_models
+                if _canonical_model_key(m.modelId, default=m.modelId) in _IMG2IMG_CAPABLE_MODELS
+            ]
+            logger.info(
+                "[parallel][%s] Img2Img filter: %d → %d capable models for bucket=%s",
+                trace_id, before, len(bucket_models), bucket,
+            )
+            if not bucket_models:
+                # No capable models in admin DB — fall back to single Kontext
+                # variant rather than failing the request.
+                fallback_key = _pick_img2img_model(req.quality)
+                logger.warning(
+                    "[parallel][%s] No img2img-capable models in DB for bucket=%s — "
+                    "falling back to single %s",
+                    trace_id, bucket, fallback_key,
+                )
+                yield _sse("testing_started", {
+                    "bucket": bucket, "total": 1, "models": [fallback_key],
+                    "trace_id": trace_id, "img2img_fallback": True,
+                })
+                result = await _generate_with_model(req, fallback_key, trace_id, quality_override=req.quality)
+                if result:
+                    yield _sse("model_result", {
+                        "generationId": result.get("generation_id"),
+                        "imageUrl":     result.get("image_url"),
+                        "modelId":      result.get("model_id"),
+                        "tier":         result.get("tier"),
+                        "latency":      result.get("latency"),
+                        "cost":         result.get("cost"),
+                        "completed":    1,
+                        "total":        1,
+                        "trace_id":     trace_id,
+                    })
+                yield _sse("testing_complete", {
+                    "total": 1, "completed": 1 if result else 0,
+                    "bucket": bucket, "trace_id": trace_id,
+                })
+                return
+
         # Build (model_key, tier) pairs — each model at every tier it supports
         test_pairs = []
         seen = set()
@@ -1034,8 +1126,24 @@ async def stream_generate(req: StreamRequest, request: Request):
     # Check if testing mode is enabled (from request body or system config)
     testing_enabled = req.testing_mode or _parse_bool_env("TESTING_MODE_ENABLED", False)
 
+    # Img2Img routing: when a reference image is supplied, only typography
+    # benefits from admin parallel mode (multiple text-rendering models compared
+    # head-to-head). Non-typography img2img always uses the single-model Flux
+    # Kontext path — running Imagen / WaveSpeed in parallel would just produce
+    # reference-blind text-to-image variants.
+    use_parallel = testing_enabled
+    if testing_enabled and req.reference_image_url:
+        from app.services.smart.config import detect_capability_bucket
+        _bucket_for_dispatch = detect_capability_bucket(req.prompt)
+        if _bucket_for_dispatch != "typography":
+            use_parallel = False
+            logger.info(
+                "[stream][%s] Img2Img + non-typography (%s) → single-model Kontext path (skip admin parallel)",
+                trace_id, _bucket_for_dispatch,
+            )
+
     async def _guarded() -> AsyncIterator[str]:
-        if testing_enabled:
+        if use_parallel:
             # PARALLEL TESTING MODE - generate from multiple models
             async for chunk in _parallel_model_stream(req, trace_id):
                 if await request.is_disconnected():

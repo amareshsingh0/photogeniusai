@@ -4169,8 +4169,9 @@ def _sync_layout_elements(copy: Dict, creative: Dict, elements: List[Dict], aspe
     for el in base:
         raw_id = str(el.get("id") or "").strip()
         key_lower = raw_id.lower()
-        canon = _id_alias.get(key_lower, key_lower)
-        canon = re.sub(r"_\d+$", "", canon)  # headline_1 → headline
+        # Strip trailing _1/_2 FIRST (body_1 → body), then alias (body → body_text)
+        stripped = re.sub(r"_\d+$", "", key_lower)
+        canon = _id_alias.get(stripped, stripped)
         if canon in _canonical:
             el["id"] = canon
         # Track by canonical id so we can drop duplicates

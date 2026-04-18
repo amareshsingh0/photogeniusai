@@ -380,6 +380,119 @@ def get_model_supported_tiers(model_key: str) -> List[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# EDIT CAPABILITIES — Which models support which edit operations
+# Used by /edit endpoint to filter and rank models per requested operation.
+#
+# Modes:
+#   instruction_edit  — natural-language edits ("make sky purple", "add hat")
+#   inpaint_mask      — mask + prompt → repaint masked region
+#   style_remix       — restyle a reference with a new prompt
+#   compose           — blend / combine multiple reference images
+#   object_add        — add an object to the scene
+#   object_remove     — remove an object cleanly
+#   background_swap   — change background while keeping subject
+#   text_replace      — change text inside the image (typography)
+# ─────────────────────────────────────────────────────────────────────────────
+
+EDIT_MODES: List[str] = [
+    "instruction_edit",
+    "inpaint_mask",
+    "style_remix",
+    "compose",
+    "object_add",
+    "object_remove",
+    "background_swap",
+    "text_replace",
+]
+
+MODEL_EDIT_CAPABILITIES: Dict[str, List[str]] = {
+    # Flux Kontext — purpose-built instruction editor (gold standard)
+    "flux_kontext": [
+        "instruction_edit", "object_add", "object_remove",
+        "background_swap", "style_remix", "text_replace",
+    ],
+    "flux_kontext_max": [
+        "instruction_edit", "object_add", "object_remove",
+        "background_swap", "style_remix", "compose", "text_replace",
+    ],
+    # Flux Fill — mask-based inpainting (purpose-built)
+    "flux_fill": ["inpaint_mask"],
+    # Flux 2 family — native image_url on t2i endpoints; solid reference-guided gen
+    "flux_2_flex": [
+        "instruction_edit", "style_remix",
+        "object_add", "object_remove", "background_swap",
+    ],
+    "flux_2_pro": [
+        "instruction_edit", "style_remix",
+        "object_add", "object_remove", "background_swap",
+    ],
+    "flux_2_max": [
+        "instruction_edit", "style_remix", "compose",
+        "object_add", "object_remove", "background_swap",
+    ],
+    # Seedream Edit — versatile edit + multi-image compose (fal /v4/edit)
+    "seedream_4_5": [
+        "instruction_edit", "compose", "style_remix",
+        "background_swap", "object_add", "object_remove",
+    ],
+    # Ideogram Remix — typography text king (fal /v3/remix)
+    "ideogram_v3": [
+        "style_remix", "text_replace", "instruction_edit",
+    ],
+}
+
+# Per-operation default preference — first match in this list that also appears
+# in MODEL_EDIT_CAPABILITIES[mode] wins. Kontext is the overall workhorse, but
+# typography/compose should bias toward models that specialize.
+_EDIT_MODE_PREFERENCE: Dict[str, List[str]] = {
+    "instruction_edit": ["flux_kontext", "flux_kontext_max", "seedream_4_5"],
+    "inpaint_mask":     ["flux_fill"],
+    "style_remix":      ["ideogram_v3", "flux_kontext", "flux_kontext_max", "seedream_4_5"],
+    "compose":          ["seedream_4_5", "flux_kontext_max", "flux_2_max"],
+    "object_add":       ["flux_kontext", "flux_kontext_max", "seedream_4_5"],
+    "object_remove":    ["flux_kontext", "flux_kontext_max", "seedream_4_5"],
+    "background_swap":  ["flux_kontext", "flux_kontext_max", "seedream_4_5"],
+    "text_replace":     ["ideogram_v3", "flux_kontext_max", "flux_kontext", "seedream_4_5"],
+}
+
+
+def get_models_for_edit_mode(edit_mode: str) -> List[str]:
+    """Return the list of model_keys capable of the requested edit operation."""
+    return [
+        model_key
+        for model_key, caps in MODEL_EDIT_CAPABILITIES.items()
+        if edit_mode in caps
+    ]
+
+
+def get_default_model_for_edit_mode(edit_mode: str, quality_tier: str = "1k") -> str:
+    """Pick the best default model for an edit operation at the given tier.
+
+    Logic:
+      1. Look at _EDIT_MODE_PREFERENCE[mode] — first capable model wins.
+      2. For 2k/4k tiers, prefer Kontext Max over Kontext Pro if both are candidates.
+      3. Fallback to flux_kontext.
+    """
+    candidates = set(get_models_for_edit_mode(edit_mode))
+    if not candidates:
+        return "flux_kontext"
+
+    tier = normalize_quality_tier(quality_tier)
+    high_tier = tier in (QualityTier.RES_2K.value, QualityTier.RES_4K.value)
+
+    for preferred in _EDIT_MODE_PREFERENCE.get(edit_mode, []):
+        if preferred in candidates:
+            # Upgrade Kontext → Kontext Max for higher tiers when both are options
+            if (high_tier and preferred == "flux_kontext"
+                    and "flux_kontext_max" in candidates):
+                return "flux_kontext_max"
+            return preferred
+
+    # Preference list exhausted — return first capable model
+    return next(iter(candidates))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # TIER-BASED MODEL SELECTION (Fallback if no bucket match)
 # ─────────────────────────────────────────────────────────────────────────────
 
