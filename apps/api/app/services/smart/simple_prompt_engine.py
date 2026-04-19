@@ -73,6 +73,45 @@ Before you write a single word of the final prompt, you have a silent 10-second 
 
 That inner monologue is the skill. You don't have to show it. But every output should prove it happened.
 
+# ONE IMAGE, ONE DESIGN — NEVER A PITCH DECK
+
+**THIS IS THE MOST IMPORTANT RULE.** Your output renders as a SINGLE finished image — not a client pitch, not a mood board, not a comparison sheet. The user clicks "regenerate" to get variants; you never ship variants inside one image.
+
+## NEVER EVER write these in the `prompt` field — the image model will literally render them as text on the image:
+
+**Variant labels:**
+- "Option 1", "Option 2", "Option 3"
+- "Version A", "Version B", "Variant 1"
+- "Layout 1", "Layout 2", "Design A/B"
+
+**Brief-doc section headers:**
+- "Headline:", "Body:", "CTA:", "Subtitle:", "Subhead:"
+- "Headon 1", "Heading 1", "Section 1", "Title:", "Text:"
+
+**Placeholder text / template language:**
+- `"CALL TO ACTION"` (in all caps as a placeholder — always write a REAL verb like "Shop Now", "Get Yours", "Claim 40% Off")
+- `"[Website Address]"`, `"[Your Logo]"`, `"[Brand Name]"`, `"[Date]"`
+- `"Lorem ipsum"`, `"placeholder text"`, `"sample copy"`, `"example text"`
+- `"TBD"`, `"TK"`, `"XXX"`
+
+**Instruction-style phrasing that leaks:**
+- "Include a headline that says..." (model may render literally)
+- "Add copy about..." (model may render literally)
+
+## RIGHT vs WRONG
+
+❌ **WRONG prompt (renders as pitch deck):**
+> "Sunscreen ad with 3 layout options. Option 1: beach scene with Headline: Glow Brighter, Body: advanced protection..., CTA: CALL TO ACTION. Option 2: model portrait with..."
+
+✅ **RIGHT prompt (renders as ONE finished ad):**
+> "A single polished sunscreen ad: a sun-lit beach flat-lay with a Glow-branded sunscreen tube centered on cream sand, soft shadow, scattered sea shells and a single palm frond at the upper-right edge. Large bold sans-serif headline 'Glow Brighter, Protected Longer' locked across the top third in warm charcoal on a cream gradient. A golden 40% OFF burst sticker at the top-right corner. Small clean sans subhead 'Broad-spectrum SPF 50' beneath the headline. A 'Shop Now' button in brand-orange pill at the bottom center. Palette: warm cream, sunlit sand, charcoal, brand orange accent."
+
+One image. One concept. Real copy, rendered in place. No options, no placeholders, no brief-doc labels.
+
+## AD_COPY FIELD — THIS IS THE ONLY PLACE YOU LIST COPY
+
+All on-image copy goes into `ad_copy.headline`, `ad_copy.subhead`, `ad_copy.cta`. In the `prompt` field, reference these by quoting the actual line ("the headline 'Glow Brighter' locked across the top"), never by labels ("Headline: Glow Brighter").
+
 # YOU ITERATE — YOU DON'T ONE-SHOT
 
 Real designers never ship the first draft. In your head, do this loop before writing the final JSON:
@@ -83,6 +122,8 @@ Real designers never ship the first draft. In your head, do this loop before wri
 4. **FINALIZE** — commit. Now write the prompt.
 
 The user only sees the final JSON, but every output should *smell* like it went through this loop.
+
+**CRITICAL:** Steps 1–3 happen **silently in your head**. They NEVER appear in the output `prompt`. Never write "Draft 1: ...", "Option 1: ...", "First version: ...", "Alternatively: ...". The final JSON contains ONE committed design, fully specified, no alternatives listed. If the user wants alternatives, they regenerate.
 
 # CONSTRUCTION ORDER — BUILD IN LAYERS
 
@@ -460,8 +501,9 @@ Before you ship, do a 5-second simulation. Close your eyes, imagine the rendered
 4. **Clutter test** — remove one thing. Does the image get better? If yes, the original was overstuffed. Strip it.
 5. **Stock-test** — does it look like a generic stock template? If yes, add the one specific detail that makes it feel hand-made (the latte art, the single petal, the wristband, the light leak).
 6. **Recreate test** — if I handed this prompt to a real photographer + designer with zero other context, could they recreate the exact image in your head?
+7. **Leak test** — scan the `prompt` for forbidden words: "Option", "Version", "Variant", "Headline:", "Body:", "CTA:", "CALL TO ACTION", "[", "]", "Draft", "Alternatively". If ANY appear as labels or placeholders, DELETE them and write the actual content inline.
 
-If any answer is "no", revise the prompt before emitting JSON. A good prompt survives all six.
+If any answer is "no", revise the prompt before emitting JSON. A good prompt survives all seven.
 
 Never wrap JSON in code fences. Never add commentary. JSON only."""
 
@@ -511,6 +553,41 @@ def _build_user_message(
 
 
 _JSON_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
+
+# Defensive sanitizer — strips pitch-deck / brief-doc leaks that sometimes slip
+# through even when the system prompt forbids them. Runs on the final prompt
+# string BEFORE it hits the image model.
+_LEAK_PATTERNS = [
+    # "Option 1:", "Option 2:", "Version A:", "Layout 1:", "Variant 1:"
+    (re.compile(r"\b(?:Option|Version|Variant|Layout|Design)\s+(?:\d+|[A-C])\s*[:.\-–—]\s*", re.IGNORECASE), ""),
+    # Brief-doc labels: "Headline:", "Body:", "CTA:", "Subtitle:", "Subhead:", "Title:", "Text:"
+    (re.compile(r"\b(?:Headline|Body|CTA|Subtitle|Subhead|Title|Text|Tagline|Call[- ]to[- ]Action)\s*:\s*", re.IGNORECASE), ""),
+    # "Headon 1", "Heading 1", "Section 1"
+    (re.compile(r"\b(?:Headon|Heading|Section)\s+\d+\b", re.IGNORECASE), ""),
+    # Bracketed placeholders: [Website Address], [Your Logo], [Brand Name], [Date]
+    (re.compile(r"\[[^\]]{2,40}\]"), ""),
+    # Placeholder chatter
+    (re.compile(r"\b(?:Lorem ipsum|placeholder text|sample copy|example text|TBD|TK|XXX)\b", re.IGNORECASE), ""),
+    # "Draft 1", "First version", "Alternatively"
+    (re.compile(r"\bDraft\s+\d+\b", re.IGNORECASE), ""),
+    (re.compile(r"\b(?:Alternatively|First version|Second version|Initial draft)\b\s*[:.\-–—]?\s*", re.IGNORECASE), ""),
+]
+
+
+def _sanitize_prompt(text: str) -> str:
+    """Strip pitch-deck / placeholder language that image models render literally."""
+    if not text:
+        return text
+    original = text
+    for pattern, replacement in _LEAK_PATTERNS:
+        text = pattern.sub(replacement, text)
+    # Collapse doubled spaces / stray punctuation left by strips
+    text = re.sub(r"  +", " ", text)
+    text = re.sub(r" ([,.;:])", r"\1", text)
+    text = text.strip()
+    if text != original:
+        logger.info("[simple-engine] sanitized leak patterns from prompt (len %d→%d)", len(original), len(text))
+    return text
 
 
 def _parse_json_loose(text: str) -> Dict[str, Any]:
@@ -564,8 +641,10 @@ class SimplePromptEngine:
             )
             text = await asyncio.to_thread(self._call_sync, user_msg)
             data = _parse_json_loose(text)
+            raw_prompt = (data.get("prompt") or user_prompt).strip()
+            clean_prompt = _sanitize_prompt(raw_prompt)
             return {
-                "prompt":          (data.get("prompt") or user_prompt).strip(),
+                "prompt":          clean_prompt,
                 "negative_prompt": (data.get("negative_prompt") or "").strip(),
                 "intent":          (data.get("intent") or "general").strip(),
                 "aspect_hint":     (data.get("aspect_hint") or "square_hd").strip(),

@@ -531,12 +531,12 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         # ── Generation via multi-provider client (with keepalives) ─────────
         from app.services.external.multi_provider_client import multi_client
 
-        # Dual Variant (Phase 6): 2k/4k + creative_bible → Safe + Experimental in parallel
+        # Dual Variant (Phase 6): DISABLED — one model, one image.
+        # Earlier this fired a safe + experimental pair for 2k/4k with creative_bible.
+        # User requested single-image-per-model. If you need to re-enable, flip
+        # this back to the original condition.
         _creative_bible = brief.get("creative_bible") or {}
-        _run_dual = (
-            quality in (QualityTier.RES_2K.value, QualityTier.RES_4K.value)
-            and bool(_creative_bible.get("visual_metaphors"))
-        )
+        _run_dual = False
         _experimental_prompt: Optional[str] = None
         if _run_dual:
             _metaphors = [m for m in _creative_bible.get("visual_metaphors", []) if m]
