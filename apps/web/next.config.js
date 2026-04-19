@@ -7,6 +7,17 @@ const nextConfig = {
   swcMinify: true,
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
+  // Stable build ID — prevents "Failed to find Server Action 'x'" errors when
+  // stale browser tabs from a prior deployment ping the new server. Falls back
+  // to a timestamp if the git hash isn't available at build time.
+  generateBuildId: async () => {
+    try {
+      const { execSync } = require("child_process");
+      return execSync("git rev-parse HEAD").toString().trim().slice(0, 12);
+    } catch {
+      return `build-${Date.now()}`;
+    }
+  },
   // Performance optimizations
   compress: true,
   poweredByHeader: false,
