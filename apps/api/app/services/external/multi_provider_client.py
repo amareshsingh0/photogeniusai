@@ -764,7 +764,19 @@ class MultiProviderClient:
             }
 
         if model_id in _KONTEXT_IDS:
-            p = {"prompt": prompt, "image_size": image_size, "num_images": num_images}
+            # Kontext API: aspect_ratio (NOT image_size), image_url required, output_format optional.
+            # Sending image_size triggers fal 422 Unprocessable Entity.
+            p = {
+                "prompt":           prompt,
+                "aspect_ratio":     _kie_aspect_ratio_for_size(image_size),
+                "num_images":       num_images,
+                "output_format":    "jpeg",
+                "safety_tolerance": "2",
+            }
+            if guidance and guidance != 3.5:
+                p["guidance_scale"] = guidance
+            if seed is not None:
+                p["seed"] = seed
             # Kontext Max supports multi-image compose via image_urls; Kontext Pro uses image_url.
             if extra_image_urls and model_id == "fal-ai/flux-pro/kontext/max":
                 urls = [reference_image_url] if reference_image_url else []

@@ -12,6 +12,17 @@ _root = Path(__file__).resolve().parents[3]
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
+# Load .env BEFORE any module reads os.getenv(...) so admin-panel feature-flag
+# toggles (which write to apps/api/.env) take effect on the next pm2 restart.
+# override=True ensures admin edits beat pm2's stale cached env.
+try:
+    from dotenv import load_dotenv as _load_dotenv  # type: ignore
+    _env_file = Path(__file__).resolve().parents[1] / ".env"
+    if _env_file.exists():
+        _load_dotenv(_env_file, override=True)
+except Exception:
+    pass
+
 # Suppress TensorFlow warnings if installed globally
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")

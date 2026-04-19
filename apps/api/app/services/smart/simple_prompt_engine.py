@@ -558,20 +558,34 @@ _JSON_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
 # through even when the system prompt forbids them. Runs on the final prompt
 # string BEFORE it hits the image model.
 _LEAK_PATTERNS = [
-    # "Option 1:", "Option 2:", "Version A:", "Layout 1:", "Variant 1:"
-    (re.compile(r"\b(?:Option|Version|Variant|Layout|Design)\s+(?:\d+|[A-C])\s*[:.\-–—]\s*", re.IGNORECASE), ""),
-    # Brief-doc labels: "Headline:", "Body:", "CTA:", "Subtitle:", "Subhead:", "Title:", "Text:"
-    (re.compile(r"\b(?:Headline|Body|CTA|Subtitle|Subhead|Title|Text|Tagline|Call[- ]to[- ]Action)\s*:\s*", re.IGNORECASE), ""),
-    # "Headon 1", "Heading 1", "Section 1"
-    (re.compile(r"\b(?:Headon|Heading|Section)\s+\d+\b", re.IGNORECASE), ""),
-    # Bracketed placeholders: [Website Address], [Your Logo], [Brand Name], [Date]
-    (re.compile(r"\[[^\]]{2,40}\]"), ""),
+    # "Option 1" / "Option 1:" / "OPTION 1" — with or without trailing punctuation
+    (re.compile(r"\b(?:Option|Version|Variant|Layout|Design|Concept|Approach)\s+(?:\d+|[A-E]|One|Two|Three|Four)\s*[:.\-–—]?\s*", re.IGNORECASE), ""),
+    # "NOVA.3", "NOVA 3", "BRAND.1" — trailing number on brand that signals variant
+    (re.compile(r"(\b[A-Z][A-Z0-9]{2,})\s*[.\-]\s*[1-9]\b"), r"\1"),
+    # Brief-doc labels: "Headline:", "Body:", "CTA:", "Subtitle:", "Subhead:", "Title:", "Text:", "Product:"
+    (re.compile(r"\b(?:Headline|Body|CTA|Subtitle|Subhead|Title|Text|Tagline|Product|Discount|Brand)\s*:\s*", re.IGNORECASE), ""),
+    # "CALL TO ACTION" as placeholder (unique phrase — if real CTA was present, it'd be an actual verb)
+    (re.compile(r"\bCALL\s+TO\s+ACTION\b", re.IGNORECASE), ""),
+    # "Headon 1", "Heading 1", "Section 1", "Panel 1"
+    (re.compile(r"\b(?:Headon|Heading|Section|Panel|Frame)\s+\d+\b", re.IGNORECASE), ""),
+    # Bracketed placeholders: [Website Address], [Your Logo], [Brand Name], [Date], [Sale Ends Date], [While Supplies Last]
+    (re.compile(r"\[[^\]]{2,60}\]"), ""),
     # Placeholder chatter
     (re.compile(r"\b(?:Lorem ipsum|placeholder text|sample copy|example text|TBD|TK|XXX)\b", re.IGNORECASE), ""),
     # "Draft 1", "First version", "Alternatively"
     (re.compile(r"\bDraft\s+\d+\b", re.IGNORECASE), ""),
     (re.compile(r"\b(?:Alternatively|First version|Second version|Initial draft)\b\s*[:.\-–—]?\s*", re.IGNORECASE), ""),
+    # Multi-panel / collage / mood-board language
+    (re.compile(r"\b(?:collage|grid layout|multi[- ]panel|split[- ]screen|A/B comparison|mood[- ]?board|pitch deck|design sheet|variation sheet|layout options?)\b", re.IGNORECASE), ""),
 ]
+
+# Always append these to negative_prompt — prevents image model from generating
+# multi-panel design-sheet style outputs even when prompt is clean.
+_ANTI_COLLAGE_NEGATIVES = (
+    "collage, grid layout, multi-panel, split-screen, A/B comparison, "
+    "mood-board, design sheet, pitch deck, variation sheet, multiple options "
+    "shown, Option 1, Option 2, Option 3, before-after split, side-by-side comparison"
+)
 
 
 def _sanitize_prompt(text: str) -> str:
@@ -643,9 +657,11 @@ class SimplePromptEngine:
             data = _parse_json_loose(text)
             raw_prompt = (data.get("prompt") or user_prompt).strip()
             clean_prompt = _sanitize_prompt(raw_prompt)
+            raw_neg = (data.get("negative_prompt") or "").strip()
+            combined_neg = f"{raw_neg}, {_ANTI_COLLAGE_NEGATIVES}" if raw_neg else _ANTI_COLLAGE_NEGATIVES
             return {
                 "prompt":          clean_prompt,
-                "negative_prompt": (data.get("negative_prompt") or "").strip(),
+                "negative_prompt": combined_neg,
                 "intent":          (data.get("intent") or "general").strip(),
                 "aspect_hint":     (data.get("aspect_hint") or "square_hd").strip(),
                 "ad_copy":         data.get("ad_copy"),
@@ -656,7 +672,7 @@ class SimplePromptEngine:
             logger.exception("[simple-engine] enrich failed: %s — falling back to raw prompt", e)
             return {
                 "prompt":          user_prompt,
-                "negative_prompt": "low-quality, blurry, distorted, watermark, extra fingers",
+                "negative_prompt": f"low-quality, blurry, distorted, watermark, extra fingers, {_ANTI_COLLAGE_NEGATIVES}",
                 "intent":          "general",
                 "aspect_hint":     "square_hd",
                 "ad_copy":         None,

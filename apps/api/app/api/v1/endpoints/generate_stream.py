@@ -493,6 +493,16 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         if req.negative_prompt is not None:
             negative_prompt = f"{req.negative_prompt}, {negative_prompt}" if negative_prompt else req.negative_prompt
 
+        # Universal leak sanitizer + anti-collage negatives — applies to ALL engine paths
+        # (simple_engine / claude_v2 / 4-agent chain) so image models never render
+        # "Option 1/2/3", "[Placeholder]", collage sheets, etc. regardless of upstream.
+        from app.services.smart.simple_prompt_engine import _sanitize_prompt, _ANTI_COLLAGE_NEGATIVES
+        enhanced_prompt = _sanitize_prompt(enhanced_prompt)
+        negative_prompt = (
+            f"{negative_prompt}, {_ANTI_COLLAGE_NEGATIVES}"
+            if negative_prompt else _ANTI_COLLAGE_NEGATIVES
+        )
+
         # Typography bucket — use model from model_config.py BUCKET_MODEL_MAP (no hardcoded override)
         if bucket == "typography":
             logger.info("[stream][%s] Typography bucket → using config model: %s", trace_id, fal_model_key)
