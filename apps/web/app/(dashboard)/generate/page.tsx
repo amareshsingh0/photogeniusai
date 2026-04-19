@@ -1117,12 +1117,6 @@ export default function GeneratePage() {
                       <span className="text-xs text-muted-foreground/80">{formatTime(result.total_time)}</span>
                     </div>
                   )}
-                  {result.model_used && (
-                    <div className="flex items-center gap-1.5">
-                      <Cpu className="h-3 w-3 text-sky-400 shrink-0" />
-                      <span className="text-xs text-sky-400 font-medium">{result.model_used}</span>
-                    </div>
-                  )}
                 </div>
 
                 {/* Detected settings */}
@@ -1307,11 +1301,6 @@ export default function GeneratePage() {
                   <p className="text-[11px] text-muted-foreground/60">
                     {getQualityMeta(qualityTier).hint} est.
                   </p>
-                  {activeModel && (
-                    <span className="text-[11px] text-sky-400/80 bg-sky-500/10 px-1.5 py-0.5 rounded font-medium">
-                      {activeModel}
-                    </span>
-                  )}
                 </div>
               )}
             </motion.div>
