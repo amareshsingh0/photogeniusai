@@ -1038,28 +1038,62 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
             "trace_id":     trace_id,
         })
 
-        # Launch all (model, tier) pairs in parallel
+        # Launch all (model, tier) pairs in parallel — wrap as Tasks so we can
+        # interleave heartbeat events while waiting. Heartbeats (every ~15s)
+        # keep the nginx/Cloudflare SSE proxy connection alive during long
+        # (80–120s) gens like Hunyuan. Without them the proxy idle-timeouts
+        # and the client never receives the final model_result.
         tasks = [
-            _generate_with_model(req, model_id, trace_id, quality_override=tier)
+            asyncio.create_task(
+                _generate_with_model(req, model_id, trace_id, quality_override=tier)
+            )
             for model_id, tier in test_pairs
         ]
 
         completed = 0
-        for coro in asyncio.as_completed(tasks):
-            result = await coro
-            completed += 1
-            if result:
-                yield _sse("model_result", {
-                    "generationId": result.get("generation_id"),
-                    "imageUrl":     result.get("image_url"),
-                    "modelId":      result.get("model_id"),
-                    "tier":         result.get("tier"),
-                    "latency":      result.get("latency"),
-                    "cost":         result.get("cost"),
-                    "completed":    completed,
-                    "total":        len(test_pairs),
-                    "trace_id":     trace_id,
+        pending = set(tasks)
+        heartbeat_interval = 15  # seconds
+        parallel_started_at = time.time()
+
+        while pending:
+            done, pending = await asyncio.wait(
+                pending,
+                timeout=heartbeat_interval,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            if not done:
+                # Nothing finished in this window — emit a heartbeat so the
+                # SSE connection doesn't sit silent long enough for nginx
+                # (default proxy_read_timeout=60s) to drop it.
+                yield _sse("heartbeat", {
+                    "t":         int(time.time()),
+                    "elapsed":   int(time.time() - parallel_started_at),
+                    "completed": completed,
+                    "total":     len(tasks),
+                    "trace_id":  trace_id,
                 })
+                continue
+
+            for task in done:
+                try:
+                    result = task.result()
+                except Exception as e:
+                    logger.error("[parallel][%s] task failed: %s", trace_id, e, exc_info=True)
+                    result = None
+                completed += 1
+                if result:
+                    yield _sse("model_result", {
+                        "generationId": result.get("generation_id"),
+                        "imageUrl":     result.get("image_url"),
+                        "modelId":      result.get("model_id"),
+                        "tier":         result.get("tier"),
+                        "latency":      result.get("latency"),
+                        "cost":         result.get("cost"),
+                        "completed":    completed,
+                        "total":        len(tasks),
+                        "trace_id":     trace_id,
+                    })
 
         yield _sse("testing_complete", {
             "total":     len(test_pairs),

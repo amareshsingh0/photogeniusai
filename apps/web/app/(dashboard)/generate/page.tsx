@@ -686,6 +686,10 @@ export default function GeneratePage() {
             }
 
 
+          } else if (event === "heartbeat") {
+            // Backend keeps SSE alive during long parallel gens (Hunyuan ~115s).
+            // No UI action — just swallow so "unknown event" doesn't spam logs.
+
           } else if (event === "error") {
             throw new Error(data.message || "Generation failed")
           }
@@ -934,12 +938,85 @@ export default function GeneratePage() {
                     />
                   </div>
 
-                  {/* Rating UI below image */}
-                  {res.generationId && (
-                    <div className="p-4 bg-black/40">
-                      <ImageRating generationId={res.generationId} imageUrl={res.image_url || ""} />
+                  {/* Per-card actions */}
+                  <div className="p-3 bg-black/40 flex flex-col gap-2">
+                    {/* Primary: promote to single-result view → unlocks full toolbar
+                        (Canvas Editor, Add Logo, Regenerate, Edit Prompt, Gallery, etc) */}
+                    <Button
+                      onClick={() => {
+                        setResult(res)
+                        setMultiResults([])
+                      }}
+                      className="gap-2 btn-premium text-white rounded-xl text-sm"
+                    >
+                      <PenSquare className="h-3.5 w-3.5" /> Use This Image
+                    </Button>
+
+                    {/* Direct action row */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          const url = res.image_url
+                          if (!url) return
+                          try {
+                            if (url.startsWith("data:")) {
+                              const link = document.createElement("a")
+                              link.href = url
+                              link.download = `photogenius-${Date.now()}.jpg`
+                              link.click()
+                              return
+                            }
+                            const blob = await fetch(url).then(r => r.blob())
+                            const blobUrl = URL.createObjectURL(blob)
+                            const link = document.createElement("a")
+                            link.href = blobUrl
+                            link.download = `photogenius-${Date.now()}.jpg`
+                            link.click()
+                            URL.revokeObjectURL(blobUrl)
+                          } catch {
+                            window.open(url, "_blank")
+                          }
+                        }}
+                        className="gap-1 rounded-xl border-white/[0.1] bg-white/[0.03] text-xs"
+                      >
+                        <Download className="h-3 w-3" />
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setResult(res)
+                          setMultiResults([])
+                          setShowEditModal(true)
+                        }}
+                        className="gap-1 rounded-xl border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 text-xs"
+                      >
+                        <Scissors className="h-3 w-3" />
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setResult(res)
+                          setMultiResults([])
+                          setShowLogoModal(true)
+                        }}
+                        className="gap-1 rounded-xl border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-xs"
+                      >
+                        <ImageIcon className="h-3 w-3" />
+                        Logo
+                      </Button>
                     </div>
-                  )}
+
+                    {/* Rating */}
+                    {res.generationId && (
+                      <ImageRating generationId={res.generationId} imageUrl={res.image_url || ""} />
+                    )}
+                  </div>
                 </motion.div>
               ))}
             </div>
