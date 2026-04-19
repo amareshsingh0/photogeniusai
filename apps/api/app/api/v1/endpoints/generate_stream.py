@@ -999,16 +999,32 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
                 })
                 return
 
-        # Build (model_key, tier) pairs — each model at every tier it supports
+        # Build (model_key, tier) pairs — STRICT tier match. Only models that
+        # support the user's selected tier are included. 1k-only models are
+        # skipped when user picks 2k/4k; 1k+2k models are skipped when user
+        # picks 4k. One generation per capable model at exactly the user's tier.
+        _VALID_TIERS = {"1k", "2k", "4k"}
+        requested_tier = req.quality if req.quality in _VALID_TIERS else "1k"
+
         test_pairs = []
         seen = set()
+        skipped = []
         for m in bucket_models:
             model_key = _canonical_model_key(m.modelId, default=m.modelId)
-            for tier in get_model_supported_tiers(model_key):
-                pair = (model_key, tier)
-                if pair not in seen:
-                    seen.add(pair)
-                    test_pairs.append(pair)
+            supported = get_model_supported_tiers(model_key)
+            if requested_tier not in supported:
+                skipped.append(model_key)
+                continue
+            pair = (model_key, requested_tier)
+            if pair not in seen:
+                seen.add(pair)
+                test_pairs.append(pair)
+
+        if skipped:
+            logger.info(
+                "[parallel][%s] tier=%s — skipped %d non-capable models: %s",
+                trace_id, requested_tier, len(skipped), skipped,
+            )
 
         logger.info(
             "[parallel][%s] bucket=%s — %d models × tiers = %d generations: %s",
