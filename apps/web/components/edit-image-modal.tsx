@@ -1,12 +1,14 @@
 "use client"
 
 /**
- * EditImageModal — 7-operation image editor.
+ * EditImageModal — full-featured AI image editor.
  *
  * Operations (ChatGPT/Gemini-style):
+ *   Enhance          — one-click auto-enhance
  *   Edit             — natural-language instruction edit
- *   Remix            — restyle with a new prompt
+ *   Remix            — restyle with theme presets or custom prompt
  *   Inpaint          — mask + prompt → repaint masked region
+ *   Add Object       — insert logos / objects / images into the scene
  *   Compose          — blend multiple images
  *   Add Text         — replace/add text in the image
  *   Remove Object    — remove an object cleanly
@@ -19,10 +21,11 @@
 import React, {
   useRef, useState, useEffect, useCallback, MouseEvent, TouchEvent,
 } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import {
   X, Brush, Circle, Square, Eraser, Trash2, Loader2, Wand2,
   Sparkles, Layers, Type, Eraser as RemoveIcon, Image as BgIcon, Plus,
+  Zap, PackagePlus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -34,6 +37,7 @@ type EditMode =
   | "inpaint_mask"
   | "compose"
   | "text_replace"
+  | "object_add"
   | "object_remove"
   | "background_swap"
 
@@ -90,6 +94,18 @@ const OPERATIONS: OpDef[] = [
     ],
   },
   {
+    id: "object_add",
+    label: "Add Object",
+    icon: <PackagePlus className="h-3.5 w-3.5" />,
+    hint: "Insert a new object, logo, or image into the scene. Upload references (optional) and describe placement.",
+    placeholder: "e.g. add a coffee cup on the table, add the uploaded logo to the top-right corner...",
+    suggestions: [
+      "Add the uploaded logo to the top-right corner",
+      "Add a small bouquet of flowers in the foreground",
+      "Add a coffee cup on the table, steaming, natural shadow",
+    ],
+  },
+  {
     id: "compose",
     label: "Compose",
     icon: <Layers className="h-3.5 w-3.5" />,
@@ -142,6 +158,61 @@ const OPERATIONS: OpDef[] = [
 const BRUSH_SIZES = [8, 16, 28, 44]
 const MAX_EXTRAS = 3
 
+// Theme preset chips — one-click styles for the Remix panel
+const THEME_PRESETS: { label: string; prompt: string }[] = [
+  { label: "Cinematic",       prompt: "cinematic film still, teal-orange color grade, 35mm lens, shallow depth of field, dramatic moody lighting" },
+  { label: "Anime",           prompt: "anime illustration, cel-shaded, vibrant colors, expressive line art, studio-quality" },
+  { label: "Watercolor",      prompt: "soft watercolor painting, paper texture, delicate brush strokes, pastel palette" },
+  { label: "Oil Painting",    prompt: "classical oil painting, rich thick brush strokes, dramatic chiaroscuro lighting, museum quality" },
+  { label: "Cyberpunk",       prompt: "cyberpunk neon aesthetic, synthwave palette, chrome and holograms, rainy night city" },
+  { label: "Vintage 70s",     prompt: "vintage 1970s photograph, warm film grain, faded color, nostalgic mood, Kodachrome" },
+  { label: "3D Pixar",        prompt: "Pixar-style 3D render, soft global illumination, expressive features, cinematic composition" },
+  { label: "Minimal",         prompt: "minimalist design, vast negative space, single accent color, clean geometric composition" },
+  { label: "Pencil Sketch",   prompt: "detailed graphite pencil sketch, cross-hatching, subtle shading, artistic line work" },
+  { label: "Pop Art",         prompt: "pop art, bold outlines, halftone dot patterns, saturated primary colors, Lichtenstein-inspired" },
+  { label: "Black & White",   prompt: "high-contrast black and white photography, dramatic shadows, film noir mood, tri-x grain" },
+  { label: "Vaporwave",       prompt: "vaporwave aesthetic, pastel pink and teal, retro 80s CRT glow, dreamlike mood" },
+  { label: "Studio Ghibli",   prompt: "Studio Ghibli hand-painted animation style, soft watercolor backgrounds, warm whimsical atmosphere" },
+  { label: "Lego Blocks",     prompt: "render the scene built entirely out of Lego bricks, studio product-photo lighting" },
+  { label: "Claymation",      prompt: "stop-motion claymation style, visible fingerprints in clay, charming handmade feel" },
+  { label: "Pixel Art",       prompt: "16-bit pixel art, limited palette, crisp pixels, retro video-game aesthetic" },
+]
+
+// One-click quick actions — apply without typing
+const QUICK_ACTIONS: {
+  id: string; label: string; icon: React.ReactNode;
+  mode: EditMode; instruction: string;
+}[] = [
+  {
+    id: "enhance",
+    label: "Auto-Enhance",
+    icon: <Zap className="h-3 w-3" />,
+    mode: "instruction_edit",
+    instruction: "enhance overall quality: boost color vibrancy, sharpen fine details, improve lighting and contrast, fix any blur, professional photography finish",
+  },
+  {
+    id: "hd_upscale",
+    label: "HD Upscale",
+    icon: <Sparkles className="h-3 w-3" />,
+    mode: "instruction_edit",
+    instruction: "upscale to high resolution, enhance fine textures, sharpen edges, clean noise, preserve original composition exactly",
+  },
+  {
+    id: "remove_bg",
+    label: "Clean BG",
+    icon: <BgIcon className="h-3 w-3" />,
+    mode: "background_swap",
+    instruction: "clean seamless studio white background, subject cleanly isolated, soft contact shadow",
+  },
+  {
+    id: "fix_faces",
+    label: "Fix Faces",
+    icon: <Wand2 className="h-3 w-3" />,
+    mode: "instruction_edit",
+    instruction: "fix any facial distortions, ensure natural skin texture, correct eye alignment and catchlights, realistic features",
+  },
+]
+
 export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
   const [mode, setMode] = useState<EditMode>("instruction_edit")
   const [tool, setTool] = useState<Tool>("brush")
@@ -154,7 +225,8 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
 
   const op = OPERATIONS.find(o => o.id === mode)!
   const showMaskTools = mode === "inpaint_mask"
-  const showExtraImages = mode === "compose"
+  const showExtraImages = mode === "compose" || mode === "object_add"
+  const showThemePresets = mode === "style_remix"
 
   const containerRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
@@ -338,7 +410,7 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
         redrawDisplay()
       }
     }
-    if (mode !== "compose") setExtras([])
+    if (mode !== "compose" && mode !== "object_add") setExtras([])
   }, [mode])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Submit ───────────────────────────────────────────────────────────────
@@ -356,6 +428,7 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
       setError("Add at least one reference image for Compose.")
       return
     }
+    // object_add allows extras to be optional (pure-text "add a cup" works)
     setError(null)
     setIsSubmitting(true)
 
@@ -369,7 +442,7 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
       if (mode === "inpaint_mask") {
         body.mask_data = maskCanvasRef.current!.toDataURL("image/png")
       }
-      if (mode === "compose" && extras.length) {
+      if ((mode === "compose" || mode === "object_add") && extras.length) {
         body.extra_image_urls = extras
       }
 
@@ -386,6 +459,37 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
       onClose()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Edit failed. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // One-click quick action: set mode + instruction, then submit immediately.
+  const runQuickAction = async (qa: (typeof QUICK_ACTIONS)[number]) => {
+    if (isSubmitting) return
+    setMode(qa.mode)
+    setInstruction(qa.instruction)
+    setError(null)
+    setIsSubmitting(true)
+    try {
+      const res = await fetch("/api/generate/edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image_url: imageUrl,
+          instruction: qa.instruction,
+          quality: "1k",
+          edit_mode: qa.mode,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `Quick action failed (${res.status})`)
+      }
+      onResult(data.image_url)
+      onClose()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Quick action failed.")
     } finally {
       setIsSubmitting(false)
     }
@@ -490,8 +594,25 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
           </div>
 
           {/* Right panel */}
-          <div className="w-72 shrink-0 flex flex-col border-l border-white/[0.06] p-4 gap-3 overflow-y-auto">
+          <div className="w-80 shrink-0 flex flex-col border-l border-white/[0.06] p-4 gap-3 overflow-y-auto">
             <p className="text-[11px] text-muted-foreground/80 leading-relaxed">{op.hint}</p>
+
+            {/* One-click quick actions */}
+            <div>
+              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-2">Quick Actions</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {QUICK_ACTIONS.map(qa => (
+                  <button
+                    key={qa.id}
+                    onClick={() => runQuickAction(qa)}
+                    disabled={isSubmitting}
+                    className="flex items-center gap-1.5 px-2 py-2 rounded-lg border border-white/[0.06] bg-white/[0.02] text-muted-foreground hover:text-white hover:border-primary/40 hover:bg-primary/5 text-[11px] font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {qa.icon} {qa.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* Inpaint tools */}
             {showMaskTools && (
@@ -552,11 +673,30 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
               </div>
             )}
 
-            {/* Compose: extra image uploader */}
+            {/* Theme presets (Remix only) */}
+            {showThemePresets && (
+              <div>
+                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-2">Theme Presets</p>
+                <div className="grid grid-cols-2 gap-1.5 max-h-56 overflow-y-auto pr-1">
+                  {THEME_PRESETS.map(t => (
+                    <button
+                      key={t.label}
+                      onClick={() => setInstruction(t.prompt)}
+                      className="text-left text-[11px] text-muted-foreground/80 hover:text-white px-2 py-1.5 rounded-lg bg-white/[0.02] hover:bg-primary/10 border border-white/[0.06] hover:border-primary/40 transition-all"
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Compose / Add Object: extra image uploader */}
             {showExtraImages && (
               <div>
                 <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mb-2">
-                  Reference Images ({extras.length}/{MAX_EXTRAS})
+                  {mode === "object_add" ? "Object / Logo" : "Reference Images"} ({extras.length}/{MAX_EXTRAS})
+                  {mode === "object_add" && <span className="ml-1 normal-case tracking-normal text-muted-foreground/40">· optional</span>}
                 </p>
                 <div className="grid grid-cols-3 gap-1.5">
                   {extras.map((u, i) => (

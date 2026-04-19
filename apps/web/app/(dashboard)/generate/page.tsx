@@ -304,7 +304,6 @@ const SESSION_KEY = "pg_last_result"
 
 export default function GeneratePage() {
   const router = useRouter()
-  const [openingEditor, setOpeningEditor] = useState(false)
   const [prompt, setPrompt] = useState("")
   const [userPrompt, setUserPrompt] = useState<string>("")
   const [isGenerating, setIsGenerating] = useState(false)
@@ -830,35 +829,6 @@ export default function GeneratePage() {
     }
   }
 
-  // Open result in canvas editor
-  const handleOpenInEditor = async () => {
-    if (!result) return
-    setOpeningEditor(true)
-    try {
-      const res = await fetch("/api/projects/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          heroUrl:      result.hero_url || result.image_url,
-          adCopy:       result.ad_copy,
-          posterDesign: result.poster_design,
-          designBrief:  result.design_brief,
-          imageUrl:     result.image_url,
-          prompt:       userPrompt,
-          name:         result.ad_copy?.headline || userPrompt.slice(0, 50) || "Untitled",
-        }),
-      })
-      const data = await res.json()
-      if (data.projectId) {
-        router.push(`/editor/${data.projectId}`)
-      } else {
-        throw new Error(data.error ?? "Failed to create project")
-      }
-    } catch (err) {
-      toast({ title: "Could not open editor", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" })
-    } finally { setOpeningEditor(false) }
-  }
-
   // Regenerate with same prompt
   const handleRegenerate = () => {
     if (userPrompt) handleGenerate(userPrompt)
@@ -1237,17 +1207,6 @@ export default function GeneratePage() {
               <div className="grid grid-cols-2 gap-2">
                 <Button onClick={handleDownload} className="gap-2 btn-premium text-white rounded-xl col-span-2">
                   <Download className="h-4 w-4" /> Download
-                </Button>
-                <Button
-                  onClick={handleOpenInEditor}
-                  disabled={openingEditor}
-                  className="gap-2 rounded-xl border border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 text-sm col-span-2"
-                  variant="outline"
-                >
-                  {openingEditor
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <PenSquare className="h-3.5 w-3.5" />}
-                  Open in Canvas Editor
                 </Button>
                 {result.ad_copy && result.hero_url && (
                   <Button
