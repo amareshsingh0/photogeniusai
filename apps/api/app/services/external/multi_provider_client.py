@@ -563,6 +563,19 @@ class MultiProviderClient:
         }
         aspect_ratio = aspect_map.get(image_size, "1:1")
 
+        # WaveSpeed endpoints drop negative_prompt entirely. If the caller
+        # passed anti-collage negatives, fold them into the positive prompt
+        # as a hard imperative so the model still gets the signal.
+        if negative_prompt:
+            _neg_lower = negative_prompt.lower()
+            if any(k in _neg_lower for k in ("collage", "panel", "grid", "option", "pitch deck", "design sheet")):
+                prompt = (
+                    "ONE single unified image, one cohesive composition. "
+                    "Not a collage, not a grid, not multi-panel, not a design sheet, "
+                    "not layout options A/B, not a brief document. "
+                    + prompt
+                )
+
         # Per-model payload (each endpoint accepts different params)
         if model_id == "grok_2_imagine":
             payload = {
@@ -668,6 +681,25 @@ class MultiProviderClient:
     def _build_fal_payload(model_id, prompt, negative_prompt, num_images, image_size,
                            steps, guidance, seed, reference_image_url,
                            rendering_speed, style, extra_image_urls=None) -> Dict:
+        # Seedream / Recraft / Grok text-to-image payloads silently drop
+        # `negative_prompt`. For those, fold an anti-collage imperative into
+        # the positive prompt so the model still gets the "one unified image"
+        # signal. Typography bucket defaults to Seedream at 1K — without this,
+        # the Claude-authored negatives never reach the model and the output
+        # keeps coming back as a pitch-deck.
+        _NO_NEG_PROMPT_MODELS = (
+            _SEEDREAM_IDS | _SEEDREAM_EDIT_IDS | _RECRAFT_IDS | _GROK_IDS
+        )
+        if model_id in _NO_NEG_PROMPT_MODELS and negative_prompt:
+            _neg_lower = negative_prompt.lower()
+            if any(k in _neg_lower for k in ("collage", "panel", "grid", "option", "pitch deck", "design sheet")):
+                prompt = (
+                    "ONE single unified image, one cohesive composition. "
+                    "Not a collage, not a grid, not multi-panel, not a design sheet, "
+                    "not layout options A/B, not a brief document. "
+                    + prompt
+                )
+
         # Set of model IDs that DO honor reference_image_url (either natively
         # in their t2i payload, or via the i2i endpoint swap above).
         _i2i_ok = (

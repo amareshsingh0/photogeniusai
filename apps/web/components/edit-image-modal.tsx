@@ -223,7 +223,7 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
   const [hasMask, setHasMask] = useState(false)
   const [extras, setExtras] = useState<string[]>([])   // data: URLs
 
-  const op = OPERATIONS.find(o => o.id === mode)!
+  const op = OPERATIONS.find(o => o.id === mode) ?? OPERATIONS[0]
   const showMaskTools = mode === "inpaint_mask"
   const showExtraImages = mode === "compose" || mode === "object_add"
   const showThemePresets = mode === "style_remix"
@@ -261,20 +261,25 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
   }, [])
 
   const setupCanvases = useCallback(() => {
-    const img = imgRef.current
-    const mask = maskCanvasRef.current
-    const display = displayCanvasRef.current
-    if (!img || !mask || !display) return
-    const w = img.clientWidth
-    const h = img.clientHeight
-    if (w === 0 || h === 0) return
-    mask.width = w;  mask.height = h
-    display.width = w;  display.height = h
-    const mCtx = mask.getContext("2d")!
-    mCtx.fillStyle = "black"
-    mCtx.fillRect(0, 0, w, h)
-    setHasMask(false)
-    redrawDisplay()
+    try {
+      const img = imgRef.current
+      const mask = maskCanvasRef.current
+      const display = displayCanvasRef.current
+      if (!img || !mask || !display) return
+      const w = img.clientWidth
+      const h = img.clientHeight
+      if (w === 0 || h === 0) return
+      mask.width = w;  mask.height = h
+      display.width = w;  display.height = h
+      const mCtx = mask.getContext("2d")
+      if (!mCtx) return
+      mCtx.fillStyle = "black"
+      mCtx.fillRect(0, 0, w, h)
+      setHasMask(false)
+      redrawDisplay()
+    } catch (e) {
+      console.error("[edit-modal] setupCanvases failed:", e)
+    }
   }, [redrawDisplay])
 
   useEffect(() => {
@@ -507,7 +512,6 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
         transition={{ duration: 0.18 }}
         className="relative w-full max-w-5xl bg-[#0d0d0d] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
         style={{ maxHeight: "95vh" }}

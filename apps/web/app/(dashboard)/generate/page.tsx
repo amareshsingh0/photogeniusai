@@ -845,7 +845,10 @@ export default function GeneratePage() {
 
   // Edit the generated image — open advanced edit modal
   const handleEditGeneratedImage = () => {
+    // Loud visible signal — if click reaches here, user WILL see this
+    try { (window as any).__editClickCount = ((window as any).__editClickCount || 0) + 1 } catch {}
     console.log("[EDIT-BTN] click fired. result:", result, "image_url:", result?.image_url)
+    toast({ title: "Opening editor…", description: "Loading edit tools" })
     if (!result?.image_url) {
       toast({
         title: "No image to edit",
@@ -854,7 +857,6 @@ export default function GeneratePage() {
       })
       return
     }
-    console.log("[EDIT-BTN] opening modal with URL:", result.image_url)
     setShowEditModal(true)
   }
 
@@ -1246,10 +1248,16 @@ export default function GeneratePage() {
                     />
                   </div>
                 )}
-                <Button onClick={handleEditGeneratedImage} className="gap-2 rounded-xl border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 text-sm" variant="outline">
+                <Button
+                  type="button"
+                  onClick={handleEditGeneratedImage}
+                  onPointerDown={handleEditGeneratedImage}
+                  className="gap-2 rounded-xl border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 text-sm col-span-2 relative z-10"
+                  variant="outline"
+                >
                   <Scissors className="h-3.5 w-3.5" /> Edit Image
                 </Button>
-                <Button onClick={() => setShowLogoModal(true)} className="gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-sm" variant="outline">
+                <Button onClick={() => setShowLogoModal(true)} className="gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-sm col-span-2" variant="outline">
                   <ImageIcon className="h-3.5 w-3.5" /> Add Logo
                 </Button>
                 <Button onClick={handleRegenerate} variant="outline" className="gap-2 rounded-xl border-white/[0.1] bg-white/[0.03] text-sm">
