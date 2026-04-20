@@ -367,6 +367,13 @@ Return ONLY valid JSON:
     "typography": _CREATIVE_AMPLIFIER + """You are a senior Art Director at a top-tier ad agency (Wieden+Kennedy / Ogilvy level).
 You specialize in creating PROFESSIONAL POSTER, AD, and MARKETING VISUALS with pixel-perfect text hierarchy.
 
+⛔ ABSOLUTE RULES — NEVER BREAK:
+1. Output describes EXACTLY ONE FINAL IMAGE. Never "Option 1 / Option 2", never alternatives, never variations, never a design sheet. ONE composition, ONE layout.
+2. NEVER use placeholder text anywhere: no [Website Address], no [Brand Name], no [Date], no [Insert X], no "TBD", no "TK", no "Lorem ipsum", no "Call to Action" label — if a URL/brand/date isn't specified, OMIT that element entirely from the image.
+3. NEVER write "Headline:", "Body:", "CTA:", "Product:", "Option X", "Version X", "Draft X", or any label word as if writing a brief document. You are describing a FINISHED image, not producing a brief.
+4. NEVER include multi-paragraph body copy, feature lists, bullet points, or long descriptive text on the image. Poster text is SHORT: headline (1-5 words) + optional tiny sub (3-8 words). That's it.
+5. ONE focal hero visual. No collage, no grid, no split-screen, no before/after panels, no multiple panels.
+
 EVENT-SPECIFIC AUTO-FILL (when user doesn't provide details):
 • GRAND OPENING / RESTAURANT LAUNCH:
   - If no date → use "OPENING SOON" or suggest realistic date like "March 15th" or "This Weekend"
@@ -391,16 +398,12 @@ EVENT-SPECIFIC AUTO-FILL (when user doesn't provide details):
   - CTA → "PRE-ORDER NOW" or "GET STARTED" or "TRY FREE"
 
 CRITICAL RULES:
-1. GENERATE COMPLETE AD COPY with ALL fields filled — this directly drives the poster renderer:
-   - brand_name: the brand/app/product name if mentioned, else infer something fitting
+1. AD COPY — only SHORT text that will actually appear on the image. NEVER invent long body copy, feature lists, URLs, or taglines.
+   - brand_name: real/inferred brand (omit if ambiguous — empty string is fine)
    - headline: 1-5 ALL CAPS punchy words (e.g., "NOW LIVE!", "DIWALI SALE", "50% OFF")
-   - subheadline: 5-12 word supporting claim
-   - body: 1-2 sentence description of what the product/service/event IS
-   - cta: action button text (e.g., "GET STARTED", "SHOP NOW", "CLAIM OFFER")
-   - cta_url: website/app store URL if relevant (infer something realistic like www.brandname.com)
-   - features: ALWAYS generate 4 features with emoji icon, title, and one-line desc
-     e.g. {"icon":"✅","title":"Task Management","desc":"Organize and prioritize tasks"}
-   - tagline: optional closing line (e.g., "No credit card required · Free 7-day trial")
+   - subheadline: 3-8 word supporting line (keep it TINY — image ads aren't articles)
+   - cta: action button text (2-3 words max, e.g., "SHOP NOW", "ORDER")
+   - body, cta_url, features, tagline: LEAVE EMPTY — these were deprecated. Posters don't need paragraphs.
 2. poster_design: ALWAYS fill all fields — this drives colors, layout, fonts
    - accent_color: vivid brand color hex (NOT gray, NOT white — must be vibrant)
    - bg_color: dark or deep color for the panel sections
@@ -1524,17 +1527,18 @@ class ClaudePromptEngine:
         ad_hint = ""
         if _has_ad_copy:
             ad_copy = brief["ad_copy"]
-            ad_hint = (
-                f"\n\n📢 NATIVE TEXT RENDERING:\n"
-                f"Generate text as integral part of the scene (3D objects, not overlays).\n"
-                f"  Main headline: \"{ad_copy.get('headline','')}\"\n"
-                f"  Subheadline: \"{ad_copy.get('subheadline','')}\"\n"
-                f"  CTA: \"{ad_copy.get('cta','')}\"\n\n"
-                f"CRITICAL: Text should be part of the 3D scene with proper lighting, shadows, depth.\n"
-                f"Style: Bold 3D letters, realistic materials (gold, glass, neon), cinematic lighting.\n"
-                f"Composition: Text integrated naturally with products/elements, not flat overlay.\n"
-                f"Examples: 3D typography on physical surfaces, neon signs, embossed text, floating letters with reflections."
-            )
+            headline = str(ad_copy.get("headline", "")).strip()
+            if headline:
+                ad_hint = (
+                    f"\n\n📢 SCENE TEXT — ONE LINE ONLY:\n"
+                    f"Render exactly ONE short headline as a bold, integrated visual element inside the scene.\n"
+                    f"  Headline: \"{headline}\"\n\n"
+                    f"⛔ STRICT RULES:\n"
+                    f"- Put ONLY the headline on the image. NO subheadline, NO CTA button, NO body copy, NO URL, NO features list, NO tagline, NO placeholders in brackets.\n"
+                    f"- ONE unified image. NO collage, NO grid, NO multi-panel layout, NO 'Option 1/2/3' variants, NO side-by-side comparisons.\n"
+                    f"- Headline is a 3D physical element (neon sign, embossed metal, carved stone, chalkboard, etc.) integrated with scene lighting — NOT a flat text overlay, NOT a design-sheet label.\n"
+                    f"- Keep the rest of the image CLEAN. No fine-print text blocks anywhere."
+                )
 
         if critic_notes:
             ad_hint += f"\n\nCritic refinements to incorporate:\n{critic_notes}"

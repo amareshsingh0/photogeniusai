@@ -580,11 +580,17 @@ _LEAK_PATTERNS = [
 ]
 
 # Always append these to negative_prompt — prevents image model from generating
-# multi-panel design-sheet style outputs even when prompt is clean.
+# multi-panel design-sheet style outputs even when prompt is clean. Aggressive
+# list because Seedream/Imagen still hallucinate pitch-deck layouts from shorter prompts.
 _ANTI_COLLAGE_NEGATIVES = (
-    "collage, grid layout, multi-panel, split-screen, A/B comparison, "
-    "mood-board, design sheet, pitch deck, variation sheet, multiple options "
-    "shown, Option 1, Option 2, Option 3, before-after split, side-by-side comparison"
+    "collage, grid layout, multi-panel, split-screen, two panels, three panels, "
+    "four panels, six panels, A/B comparison, mood-board, design sheet, pitch deck, "
+    "variation sheet, layout options, multiple options shown, "
+    "Option 1, Option 2, Option 3, Option 4, before-after split, side-by-side comparison, "
+    "text-heavy design, wall of text, body copy block, paragraph of text, "
+    "annotated design, labeled sections, numbered sections, headline plus body plus CTA layout, "
+    "brief document, creative brief layout, Instagram carousel, multi-slide layout, "
+    "image split into regions, framed sub-images"
 )
 
 

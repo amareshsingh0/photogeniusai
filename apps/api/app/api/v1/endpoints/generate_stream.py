@@ -493,11 +493,32 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         if req.negative_prompt is not None:
             negative_prompt = f"{req.negative_prompt}, {negative_prompt}" if negative_prompt else req.negative_prompt
 
-        # Universal leak sanitizer + anti-collage negatives — applies to ALL engine paths
-        # (simple_engine / claude_v2 / 4-agent chain) so image models never render
-        # "Option 1/2/3", "[Placeholder]", collage sheets, etc. regardless of upstream.
+        # Universal leak sanitizer + anti-collage negatives + hard cap + single-image anchor
+        # — applies to ALL engine paths (simple_engine / claude_v2 / 4-agent chain).
+        # This is defense-in-depth: LLMs sometimes output pitch-deck structure even when
+        # told not to, and long walls of copy get rendered verbatim by image models.
         from app.services.smart.simple_prompt_engine import _sanitize_prompt, _ANTI_COLLAGE_NEGATIVES
+
+        # 1) Strip Option 1/2/3, [Placeholder], brief-doc labels, collage words.
         enhanced_prompt = _sanitize_prompt(enhanced_prompt)
+
+        # 2) Hard word cap — image models render long prompts as wall-of-text. Truncate
+        #    to 80 words (about 500 chars) to force concise scene description.
+        _words = enhanced_prompt.split()
+        if len(_words) > 80:
+            enhanced_prompt = " ".join(_words[:80])
+            logger.info("[stream][%s] prompt truncated %d→80 words to prevent text-wall rendering",
+                        trace_id, len(_words))
+
+        # 3) Single-image anchor — forces image model to interpret prompt as ONE
+        #    composition, not a multi-panel design sheet.
+        _single_image_anchor = (
+            "ONE single unified photograph, one cohesive composition, "
+            "no collage, no panels, no grid, no text blocks, no design-sheet layout. "
+        )
+        enhanced_prompt = _single_image_anchor + enhanced_prompt
+
+        # 4) Strong anti-collage negative prompt — Seedream/Imagen respect negatives.
         negative_prompt = (
             f"{negative_prompt}, {_ANTI_COLLAGE_NEGATIVES}"
             if negative_prompt else _ANTI_COLLAGE_NEGATIVES
