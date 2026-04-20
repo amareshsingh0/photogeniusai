@@ -3,13 +3,13 @@ import { Providers } from "@/components/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PhotoGenius AI",
-  description: "AI-powered portrait studio with Instant Magic Preview",
+  title: "Pixium Studio",
+  description: "Advanced AI image generation engine",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "PhotoGenius",
+    title: "Pixium",
   },
   other: {
     "mobile-web-app-capable": "yes",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    siteName: "PhotoGenius AI",
+    siteName: "Pixium",
   },
 };
 
