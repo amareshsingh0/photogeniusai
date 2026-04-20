@@ -845,7 +845,16 @@ export default function GeneratePage() {
 
   // Edit the generated image — open advanced edit modal
   const handleEditGeneratedImage = () => {
-    if (!result?.image_url) return
+    console.log("[EDIT-BTN] click fired. result:", result, "image_url:", result?.image_url)
+    if (!result?.image_url) {
+      toast({
+        title: "No image to edit",
+        description: `result=${result ? "exists" : "null"}, image_url=${result?.image_url ?? "missing"}`,
+        variant: "destructive",
+      })
+      return
+    }
+    console.log("[EDIT-BTN] opening modal with URL:", result.image_url)
     setShowEditModal(true)
   }
 
@@ -958,6 +967,15 @@ export default function GeneratePage() {
                         size="sm"
                         variant="outline"
                         onClick={() => {
+                          console.log("[EDIT-GRID] click fired. res:", res)
+                          if (!res?.image_url) {
+                            toast({
+                              title: "No image URL in this result",
+                              description: JSON.stringify(res).slice(0, 200),
+                              variant: "destructive",
+                            })
+                            return
+                          }
                           setResult(res)
                           setMultiResults([])
                           setShowEditModal(true)
