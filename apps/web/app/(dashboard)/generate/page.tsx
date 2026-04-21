@@ -4,7 +4,27 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 
-const EditImageModal      = dynamic(() => import("@/components/edit-image-modal"),      { ssr: false })
+const EditImageModal      = dynamic(
+  () => import("@/components/edit-image-modal").catch(err => {
+    console.error("[EditImageModal] chunk load failed:", err)
+    return { default: () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+        <div className="bg-red-950 border border-red-500 rounded-xl p-6 max-w-md text-white">
+          <p className="font-semibold mb-2">Editor failed to load</p>
+          <p className="text-sm text-red-200">Chunk load error — please hard refresh (Ctrl+Shift+R).</p>
+        </div>
+      </div>
+    ) }
+  }),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div className="text-white text-sm animate-pulse">Loading editor…</div>
+      </div>
+    ),
+  }
+)
 const LogoOverlayModal    = dynamic(() => import("@/components/logo-overlay-modal"),    { ssr: false })
 const PosterPackModal     = dynamic(() => import("@/components/poster-pack-modal").then(m => ({ default: m.PosterPackModal })),     { ssr: false })
 const GenerationControlsV2 = dynamic(() => import("@/components/generation-controls-v2").then(m => ({ default: m.GenerationControlsV2 })), { ssr: false })
