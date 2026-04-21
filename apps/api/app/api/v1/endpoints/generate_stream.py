@@ -571,6 +571,20 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             if negative_prompt else _ANTI_COLLAGE_NEGATIVES
         )
 
+        # ── DEBUG: dump exact prompt + engine source going to model ──────
+        # When users report bad output, this is the SINGLE log line to check.
+        # Tag = [FINAL-PROMPT] for easy grep.
+        logger.info(
+            "[FINAL-PROMPT][%s] engine=%s model=%s bucket=%s tier=%s\n  prompt: %s\n  negative: %s",
+            trace_id,
+            "simple_engine" if _simple_payload else (params.get("_source") or "unknown"),
+            fal_model_key,
+            bucket,
+            quality,
+            enhanced_prompt[:600],
+            (negative_prompt or "")[:300],
+        )
+
         # Typography bucket — use model from model_config.py BUCKET_MODEL_MAP (no hardcoded override)
         if bucket == "typography":
             logger.info("[stream][%s] Typography bucket → using config model: %s", trace_id, fal_model_key)
