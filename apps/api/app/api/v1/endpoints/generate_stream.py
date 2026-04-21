@@ -303,6 +303,28 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             logger.warning("[stream][%s] Cache check failed: %s", trace_id, cache_err)
 
     try:
+        # ── Stage -2: PRE-SANITIZE USER INPUT ──────────────────────────────
+        # Users often paste full marketing briefs as the prompt — markdown
+        # asterisks, '[Brand]' placeholder brackets, '**Caption Prompt:**'
+        # section labels, '**Visual Suggestion:**', '**CTA:**', etc.
+        # If we forward this raw to the engine, the image model renders all
+        # of it as text on the image. Strip it BEFORE anything sees it.
+        from app.services.smart.simple_prompt_engine import _sanitize_prompt as _strip_leaks
+        _raw_user_prompt = req.prompt
+        _cleaned = _strip_leaks(_raw_user_prompt)
+        # Also strip markdown asterisks / list bullets that the output sanitizer
+        # already handles but applied here defensively for input.
+        import re as _re
+        _cleaned = _re.sub(r"^\s*[\*\-•]\s+", "", _cleaned, flags=_re.MULTILINE)  # bullet markers
+        _cleaned = _re.sub(r"\*{1,3}([^\*\n]+)\*{1,3}", r"\1", _cleaned)         # **bold**, *italic*
+        _cleaned = _re.sub(r"\s{2,}", " ", _cleaned).strip()
+        if _cleaned and _cleaned != _raw_user_prompt:
+            logger.info(
+                "[stream][%s] PRE-SANITIZED user input %d→%d chars",
+                trace_id, len(_raw_user_prompt), len(_cleaned),
+            )
+            req.prompt = _cleaned
+
         # ── Stage -1: Intent ───────────────────────────────────────────────
         from app.services.smart.intent_analyzer import intent_analyzer
 

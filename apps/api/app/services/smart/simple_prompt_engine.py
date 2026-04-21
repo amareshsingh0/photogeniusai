@@ -573,11 +573,15 @@ _LEAK_PATTERNS = [
     (re.compile(r"\bCALL\s+TO\s+ACTION\b", re.IGNORECASE), ""),
     # "Headon 1", "Heading 1", "Section 1", "Panel 1"
     (re.compile(r"\b(?:Headon|Heading|Section|Panel|Frame)\s+\d+\b", re.IGNORECASE), ""),
-    # Bracketed placeholders — covers [Pixium], [Brand], [Diamond], [Gold], [Website Address], [Your Logo],
-    # [Date], [Sale Ends Date], [While Supplies Last]. Single-word too: [Logo], [URL].
-    (re.compile(r"\[[^\]\n]{1,80}\]"), ""),
-    # Curly-brace placeholders: {brand}, {{logo}}
-    (re.compile(r"\{{1,2}[^}\n]{1,80}\}{1,2}"), ""),
+    # Known template placeholders — pure UI elements, drop entirely.
+    (re.compile(r"\[(?:Website\s*Address|Your\s*Logo|Logo|URL|Date|Sale\s*Ends?\s*Date|While\s*Supplies?\s*Last|Insert[^\]]*|Click\s*Here|Brand\s*Name|Company\s*Name|Tagline)\]", re.IGNORECASE), ""),
+    # Remaining bracketed content — UNWRAP, don't drop. [Pixium Gold] → Pixium Gold.
+    # Reason: dropping loses real brand/product names; unwrapping lets the model
+    # use them as actual scene subjects. The output sanitizer at generate_stream
+    # still has the standalone-line check for any leaked brief structure.
+    (re.compile(r"\[([^\]\n]{1,80})\]"), r"\1"),
+    # Curly-brace placeholders: {brand}, {{logo}} — same rule, unwrap.
+    (re.compile(r"\{{1,2}([^}\n]{1,80})\}{1,2}"), r"\1"),
     # Placeholder chatter
     (re.compile(r"\b(?:Lorem ipsum|placeholder text|sample copy|example text|TBD|TK|XXX|YOUR\s+\w+\s+HERE)\b", re.IGNORECASE), ""),
     # "Draft 1", "First version", "Alternatively"
