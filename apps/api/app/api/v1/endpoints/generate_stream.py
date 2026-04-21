@@ -430,7 +430,11 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         # ── Stage A: Creative Brief ────────────────────────────────────────
         # Simple engine path — single Haiku call, skips agent chain + Stage A/B engine.
         # Toggle: USE_SIMPLE_ENGINE=true. When on, bypass everything else.
-        use_simple = os.getenv("USE_SIMPLE_ENGINE", "false").lower() == "true"
+        # Default ON — simple flow: prompt → Haiku → describe → image model.
+        # 4-agent chain + Claude v2 keep generating multi-option pitch-deck
+        # prompts that image models render literally. Simple engine has the
+        # strictest "ONE image, one design" rules in its system prompt.
+        use_simple = os.getenv("USE_SIMPLE_ENGINE", "true").lower() == "true"
         # Import prompt engine based on env flag
         use_claude = os.getenv("USE_CLAUDE_ENGINE", "true").lower() != "false"
         if use_claude:
@@ -572,11 +576,11 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         enhanced_prompt = _sanitize_prompt(enhanced_prompt)
 
         # 2) Hard word cap — image models render long prompts as wall-of-text. Truncate
-        #    to 45 words to force concise SCENE description, not body copy.
+        #    to 35 words to force concise SCENE description, not body copy.
         _words = enhanced_prompt.split()
-        if len(_words) > 45:
-            enhanced_prompt = " ".join(_words[:45])
-            logger.info("[stream][%s] prompt truncated %d→45 words to prevent text-wall rendering",
+        if len(_words) > 35:
+            enhanced_prompt = " ".join(_words[:35])
+            logger.info("[stream][%s] prompt truncated %d→35 words to prevent text-wall rendering",
                         trace_id, len(_words))
 
         # 3) Single-image anchor — forces image model to interpret prompt as ONE

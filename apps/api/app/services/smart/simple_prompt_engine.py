@@ -567,8 +567,14 @@ _LEAK_PATTERNS = [
     (re.compile(r"\b(?:Option|Version|Variant|Layout|Design|Concept|Approach)\s+(?:\d+|[A-E]|One|Two|Three|Four)\s*[:.\-–—]?\s*", re.IGNORECASE), ""),
     # "NOVA.3", "NOVA 3", "BRAND.1" — trailing number on brand that signals variant
     (re.compile(r"(\b[A-Z][A-Z0-9]{2,})\s*[.\-]\s*[1-9]\b"), r"\1"),
-    # Brief-doc labels: "Headline:", "Body:", "CTA:", "Subtitle:", "Subhead:", "Title:", "Text:", "Product:"
-    (re.compile(r"\b(?:Headline|Body|CTA|Subtitle|Subhead|Title|Text|Tagline|Product|Discount|Brand|Why\s+an?\s+\w+)\s*[:?]\s*", re.IGNORECASE), ""),
+    # Brief-doc labels: "Headline:", "Body:", "CTA:", "Subtitle:", "Subhead:", "Title:", "Text:", "Caption:", "Visual:", "Goal:"
+    (re.compile(r"\b(?:Headline|Body|CTA|Subtitle|Subhead|Title|Text|Tagline|Caption|Visual|Visual\s+Suggestion|Goal|Hook|Description|Voice|Mood|Vibe|Concept|Idea|Suggestion|Product|Discount|Brand|Why\s+an?\s+\w+)\s*[:?]\s*", re.IGNORECASE), ""),
+    # Typoed variants the model has been seen rendering: "Visption", "Captin"
+    (re.compile(r"\b(?:Visption|Captin|Captain\s+\d+|Vipsion)\s*\d*\s*[:?]?\s*", re.IGNORECASE), ""),
+    # Standalone "+" markers used as bullets in pitch decks
+    (re.compile(r"(?:^|\s)\+\s+(?=\S)"), " "),
+    # "Body copy:", "Body text:" multi-word labels
+    (re.compile(r"\bBody\s+(?:copy|text|paragraph)\s*[:?]\s*", re.IGNORECASE), ""),
     # "CALL TO ACTION" as placeholder (unique phrase — if real CTA was present, it'd be an actual verb)
     (re.compile(r"\bCALL\s+TO\s+ACTION\b", re.IGNORECASE), ""),
     # "Headon 1", "Heading 1", "Section 1", "Panel 1"
