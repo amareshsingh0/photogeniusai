@@ -1311,6 +1311,30 @@ export default function GeneratePage() {
             designBrief={result.design_brief}
           />
         )}
+
+        {/* Edit Image Modal — must mount here too because this branch returns early */}
+        {showEditModal && result?.image_url && (
+          <EditImageModal
+            imageUrl={result.image_url}
+            onClose={() => setShowEditModal(false)}
+            onResult={(newUrl) => {
+              setResult(prev => prev ? { ...prev, image_url: newUrl } : prev)
+              setShowEditModal(false)
+            }}
+          />
+        )}
+
+        {/* Logo Overlay Modal */}
+        {showLogoModal && result?.image_url && (
+          <LogoOverlayModal
+            imageUrl={result.image_url}
+            onClose={() => setShowLogoModal(false)}
+            onResult={(newUrl) => {
+              setResult(prev => prev ? { ...prev, image_url: newUrl } : prev)
+              setShowLogoModal(false)
+            }}
+          />
+        )}
       </div>
     )
   }
