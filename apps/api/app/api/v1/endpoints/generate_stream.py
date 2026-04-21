@@ -430,11 +430,14 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         # ── Stage A: Creative Brief ────────────────────────────────────────
         # Simple engine path — single Haiku call, skips agent chain + Stage A/B engine.
         # Toggle: USE_SIMPLE_ENGINE=true. When on, bypass everything else.
-        # Default ON — simple flow: prompt → Haiku → describe → image model.
-        # 4-agent chain + Claude v2 keep generating multi-option pitch-deck
-        # prompts that image models render literally. Simple engine has the
-        # strictest "ONE image, one design" rules in its system prompt.
-        use_simple = os.getenv("USE_SIMPLE_ENGINE", "true").lower() == "true"
+        # HARD ENV OVERRIDE — simple flow: prompt → Haiku → describe → image model.
+        # Only OFF when explicitly USE_SIMPLE_ENGINE=false. Missing var, blank,
+        # or any other value defaults to ON. Prevents stale .env from silently
+        # falling back to the 4-agent chain that produces option/panel layouts.
+        _simple_env = os.getenv("USE_SIMPLE_ENGINE", "").strip().lower()
+        use_simple = (_simple_env != "false")
+        # Loud stdout marker — visible in pm2 logs (logger.info isn't captured).
+        print(f"[ENGINE-PICK] use_simple={use_simple} env_value={_simple_env!r} bucket={bucket} tier={quality} prompt_len={len(req.prompt)}", flush=True)
         # Import prompt engine based on env flag
         use_claude = os.getenv("USE_CLAUDE_ENGINE", "true").lower() != "false"
         if use_claude:

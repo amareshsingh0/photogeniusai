@@ -614,11 +614,39 @@ _ANTI_COLLAGE_NEGATIVES = (
 )
 
 
+# Sentence-level killer — if a sentence/clause mentions any of these multi-variant
+# trigger words, drop the WHOLE sentence. Splits on '.', '!', '?', and newlines.
+# These words almost always mean the LLM is describing a layout with multiple
+# panels/options/concepts inside one image, which the image model then renders.
+_MULTI_VARIANT_TRIGGERS = re.compile(
+    r"\b(?:options?|variants?|versions?|concepts?|alternatives?|side[\s-]by[\s-]side|"
+    r"comparison|comparisons|panels?|grid|collage|moodboard|mood[\s-]board|"
+    r"three\s+(?:designs?|ads?|posters?|layouts?|variations?)|"
+    r"multiple\s+(?:designs?|ads?|posters?|layouts?|variations?|angles?|shots?)|"
+    r"two\s+(?:designs?|ads?|posters?|layouts?)|"
+    r"four\s+(?:designs?|ads?|posters?|layouts?)|"
+    r"(?:left|right|top|bottom)\s+panel|carousel|slide\s+\d+)\b",
+    re.IGNORECASE,
+)
+
+
+def _drop_multi_variant_sentences(text: str) -> str:
+    """Drop entire sentences that mention multi-variant/panel/option language."""
+    if not text:
+        return text
+    pieces = re.split(r"(?<=[.!?])\s+|\n+", text)
+    kept = [p for p in pieces if p and not _MULTI_VARIANT_TRIGGERS.search(p)]
+    return " ".join(kept).strip()
+
+
 def _sanitize_prompt(text: str) -> str:
     """Strip pitch-deck / placeholder language that image models render literally."""
     if not text:
         return text
     original = text
+    # Pass 1: drop entire sentences mentioning multi-variant trigger words.
+    text = _drop_multi_variant_sentences(text)
+    # Pass 2: regex strip individual leak patterns (labels, brackets, etc).
     for pattern, replacement in _LEAK_PATTERNS:
         text = pattern.sub(replacement, text)
     # Collapse doubled spaces / stray punctuation left by strips
@@ -627,6 +655,8 @@ def _sanitize_prompt(text: str) -> str:
     text = text.strip()
     if text != original:
         logger.info("[simple-engine] sanitized leak patterns from prompt (len %d→%d)", len(original), len(text))
+        # Loud stdout — visible in pm2 logs (logger.info often not captured).
+        print(f"[SANITIZE] dropped {len(original) - len(text)} chars of multi-variant/pitch-deck language", flush=True)
     return text
 
 
