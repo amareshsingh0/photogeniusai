@@ -558,25 +558,35 @@ _JSON_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
 # through even when the system prompt forbids them. Runs on the final prompt
 # string BEFORE it hits the image model.
 _LEAK_PATTERNS = [
+    # Markdown headers: "# Headline", "## Subhead" — image models render the # literally
+    (re.compile(r"^\s*#{1,6}\s+", re.MULTILINE), ""),
+    (re.compile(r"\s+#{1,6}\s+"), " "),
+    # Markdown bold/italic markers
+    (re.compile(r"\*{1,3}([^\*]+)\*{1,3}"), r"\1"),
     # "Option 1" / "Option 1:" / "OPTION 1" — with or without trailing punctuation
     (re.compile(r"\b(?:Option|Version|Variant|Layout|Design|Concept|Approach)\s+(?:\d+|[A-E]|One|Two|Three|Four)\s*[:.\-–—]?\s*", re.IGNORECASE), ""),
     # "NOVA.3", "NOVA 3", "BRAND.1" — trailing number on brand that signals variant
     (re.compile(r"(\b[A-Z][A-Z0-9]{2,})\s*[.\-]\s*[1-9]\b"), r"\1"),
     # Brief-doc labels: "Headline:", "Body:", "CTA:", "Subtitle:", "Subhead:", "Title:", "Text:", "Product:"
-    (re.compile(r"\b(?:Headline|Body|CTA|Subtitle|Subhead|Title|Text|Tagline|Product|Discount|Brand)\s*:\s*", re.IGNORECASE), ""),
+    (re.compile(r"\b(?:Headline|Body|CTA|Subtitle|Subhead|Title|Text|Tagline|Product|Discount|Brand|Why\s+an?\s+\w+)\s*[:?]\s*", re.IGNORECASE), ""),
     # "CALL TO ACTION" as placeholder (unique phrase — if real CTA was present, it'd be an actual verb)
     (re.compile(r"\bCALL\s+TO\s+ACTION\b", re.IGNORECASE), ""),
     # "Headon 1", "Heading 1", "Section 1", "Panel 1"
     (re.compile(r"\b(?:Headon|Heading|Section|Panel|Frame)\s+\d+\b", re.IGNORECASE), ""),
-    # Bracketed placeholders: [Website Address], [Your Logo], [Brand Name], [Date], [Sale Ends Date], [While Supplies Last]
-    (re.compile(r"\[[^\]]{2,60}\]"), ""),
+    # Bracketed placeholders — covers [Pixium], [Brand], [Diamond], [Gold], [Website Address], [Your Logo],
+    # [Date], [Sale Ends Date], [While Supplies Last]. Single-word too: [Logo], [URL].
+    (re.compile(r"\[[^\]\n]{1,80}\]"), ""),
+    # Curly-brace placeholders: {brand}, {{logo}}
+    (re.compile(r"\{{1,2}[^}\n]{1,80}\}{1,2}"), ""),
     # Placeholder chatter
-    (re.compile(r"\b(?:Lorem ipsum|placeholder text|sample copy|example text|TBD|TK|XXX)\b", re.IGNORECASE), ""),
+    (re.compile(r"\b(?:Lorem ipsum|placeholder text|sample copy|example text|TBD|TK|XXX|YOUR\s+\w+\s+HERE)\b", re.IGNORECASE), ""),
     # "Draft 1", "First version", "Alternatively"
     (re.compile(r"\bDraft\s+\d+\b", re.IGNORECASE), ""),
     (re.compile(r"\b(?:Alternatively|First version|Second version|Initial draft)\b\s*[:.\-–—]?\s*", re.IGNORECASE), ""),
     # Multi-panel / collage / mood-board language
     (re.compile(r"\b(?:collage|grid layout|multi[- ]panel|split[- ]screen|A/B comparison|mood[- ]?board|pitch deck|design sheet|variation sheet|layout options?)\b", re.IGNORECASE), ""),
+    # "Discover Your X" / "Elevate Your X" CTA-button language that gets rendered as button
+    (re.compile(r"\b(?:Click here|Learn more|Shop now|Discover\s+your\s+\w+|Elevate\s+your\s+\w+|Buy\s+now|Order\s+today)\b\s*[.!]?", re.IGNORECASE), ""),
 ]
 
 # Always append these to negative_prompt — prevents image model from generating

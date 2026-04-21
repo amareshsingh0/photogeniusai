@@ -503,11 +503,11 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         enhanced_prompt = _sanitize_prompt(enhanced_prompt)
 
         # 2) Hard word cap — image models render long prompts as wall-of-text. Truncate
-        #    to 80 words (about 500 chars) to force concise scene description.
+        #    to 45 words to force concise SCENE description, not body copy.
         _words = enhanced_prompt.split()
-        if len(_words) > 80:
-            enhanced_prompt = " ".join(_words[:80])
-            logger.info("[stream][%s] prompt truncated %d→80 words to prevent text-wall rendering",
+        if len(_words) > 45:
+            enhanced_prompt = " ".join(_words[:45])
+            logger.info("[stream][%s] prompt truncated %d→45 words to prevent text-wall rendering",
                         trace_id, len(_words))
 
         # 3) Single-image anchor — forces image model to interpret prompt as ONE
