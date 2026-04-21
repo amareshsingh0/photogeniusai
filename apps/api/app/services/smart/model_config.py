@@ -283,9 +283,12 @@ MODEL_REGISTRY = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 BUCKET_MODEL_MAP = {
-    # Typography/Poster → Seedream 4.5 (1K), Gemini 3.1 (2K), Imagen 4 Ultra (4K)
+    # Typography/Poster → Gemini 3 (1K), Gemini 3.1 (2K), Imagen 4 Ultra (4K)
+    # Note: Seedream 4.5 was producing 4-panel design-sheet collages for typography
+    # prompts despite anti-collage negatives (model is heavily design-board biased).
+    # Gemini honors negatives + doesn't have design-sheet bias = clean single image.
     "typography": {
-        QualityTier.RES_1K: "seedream_4_5",
+        QualityTier.RES_1K: "gemini_3_imagen",
         QualityTier.RES_2K: "gemini_3_1_imagen",
         QualityTier.RES_4K: "imagen_4_ultra",
     },
