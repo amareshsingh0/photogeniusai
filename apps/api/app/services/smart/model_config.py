@@ -283,11 +283,9 @@ MODEL_REGISTRY = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 BUCKET_MODEL_MAP = {
-    # Typography/Poster → Ideogram v3 (1K), Gemini 3.1 (2K), Imagen 4 Ultra (4K)
-    # Note: User-tested side-by-side. Seedream + Imagen both rendered the entire
-    # creative brief verbatim (4-panel collages with "[Pixium]" placeholders, body
-    # paragraphs, CTA buttons). Only Ideogram produced a clean single image — it
-    # honors negative_prompt strongly and ignores brief-doc structure.
+    # Typography/Poster — fallback only. Real routing comes from DB ModelConfig
+    # (admin /admin → Models tab). This map is hit only if DB has no active models
+    # tagged with the typography bucket for the requested tier.
     "typography": {
         QualityTier.RES_1K: "ideogram_v3",
         QualityTier.RES_2K: "gemini_3_1_imagen",

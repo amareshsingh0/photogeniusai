@@ -322,10 +322,57 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
 
         # ── Capability routing ─────────────────────────────────────────────
         from app.services.smart.config import detect_capability_bucket
-        from app.services.smart.model_config import get_model_for_request
+        from app.services.smart.model_config import (
+            get_model_for_request, get_model_supported_tiers,
+            normalize_quality_tier, MODEL_REGISTRY,
+        )
 
         bucket = detect_capability_bucket(req.prompt)
-        model_cfg = get_model_for_request(bucket, quality)
+
+        # DB-DRIVEN MODEL PICKER (admin /admin → Models tab controls this).
+        # Pick from ModelConfig where isActive=True AND bucket ∈ model.buckets[]
+        # AND model supports requested tier. Cheapest wins on tie.
+        # Falls back to static BUCKET_MODEL_MAP if no DB match.
+        model_cfg = None
+        norm_tier = normalize_quality_tier(quality)
+        db_bucket = bucket.split("_")[0] if "_" in bucket else bucket
+        try:
+            from prisma import Prisma
+            _prisma = Prisma()
+            await _prisma.connect()
+            _db_models = await _prisma.modelconfig.find_many(where={"isActive": True})
+            await _prisma.disconnect()
+            _candidates = [
+                m for m in _db_models
+                if (bucket in (m.buckets or []) or db_bucket in (m.buckets or []))
+                and norm_tier in get_model_supported_tiers(m.modelId)
+                and _canonical_model_key(m.modelId, default="") in MODEL_REGISTRY
+            ]
+            if _candidates:
+                _candidates.sort(key=lambda m: m.costPerImage or 0)
+                _chosen_key = _canonical_model_key(_candidates[0].modelId, default="")
+                _spec = MODEL_REGISTRY[_chosen_key]
+                model_cfg = {
+                    "model_key": _chosen_key,
+                    "model": _spec["endpoint"],
+                    "provider": _spec["provider"].value,
+                    "display_name": _spec["display_name"],
+                    "tier_used": norm_tier,
+                    "cost_per_image": _spec["cost_per_image"],
+                    "num_images": 1,
+                }
+                logger.info(
+                    "[stream][%s] DB-picker chose %s for bucket=%s tier=%s (from %d candidates)",
+                    trace_id, _chosen_key, bucket, norm_tier, len(_candidates),
+                )
+        except Exception as _e:
+            logger.warning("[stream][%s] DB-picker failed, falling back to static map: %s", trace_id, _e)
+
+        # Fallback: static BUCKET_MODEL_MAP (hardcoded routing).
+        if not model_cfg:
+            model_cfg = get_model_for_request(bucket, quality)
+            logger.info("[stream][%s] Static-map picked %s for bucket=%s tier=%s",
+                        trace_id, model_cfg.get("model_key"), bucket, norm_tier)
 
         fal_model_key = _canonical_model_key(
             model_cfg.get("model_key") or model_cfg.get("model"),
