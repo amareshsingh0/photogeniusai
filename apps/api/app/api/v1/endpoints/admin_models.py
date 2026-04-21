@@ -120,6 +120,15 @@ DEFAULT_MODELS = [
         "isTestingEnabled": True,
     },
     {
+        "modelId": "recraft_v4_pro",
+        "provider": "fal.ai",
+        "displayName": "Recraft v4 Pro",
+        "buckets": ["vector", "typography"],
+        "costPerImage": 0.03,
+        "isActive": True,
+        "isTestingEnabled": True,
+    },
+    {
         "modelId": "hunyuan_image",
         "provider": "fal.ai",
         "displayName": "Hunyuan Image",
