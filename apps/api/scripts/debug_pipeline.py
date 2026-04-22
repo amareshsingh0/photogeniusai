@@ -171,13 +171,15 @@ async def main() -> int:
     sanitized_diff = len(pre_sanitize) - len(enhanced_prompt)
 
     pre_cap_words = enhanced_prompt.split()
-    if len(pre_cap_words) > 35:
-        enhanced_prompt = " ".join(pre_cap_words[:35])
+    engine_source = (params.get("_source") or "").lower()
+    if engine_source != "simple_engine" and len(pre_cap_words) > 220:
+        truncated = " ".join(pre_cap_words[:220])
+        last_term = max(truncated.rfind("."), truncated.rfind("!"), truncated.rfind("?"))
+        if last_term > 200:
+            truncated = truncated[: last_term + 1]
+        enhanced_prompt = truncated
 
-    _single_image_anchor = (
-        "ONE single unified photograph, one cohesive composition, "
-        "no collage, no panels, no grid, no text blocks, no design-sheet layout. "
-    )
+    _single_image_anchor = "ONE single unified image, one cohesive composition. "
     enhanced_prompt = _single_image_anchor + enhanced_prompt
 
     if not negative_prompt:

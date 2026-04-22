@@ -578,20 +578,33 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         # 1) Strip Option 1/2/3, [Placeholder], brief-doc labels, collage words.
         enhanced_prompt = _sanitize_prompt(enhanced_prompt)
 
-        # 2) Hard word cap — image models render long prompts as wall-of-text. Truncate
-        #    to 35 words to force concise SCENE description, not body copy.
-        _words = enhanced_prompt.split()
-        if len(_words) > 35:
-            enhanced_prompt = " ".join(_words[:35])
-            logger.info("[stream][%s] prompt truncated %d→35 words to prevent text-wall rendering",
-                        trace_id, len(_words))
+        # 2) Sentence-aware safety cap — only kicks in for genuinely runaway prompts.
+        #    The earlier 35-word cap chopped Haiku's curated 192-word briefs in
+        #    mid-sentence (literally ending at "metallic gold cap,"), destroying
+        #    headline/palette/CTA context the image model needs.
+        #    simple_engine output is already curated by Haiku → trust it (no cap).
+        #    For other engines, cap at 220 words, cutting at the nearest sentence
+        #    boundary so we never end mid-clause.
+        _engine_source = (params.get("_source") or "").lower()
+        if _engine_source != "simple_engine":
+            _words = enhanced_prompt.split()
+            if len(_words) > 220:
+                _truncated = " ".join(_words[:220])
+                # Cut at the last sentence terminator inside the kept window so
+                # the prompt never ends mid-clause.
+                _last_terminator = max(
+                    _truncated.rfind("."), _truncated.rfind("!"), _truncated.rfind("?")
+                )
+                if _last_terminator > 200:  # only honor terminator if we keep most of the prompt
+                    _truncated = _truncated[: _last_terminator + 1]
+                enhanced_prompt = _truncated
+                logger.info("[stream][%s] prompt truncated %d→%d words at sentence boundary",
+                            trace_id, len(_words), len(enhanced_prompt.split()))
 
-        # 3) Single-image anchor — forces image model to interpret prompt as ONE
-        #    composition, not a multi-panel design sheet.
-        _single_image_anchor = (
-            "ONE single unified photograph, one cohesive composition, "
-            "no collage, no panels, no grid, no text blocks, no design-sheet layout. "
-        )
+        # 3) Single-image anchor — short imperative so the image model interprets
+        #    the prompt as ONE composition. Long anchor (22 words) was eating into
+        #    the context budget; this 8-word version is enough to set intent.
+        _single_image_anchor = "ONE single unified image, one cohesive composition. "
         enhanced_prompt = _single_image_anchor + enhanced_prompt
 
         # 4) Strong anti-collage negative prompt — Seedream/Imagen respect negatives.
