@@ -44,6 +44,28 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_json(payload) -> str:
+    """Serialise a provider payload for logging.
+
+    Truncates any inline base64 data: URLs (reference images, masks) so a single
+    log line stays readable even when the caller passed a 1-MB image. Returns a
+    compact one-line string suitable for grepping in pm2 logs.
+    """
+    def _truncate(value):
+        if isinstance(value, str) and value.startswith("data:") and len(value) > 80:
+            return f"{value[:60]}...<{len(value)} chars>"
+        if isinstance(value, list):
+            return [_truncate(v) for v in value]
+        if isinstance(value, dict):
+            return {k: _truncate(v) for k, v in value.items()}
+        return value
+    try:
+        return json.dumps(_truncate(payload), ensure_ascii=False, separators=(",", ":"))
+    except Exception:
+        return repr(payload)[:500]
+
+
 # ── Provider API configs ───────────────────────────────────────────────────────
 
 _FAL_BASE       = "https://fal.run"
@@ -416,6 +438,7 @@ class MultiProviderClient:
             num_inference_steps, guidance_scale, seed, reference_image_url,
             rendering_speed, style, extra_image_urls
         )
+        logger.info("[PAYLOAD][fal] model=%s body=%s", model_id, _safe_json(payload))
         try:
             resp = await client.post(f"https://fal.run/{model_id}", json=payload)
             resp.raise_for_status()
@@ -492,6 +515,7 @@ class MultiProviderClient:
                 "Content-Type": "application/json",
             }
             client = self._get_client("google")
+            logger.info("[PAYLOAD][google] model=%s endpoint=%s body=%s", model_id, endpoint, _safe_json(payload))
             resp = await client.post(url, json=payload, headers=headers, timeout=120.0)
             resp.raise_for_status()
             data = resp.json()
@@ -594,6 +618,7 @@ class MultiProviderClient:
         submit_url = f"{_WAVESPEED_BASE}/{model_path}"
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
+        logger.info("[PAYLOAD][wavespeed] model=%s path=%s body=%s", model_id, model_path, _safe_json(payload))
         try:
             client = self._get_client("wavespeed")
 
