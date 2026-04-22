@@ -180,10 +180,10 @@ async def main() -> int:
     )
     enhanced_prompt = _single_image_anchor + enhanced_prompt
 
-    negative_prompt = (
-        f"{negative_prompt}, {_ANTI_COLLAGE_NEGATIVES}"
-        if negative_prompt else _ANTI_COLLAGE_NEGATIVES
-    )
+    if not negative_prompt:
+        negative_prompt = _ANTI_COLLAGE_NEGATIVES
+    elif "design sheet, pitch deck" not in negative_prompt:
+        negative_prompt = f"{negative_prompt}, {_ANTI_COLLAGE_NEGATIVES}"
 
     dump("STAGE 2 — UNIVERSAL DEFENSE (sanitize + cap + anchor + neg)", {
         "sanitizer_dropped_chars": sanitized_diff,
@@ -197,8 +197,11 @@ async def main() -> int:
     # ── Stage 3 — pick provider + build the EXACT payload that gets POSTed ──
     from app.services.smart.model_config import MODEL_REGISTRY
     spec = MODEL_REGISTRY.get(fal_model_key, {})
-    provider = spec.get("provider", "unknown")
-    provider_model_id = spec.get("provider_model_id") or spec.get("model_id") or fal_model_key
+    raw_provider = spec.get("provider", "unknown")
+    # provider is a ModelProvider enum — extract the short string ("fal", "google", "wavespeed")
+    provider = getattr(raw_provider, "value", str(raw_provider)).split(".")[-1].lower()
+    # Real fal/google/wavespeed identifier lives in `endpoint` (NOT model_id / provider_model_id)
+    provider_model_id = spec.get("endpoint") or spec.get("provider_model_id") or fal_model_key
 
     image_size = _pick_size(args.width, args.height)
     num_images = model_cfg.get("num_images", 1)

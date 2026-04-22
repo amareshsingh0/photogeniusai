@@ -595,10 +595,12 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         enhanced_prompt = _single_image_anchor + enhanced_prompt
 
         # 4) Strong anti-collage negative prompt — Seedream/Imagen respect negatives.
-        negative_prompt = (
-            f"{negative_prompt}, {_ANTI_COLLAGE_NEGATIVES}"
-            if negative_prompt else _ANTI_COLLAGE_NEGATIVES
-        )
+        #    simple_engine.enrich() already merges _ANTI_COLLAGE_NEGATIVES into its
+        #    own neg output, so check before appending or we double the payload.
+        if not negative_prompt:
+            negative_prompt = _ANTI_COLLAGE_NEGATIVES
+        elif "design sheet, pitch deck" not in negative_prompt:
+            negative_prompt = f"{negative_prompt}, {_ANTI_COLLAGE_NEGATIVES}"
 
         # ── DEBUG: dump exact prompt + engine source going to model ──────
         # When users report bad output, this is the SINGLE log line to check.
