@@ -486,28 +486,29 @@ class MultiProviderClient:
         }
         aspect_ratio = aspect_map.get(image_size, "1:1")
 
-        # Add negative prompt to the main prompt if provided
-        if negative_prompt:
-            full_prompt = f"{prompt}. Avoid: {negative_prompt}"
-        else:
-            full_prompt = prompt
+        # CRITICAL: do NOT inline-append the negative as text. Imagen ignores
+        # "Avoid: ..." prefixes and reads the listed words LITERALLY — so
+        # "Avoid: Option 1, Option 2, multi-panel, design sheet" actually triggers
+        # those exact layouts. Use Imagen's native `negativePrompt` parameter,
+        # which the predict API supports server-side.
+        full_prompt = prompt
 
         try:
             # Google AI Studio REST API endpoint for Imagen (uses :predict)
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{endpoint}:predict"
 
+            params: Dict = {
+                "sampleCount":       min(num_images, 4),  # Max 4 per API call
+                "aspectRatio":       aspect_ratio,
+                "safetyFilterLevel": "BLOCK_ONLY_HIGH",
+                "personGeneration":  "ALLOW_ADULT",
+            }
+            if negative_prompt:
+                params["negativePrompt"] = negative_prompt
+
             payload = {
-                "instances": [
-                    {
-                        "prompt": full_prompt,
-                    }
-                ],
-                "parameters": {
-                    "sampleCount": min(num_images, 4),  # Max 4 per API call
-                    "aspectRatio": aspect_ratio,
-                    "safetyFilterLevel": "BLOCK_ONLY_HIGH",
-                    "personGeneration": "ALLOW_ADULT",
-                }
+                "instances":  [{"prompt": full_prompt}],
+                "parameters": params,
             }
 
             headers = {

@@ -247,22 +247,24 @@ async def main() -> int:
         print(f"\n[compact] {_safe_json(payload)}")
 
     elif provider == "google":
-        # Mirror _call_google body construction
-        full_prompt = enhanced_prompt
-        if negative_prompt:
-            full_prompt = f"{enhanced_prompt}. Avoid: {negative_prompt}"
+        # Mirror _call_google body construction. Use Imagen's native negativePrompt
+        # parameter — appending "Avoid: ..." to the prompt makes Imagen render the
+        # listed avoid-words literally (Option 1/2/3 etc.).
         aspect_map = {
             "square_hd": "1:1", "landscape_16_9": "16:9",
             "portrait_9_16": "9:16", "landscape_4_3": "4:3",
         }
+        params_dict = {
+            "sampleCount":       min(num_images, 4),
+            "aspectRatio":       aspect_map.get(image_size, "1:1"),
+            "safetyFilterLevel": "BLOCK_ONLY_HIGH",
+            "personGeneration":  "ALLOW_ADULT",
+        }
+        if negative_prompt:
+            params_dict["negativePrompt"] = negative_prompt
         payload = {
-            "instances": [{"prompt": full_prompt}],
-            "parameters": {
-                "sampleCount":       min(num_images, 4),
-                "aspectRatio":       aspect_map.get(image_size, "1:1"),
-                "safetyFilterLevel": "BLOCK_ONLY_HIGH",
-                "personGeneration":  "ALLOW_ADULT",
-            },
+            "instances":  [{"prompt": enhanced_prompt}],
+            "parameters": params_dict,
         }
         endpoint = spec.get("endpoint") or provider_model_id
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{endpoint}:predict"
