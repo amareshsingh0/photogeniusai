@@ -454,7 +454,9 @@ class MultiProviderClient:
                            num_images: int, image_size: str, num_inference_steps: int,
                            guidance_scale: float, seed, reference_image_url: Optional[str] = None,
                            **kwargs) -> Dict:
-        """Google Imagen 3 — via Google AI Studio REST API ($0.02/image)."""
+        """Single entry point for ALL Google models — Imagen 3, Imagen 4
+        (base/fast/ultra), Gemini 3/3.1 Imagen — via Google AI Studio REST API
+        (`:predict`). Same anti-collage fold-in applies to every endpoint."""
         import asyncio
         start = time.time()
 
@@ -486,12 +488,22 @@ class MultiProviderClient:
         }
         aspect_ratio = aspect_map.get(image_size, "1:1")
 
-        # CRITICAL: do NOT inline-append the negative as text. Imagen ignores
-        # "Avoid: ..." prefixes and reads the listed words LITERALLY — so
-        # "Avoid: Option 1, Option 2, multi-panel, design sheet" actually triggers
-        # those exact layouts. Use Imagen's native `negativePrompt` parameter,
-        # which the predict API supports server-side.
+        # Imagen 4 (imagen-4.0-generate-001) DROPPED the negativePrompt parameter
+        # — silently ignored. And inlining the neg as "Avoid: ..." text backfires
+        # because Imagen reads avoid-words literally.
+        # Same treatment as WaveSpeed/Seedream/Recraft/Grok: fold a short
+        # anti-collage imperative into the POSITIVE prompt when the neg
+        # contains anti-collage signals.
         full_prompt = prompt
+        if negative_prompt:
+            _neg_lower = negative_prompt.lower()
+            if any(k in _neg_lower for k in ("collage", "panel", "grid", "option", "pitch deck", "design sheet")):
+                full_prompt = (
+                    "ONE single unified image, one cohesive composition. "
+                    "Not a collage, not a grid, not multi-panel, not a design sheet, "
+                    "not layout options A/B, not a brief document. "
+                    + prompt
+                )
 
         try:
             # Google AI Studio REST API endpoint for Imagen (uses :predict)
@@ -503,8 +515,9 @@ class MultiProviderClient:
                 "safetyFilterLevel": "BLOCK_ONLY_HIGH",
                 "personGeneration":  "ALLOW_ADULT",
             }
-            if negative_prompt:
-                params["negativePrompt"] = negative_prompt
+            # NOTE: do NOT send `negativePrompt` to Imagen 4 — parameter is
+            # silently ignored. Anti-collage signal is folded into positive
+            # prompt above instead.
 
             payload = {
                 "instances":  [{"prompt": full_prompt}],
