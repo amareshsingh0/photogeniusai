@@ -195,13 +195,15 @@ async def main() -> int:
     })
 
     # ── Stage 3 — pick provider + build the EXACT payload that gets POSTed ──
-    from app.services.smart.model_config import MODEL_REGISTRY
-    spec = MODEL_REGISTRY.get(fal_model_key, {})
-    raw_provider = spec.get("provider", "unknown")
-    # provider is a ModelProvider enum — extract the short string ("fal", "google", "wavespeed")
-    provider = getattr(raw_provider, "value", str(raw_provider)).split(".")[-1].lower()
-    # Real fal/google/wavespeed identifier lives in `endpoint` (NOT model_id / provider_model_id)
-    provider_model_id = spec.get("endpoint") or spec.get("provider_model_id") or fal_model_key
+    # Source of truth for the actual provider URL is MODEL_PROVIDER_CHAIN in
+    # multi_provider_client.py (NOT the `endpoint` alias on MODEL_REGISTRY).
+    # Each chain entry = (provider, provider_model_id, cost). First = primary.
+    from app.services.external.multi_provider_client import MODEL_PROVIDER_CHAIN
+    chain = MODEL_PROVIDER_CHAIN.get(fal_model_key, [])
+    if not chain:
+        dump("STAGE 3 — ROUTING FAILED", {"reason": f"{fal_model_key!r} not in MODEL_PROVIDER_CHAIN"})
+        return 1
+    provider, provider_model_id, _cost = chain[0]
 
     image_size = _pick_size(args.width, args.height)
     num_images = model_cfg.get("num_images", 1)
