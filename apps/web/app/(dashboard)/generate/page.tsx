@@ -1238,6 +1238,19 @@ export default function GeneratePage() {
               )}
 
               {/* Action buttons */}
+              {/* EDIT IMAGE — standalone native button, lifted OUT of the grid so
+                  nothing can sit above it in stacking order and swallow the click.
+                  Uses a raw <button> instead of the shadcn Button wrapper to
+                  sidestep any Radix Slot / ref-forwarding weirdness. */}
+              <button
+                type="button"
+                onClick={handleEditGeneratedImage}
+                className="relative z-20 isolate flex w-full items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
+                style={{ pointerEvents: "auto" }}
+              >
+                <Scissors className="h-3.5 w-3.5" /> Edit Image
+              </button>
+
               <div className="grid grid-cols-2 gap-2">
                 <Button onClick={handleDownload} className="gap-2 btn-premium text-white rounded-xl col-span-2">
                   <Download className="h-4 w-4" /> Download
@@ -1268,15 +1281,6 @@ export default function GeneratePage() {
                     />
                   </div>
                 )}
-                <Button
-                  type="button"
-                  onClick={handleEditGeneratedImage}
-                  onPointerDown={handleEditGeneratedImage}
-                  className="gap-2 rounded-xl border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 text-sm col-span-2 relative z-10"
-                  variant="outline"
-                >
-                  <Scissors className="h-3.5 w-3.5" /> Edit Image
-                </Button>
                 <Button onClick={() => setShowLogoModal(true)} className="gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-sm col-span-2" variant="outline">
                   <ImageIcon className="h-3.5 w-3.5" /> Add Logo
                 </Button>
