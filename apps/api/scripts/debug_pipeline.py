@@ -189,8 +189,10 @@ async def main() -> int:
 
     dump("STAGE 2 — UNIVERSAL DEFENSE (sanitize + cap + anchor + neg)", {
         "sanitizer_dropped_chars": sanitized_diff,
+        "engine_source":           engine_source,
         "word_count_before_cap":   len(pre_cap_words),
-        "word_count_after_cap":    min(len(pre_cap_words), 35),
+        "word_count_after_cap":    len(enhanced_prompt.split()) - len(_single_image_anchor.split()),
+        "cap_applied":             engine_source != "simple_engine" and len(pre_cap_words) > 220,
         "anchor_prepended":        True,
         "final_prompt":            enhanced_prompt,
         "final_negative_prompt":   negative_prompt,
