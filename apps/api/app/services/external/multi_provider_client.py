@@ -40,9 +40,173 @@ import time
 import json
 from typing import Dict, List, Optional
 
+import re
+
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+# ─── Imagen prompt distillation ──────────────────────────────────────────────
+# Google Imagen 3/4 + Gemini Imagen interpret long art-direction prompts as
+# "creative brief documents" and render literal multi-panel layouts with
+# "Option 1/2/3", "Body:", "CTA:", "[Website]", hashtags etc. Adding anti-
+# collage instructions DOESN'T help (Imagen's parser reads "Not a collage"
+# as a positive trigger) and the `negativePrompt` parameter was DROPPED from
+# Imagen 4. The only thing that works: STRIP all designer-brief vocabulary
+# from the prompt before sending, keeping only (a) the scene, (b) the literal
+# text to render. Done deterministically with regex — no extra LLM call.
+
+# Words/phrases that signal "this is a creative brief, render it as one"
+_IMAGEN_BRIEF_VOCAB = re.compile(
+    r"\b(?:"
+    r"headline|sub-?head|sub-?title|tagline|caption|body\s+(?:copy|text|paragraph)|"
+    r"call[\s-]to[\s-]action|cta|pill\s+button|button|badge|chip|ribbon\s+band|"
+    r"hierarchy|anchor(?:s|ed|ing)?|locked|occupy(?:ing|ies)?|"
+    r"dominant|secondary|tracking\s+(?:tight|loose|wide|normal)|leading\s+\w+|"
+    r"left[\s-]aligned|right[\s-]aligned|center[\s-]aligned|alignment|"
+    r"layout|composition\s+(?:features|anchors|locks)|poster\s+height|"
+    r"upper\s+third|lower\s+third|middle\s+third|"
+    r"top\s+(?:third|left|right|center|edge)|bottom\s+(?:third|left|right|center|edge)|"
+    r"center[\s-]?left|center[\s-]?right|center[\s-]?top|center[\s-]?bottom|"
+    r"center[\s-]?aligned|"
+    r"display\s+sans-?serif|condensed\s+sans-?serif|elegant\s+serif|"
+    r"sans-?serif|serif\b|font\s+(?:size|weight|family|hierarchy)|"
+    r"oversized|all\s+caps|tracking|leading|kerning|"
+    r"option\s*\d+|version\s*\d+|concept\s*\d+|variant\s*\d+|design\s*\d+|"
+    r"draft\s*\d+|"
+    r"palette:?|color\s+(?:palette|breakdown|harmony|hierarchy)|"
+    r"safe\s+margins?|negative\s+space|breathing\s+room|"
+    r"drop\s+shadow|specular\s+highlight|rim[\s-]?light|backlight|backlit|"
+    r"key\s+light|fill\s+light|three[\s-]?point\s+lighting|"
+    r"film\s+grain|85mm|portrait[\s-]?lens|depth\s+of\s+field|bokeh|"
+    r"editorial\s+polish|premium\s+\w+\s+aesthetic|aspirational\s+mood|"
+    r"high\s+legibility|read(?:ability|ing\s+distance)|"
+    r"set\s+at\s+\d+%|at\s+\d+%\s+of\s+(?:poster|image|frame)|"
+    r"\d{1,3}%\s+of\s+(?:poster|image|frame|height|width)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Bracketed placeholders that get rendered as text in Imagen output
+_IMAGEN_BRACKETS = re.compile(r"\[[^\]\n]{1,80}\]")
+# Curly placeholders too
+_IMAGEN_BRACES = re.compile(r"\{{1,2}[^}\n]{1,80}\}{1,2}")
+
+# Color percentage breakdowns: "warm cream 60%, turquoise 25%, coral 10%"
+_IMAGEN_COLOR_PERCENT = re.compile(
+    r"\b[\w-]+(?:\s+[\w-]+){0,3}\s+\d{1,3}\s*%(?:\s*[,&;]?)",
+    re.IGNORECASE,
+)
+
+# Bare percentages: "35%", "60 %"
+_IMAGEN_BARE_PERCENT = re.compile(r"\b\d{1,3}\s*%")
+
+# Markdown-ish leftovers
+_IMAGEN_MD = re.compile(r"[#*`_]{1,3}")
+
+# "reads 'X'" / "reading 'X'" / "text 'X'" — extract the quoted X but drop the framing words later
+_IMAGEN_QUOTED = re.compile(r"['\"‘’“”]([^'\"‘’“”\n]{2,80})['\"‘’“”]")
+
+# Hashtag patterns Imagen renders literally
+_IMAGEN_HASHTAGS = re.compile(r"#\w+(?:\s+#\w+)*")
+
+
+def _distill_for_imagen(prompt: str) -> str:
+    """Transform a designer-brief prompt into a direct image-gen prompt for Imagen.
+
+    Strips all art-direction vocabulary that triggers Imagen's "render this as
+    a creative brief document" bias. Keeps the scene + literal text only.
+    Output is capped at ~60 words and wrapped with explicit single-image framing.
+    """
+    if not prompt:
+        return prompt
+    original = prompt
+
+    # 1) Extract literal text-to-render BEFORE stripping anything (we need
+    #    the quotes intact). Take up to 3 distinct quoted strings.
+    seen = set()
+    literals: list[str] = []
+    for match in _IMAGEN_QUOTED.finditer(prompt):
+        text = match.group(1).strip()
+        # Skip noise: percentages, very short fragments, brief-doc labels
+        if not text or len(text) < 2:
+            continue
+        if text.lower() in seen:
+            continue
+        if re.fullmatch(r"\d{1,3}%?", text):
+            continue
+        if text.lower() in {"option 1", "option 2", "option 3", "body", "cta", "headline"}:
+            continue
+        seen.add(text.lower())
+        literals.append(text)
+        if len(literals) >= 3:
+            break
+
+    # 2) Strip placeholders (Imagen renders [Website Address] as visible text)
+    cleaned = _IMAGEN_BRACKETS.sub("", prompt)
+    cleaned = _IMAGEN_BRACES.sub("", cleaned)
+
+    # 3) Strip hashtags (rendered literally as #GlowSunscreen etc.)
+    cleaned = _IMAGEN_HASHTAGS.sub("", cleaned)
+
+    # 4) Strip color-percentage palette breakdowns: "warm cream 60%, turquoise 25%"
+    cleaned = _IMAGEN_COLOR_PERCENT.sub("", cleaned)
+    cleaned = _IMAGEN_BARE_PERCENT.sub("", cleaned)
+
+    # 5) Strip designer-brief vocabulary
+    cleaned = _IMAGEN_BRIEF_VOCAB.sub("", cleaned)
+
+    # 6) Strip markdown leftovers
+    cleaned = _IMAGEN_MD.sub("", cleaned)
+
+    # 7) Drop entire sentences that still mention multi-variant trigger words
+    pieces = re.split(r"(?<=[.!?])\s+|\n+", cleaned)
+    BAD_SENTENCE = re.compile(
+        r"\b(?:option|variant|version|concept|panel|grid|collage|moodboard|"
+        r"mood-board|carousel|slide\s+\d+|comparison|side[\s-]by[\s-]side)\b",
+        re.IGNORECASE,
+    )
+    pieces = [p for p in pieces if p and not BAD_SENTENCE.search(p)]
+    cleaned = " ".join(pieces)
+
+    # 8) Collapse whitespace, stray punctuation
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    cleaned = re.sub(r"([,.;:])(?:\s*\1)+", r"\1", cleaned)
+    cleaned = re.sub(r"^[\s,;:.]+|[\s,;:]+$", "", cleaned)
+
+    # 9) Cap at 60 words (sentence-aware) — Imagen does best with concise scenes
+    words = cleaned.split()
+    if len(words) > 60:
+        truncated = " ".join(words[:60])
+        last_term = max(truncated.rfind("."), truncated.rfind("!"), truncated.rfind("?"))
+        if last_term > 80:
+            truncated = truncated[: last_term + 1]
+        cleaned = truncated
+
+    # 10) Build final prompt with explicit single-image framing + literal text
+    parts = ["A single photograph of one poster."]
+    if cleaned:
+        parts.append(cleaned)
+    if literals:
+        text_parts = []
+        for i, t in enumerate(literals):
+            if i == 0:
+                text_parts.append(f'large bold text "{t}"')
+            elif i == 1:
+                text_parts.append(f'smaller text "{t}"')
+            else:
+                text_parts.append(f'small text "{t}"')
+        parts.append("Visible text on the poster: " + ", ".join(text_parts) + ".")
+    # Keep this short and simple — long anti-collage instructions trigger the bias.
+    parts.append("One unified image only.")
+
+    result = " ".join(parts).strip()
+    if result != original:
+        logger.info("[imagen-distill] %d→%d chars (kept %d literals)",
+                    len(original), len(result), len(literals))
+    return result
 
 
 def _safe_json(payload) -> str:
@@ -488,22 +652,15 @@ class MultiProviderClient:
         }
         aspect_ratio = aspect_map.get(image_size, "1:1")
 
-        # Imagen 4 (imagen-4.0-generate-001) DROPPED the negativePrompt parameter
-        # — silently ignored. And inlining the neg as "Avoid: ..." text backfires
-        # because Imagen reads avoid-words literally.
-        # Same treatment as WaveSpeed/Seedream/Recraft/Grok: fold a short
-        # anti-collage imperative into the POSITIVE prompt when the neg
-        # contains anti-collage signals.
-        full_prompt = prompt
-        if negative_prompt:
-            _neg_lower = negative_prompt.lower()
-            if any(k in _neg_lower for k in ("collage", "panel", "grid", "option", "pitch deck", "design sheet")):
-                full_prompt = (
-                    "ONE single unified image, one cohesive composition. "
-                    "Not a collage, not a grid, not multi-panel, not a design sheet, "
-                    "not layout options A/B, not a brief document. "
-                    + prompt
-                )
+        # CRITICAL: Imagen 3 + Imagen 4 + Gemini Imagen all interpret long
+        # designer-brief prompts as "render this as a creative brief document"
+        # → produce multi-panel pitch-decks with Option 1/2/3, Body:, [Website]
+        # labels, hashtags, etc.
+        # Anti-collage instructions DON'T help (parser reads "Not a collage" as
+        # a positive trigger) and `negativePrompt` was DROPPED in Imagen 4.
+        # Solution: distill the prompt — strip ALL designer-brief vocabulary,
+        # placeholders, percentages, hashtags. Keep only scene + literal text.
+        full_prompt = _distill_for_imagen(prompt)
 
         try:
             # Google AI Studio REST API endpoint for Imagen (uses :predict)

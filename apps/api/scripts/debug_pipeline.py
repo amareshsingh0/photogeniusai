@@ -247,26 +247,36 @@ async def main() -> int:
         print(f"\n[compact] {_safe_json(payload)}")
 
     elif provider == "google":
-        # Mirror _call_google body construction. Use Imagen's native negativePrompt
-        # parameter — appending "Avoid: ..." to the prompt makes Imagen render the
-        # listed avoid-words literally (Option 1/2/3 etc.).
+        # Mirror _call_google body construction. Imagen 3/4 + Gemini Imagen
+        # interpret designer-brief language as "render a brief document" —
+        # so the prompt is DISTILLED first (strips brief vocab, placeholders,
+        # percentages, hashtags) and `negativePrompt` is NOT sent (Imagen 4
+        # silently ignores it).
+        from app.services.external.multi_provider_client import _distill_for_imagen
         aspect_map = {
             "square_hd": "1:1", "landscape_16_9": "16:9",
             "portrait_9_16": "9:16", "landscape_4_3": "4:3",
         }
-        params_dict = {
-            "sampleCount":       min(num_images, 4),
-            "aspectRatio":       aspect_map.get(image_size, "1:1"),
-            "safetyFilterLevel": "BLOCK_ONLY_HIGH",
-            "personGeneration":  "ALLOW_ADULT",
-        }
-        if negative_prompt:
-            params_dict["negativePrompt"] = negative_prompt
+        distilled_prompt = _distill_for_imagen(enhanced_prompt)
+        dump("STAGE 3.5 — IMAGEN DISTILLATION", {
+            "before_chars": len(enhanced_prompt),
+            "after_chars":  len(distilled_prompt),
+            "distilled":    distilled_prompt,
+        })
         payload = {
-            "instances":  [{"prompt": enhanced_prompt}],
-            "parameters": params_dict,
+            "instances":  [{"prompt": distilled_prompt}],
+            "parameters": {
+                "sampleCount":       min(num_images, 4),
+                "aspectRatio":       aspect_map.get(image_size, "1:1"),
+                "safetyFilterLevel": "BLOCK_ONLY_HIGH",
+                "personGeneration":  "ALLOW_ADULT",
+            },
         }
-        endpoint = spec.get("endpoint") or provider_model_id
+        # MODEL_PROVIDER_CHAIN's provider_model_id for Google is the same key
+        # name (e.g. "gemini_3_1_imagen") — actual REST endpoint slug
+        # ("imagen-4.0-generate-001") lives in MODEL_REGISTRY[key]["endpoint"].
+        from app.services.smart.model_config import MODEL_REGISTRY
+        endpoint = MODEL_REGISTRY.get(fal_model_key, {}).get("endpoint", provider_model_id)
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{endpoint}:predict"
         dump(f"STAGE 4 — FINAL JSON → POST {url}", payload)
 
