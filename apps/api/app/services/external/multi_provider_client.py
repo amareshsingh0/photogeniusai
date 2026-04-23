@@ -185,22 +185,63 @@ def _distill_for_imagen(prompt: str) -> str:
             truncated = truncated[: last_term + 1]
         cleaned = truncated
 
-    # 10) Build final prompt with explicit single-image framing + literal text
-    parts = ["A single photograph of one poster."]
-    if cleaned:
-        parts.append(cleaned)
+    # 10) Build final prompt — photography-forward framing.
+    # AVOID leading with "poster" — Imagen has a strong "poster template" bias
+    # that overrides scene description. Lead with "commercial advertising
+    # photograph" instead, which pulls Imagen toward photographic output.
+    # Also: strip the upstream "ONE single unified image" anchor (added by
+    # generate_stream.py) to avoid double-anchoring that confuses the model.
+    cleaned = re.sub(
+        r"^\s*ONE single unified (?:image|photograph)[^.]*\.\s*",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"^\s*one cohesive composition[^.]*\.\s*",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    # Some Haiku outputs literally start with "A bold ... poster: ..." — strip
+    # the "poster" framing word so it doesn't double up with our anchor below.
+    cleaned = re.sub(
+        r"^[Aa]\s+\w+[\w,\s-]*?\s+(?:poster|advertisement|ad)\s*[:.\-—]?\s*",
+        "",
+        cleaned,
+    )
+
+    parts: list[str] = []
     if literals:
+        # This is an ad/poster (has quoted text to render) — anchor with
+        # photographic framing to override Imagen's "minimalist poster
+        # template" default. Without this, Imagen renders cartoon/illustration
+        # styles even when the brief specified photo.
+        parts.append(
+            "A single high-quality commercial advertising photograph, "
+            "photorealistic, professional studio photography style."
+        )
+        if cleaned:
+            parts.append(cleaned)
         text_parts = []
         for i, t in enumerate(literals):
             if i == 0:
-                text_parts.append(f'large bold text "{t}"')
+                text_parts.append(f'"{t}" as the main headline in large bold letters')
             elif i == 1:
-                text_parts.append(f'smaller text "{t}"')
+                text_parts.append(f'"{t}" as a smaller subtext line')
             else:
-                text_parts.append(f'small text "{t}"')
-        parts.append("Visible text on the poster: " + ", ".join(text_parts) + ".")
-    # Keep this short and simple — long anti-collage instructions trigger the bias.
-    parts.append("One unified image only.")
+                text_parts.append(f'"{t}" as small caption text')
+        parts.append(
+            "The photograph displays this visible text overlaid on the image: "
+            + ", ".join(text_parts) + "."
+        )
+    else:
+        # No quoted text → pure scene (portrait, photoreal, anime, etc).
+        # Just send the cleaned scene without ad-photography framing.
+        if cleaned:
+            parts.append(cleaned)
+        else:
+            parts.append(prompt)  # safety: never send empty prompt
 
     result = " ".join(parts).strip()
     if result != original:
