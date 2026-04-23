@@ -224,6 +224,27 @@ def _distill_for_imagen(prompt: str) -> str:
         cleaned,
         flags=re.IGNORECASE,
     )
+    # "The a X" / "the a X" — leftover article when a noun phrase got stripped
+    cleaned = re.sub(r"\b[Tt]he\s+a\s+", "a ", cleaned)
+    cleaned = re.sub(r"\b[Tt]he\s+an\s+", "an ", cleaned)
+    # "The is" / "The was" / "The features" — orphan article before verb
+    cleaned = re.sub(
+        r"\b[Tt]he\s+(?=is|was|were|are|features?|shows?|displays?|contains?|includes?|sits?|sit\s+|locks?|appears?)\b",
+        "",
+        cleaned,
+    )
+    # "the in" / "the of" / "the with" — orphan article before preposition
+    cleaned = re.sub(rf"\b[Tt]he\s+(?=(?:{_PREPS}|of)\b)", "", cleaned)
+    # Empty approximation/parens: "(≈ width)" / "(approximately ,)" / "(>)"
+    cleaned = re.sub(r"\([^)]{0,20}?(?:≈|~|approx\.?|approximately)\s*[\w-]*\s*\)", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\(\s*[≈~]?\s*\w*\s*\)", "", cleaned)
+    # Orphan fragments like "margin from," / "margin from." / "spacing of,"
+    cleaned = re.sub(
+        r"\b(?:margin|spacing|padding|inset|gap|distance|offset)\s+(?:from|to|of|between|above|below)\s*[,.;:]",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
     # Strip orphan punctuation runs
     cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
     cleaned = re.sub(r"([,.;:])(?:\s*\1)+", r"\1", cleaned)
@@ -423,10 +444,9 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
     "imagen_3": [
         ("google",   "imagen_3",                        0.020),  # $0.02/image (1024x1024)
     ],
-    # ── Real-ESRGAN upscale — fal.ai
+    # ── Real-ESRGAN upscale — fal.ai only (Replicate removed in 3-provider cleanup)
     "real_esrgan": [
         ("fal",      "fal-ai/real-esrgan",             0.002),
-        ("replicate","nightmareai/real-esrgan",        0.001),
     ],
 }
 
@@ -624,21 +644,14 @@ class MultiProviderClient:
     # ── Upscale (ESRGAN) ──────────────────────────────────────────────────────
 
     async def upscale(self, image_url: str, scale: int = 4) -> Dict:
-        """4x upscale — fal.ai ESRGAN primary, Replicate fallback."""
-        chain = MODEL_PROVIDER_CHAIN.get("real_esrgan", [])
-        last_error = "No providers"
-        for provider, model_id, cost_usd in chain:
-            key = self._keys.get(provider, "")
-            if not key:
-                continue
-            result = await self._upscale_fal(image_url, scale) if provider == "fal" \
-                else await self._upscale_replicate(image_url, scale)
-            if result["success"]:
-                result["provider"] = provider
-                result["cost_usd"] = cost_usd
-                return result
-            last_error = result.get("metadata", {}).get("error", "unknown")
-        return self._error("real_esrgan", f"Upscale failed: {last_error}", 0.0)
+        """4x upscale via fal.ai Real-ESRGAN."""
+        if not self._keys.get("fal"):
+            return self._error("real_esrgan", "FAL_KEY not set", 0.0)
+        result = await self._upscale_fal(image_url, scale)
+        if result["success"]:
+            result["provider"] = "fal"
+            result["cost_usd"] = 0.002
+        return result
 
     # ── Provider-specific callers ─────────────────────────────────────────────
 
