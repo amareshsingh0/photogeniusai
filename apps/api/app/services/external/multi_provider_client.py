@@ -94,13 +94,19 @@ _IMAGEN_BRACKETS = re.compile(r"\[[^\]\n]{1,80}\]")
 _IMAGEN_BRACES = re.compile(r"\{{1,2}[^}\n]{1,80}\}{1,2}")
 
 # Color percentage breakdowns: "warm cream 60%, turquoise 25%, coral 10%"
+# Only matches when the percentage is part of a palette breakdown — needs at
+# least 2 word tokens before the percentage. Won't match "50% OFF" or "SPF 50".
 _IMAGEN_COLOR_PERCENT = re.compile(
-    r"\b[\w-]+(?:\s+[\w-]+){0,3}\s+\d{1,3}\s*%(?:\s*[,&;]?)",
+    r"\b[\w-]+(?:\s+[\w-]+){1,3}\s+\d{1,3}\s*%(?:\s*[,&;]?)",
     re.IGNORECASE,
 )
 
-# Bare percentages: "35%", "60 %"
-_IMAGEN_BARE_PERCENT = re.compile(r"\b\d{1,3}\s*%")
+# Designer percentage CONTEXTS only — "8% inset", "60% opacity", "35% of poster"
+# Critically does NOT touch "50% OFF" (real ad copy) or "SPF 50" or "$50".
+_IMAGEN_DESIGN_PERCENT = re.compile(
+    r"\b\d{1,3}\s*%\s+(?:opacity|inset|of\s+\w+|alpha|coverage|saturation|brightness)\b",
+    re.IGNORECASE,
+)
 
 # Markdown-ish leftovers
 _IMAGEN_MD = re.compile(r"[#*`_]{1,3}")
@@ -151,8 +157,10 @@ def _distill_for_imagen(prompt: str) -> str:
     cleaned = _IMAGEN_HASHTAGS.sub("", cleaned)
 
     # 4) Strip color-percentage palette breakdowns: "warm cream 60%, turquoise 25%"
+    #    and designer-context percentages ("60% opacity", "8% inset"), but
+    #    PRESERVE real ad copy like "50% OFF" / "SPF 50".
     cleaned = _IMAGEN_COLOR_PERCENT.sub("", cleaned)
-    cleaned = _IMAGEN_BARE_PERCENT.sub("", cleaned)
+    cleaned = _IMAGEN_DESIGN_PERCENT.sub("", cleaned)
 
     # 5) Strip designer-brief vocabulary
     cleaned = _IMAGEN_BRIEF_VOCAB.sub("", cleaned)
@@ -183,16 +191,39 @@ def _distill_for_imagen(prompt: str) -> str:
         flags=re.IGNORECASE,
     )
 
-    # 10) Grammar repair after strips — remove dangling prepositions left over
-    #     when "lower third"/"upper third" etc. were stripped.
+    # 10) Grammar repair after strips — when designer phrases like "upper third",
+    #     "60% opacity" got removed they leave dangling prepositions/articles
+    #     and orphan empty quoted strings.
+    _PREPS = "at|in|across|on|over|to|from|along|around|near|by|with|under|above|below|between"
+    # "across the in" / "across the with" → just keep the second prep
     cleaned = re.sub(
-        r"\b(?:at|in|across|on|over|to|from|along|around|near|by)\s+the\s*(?=[,.;:]|$)",
+        rf"\b(?:{_PREPS})\s+the\s+(?=(?:{_PREPS})\b)",
         "",
         cleaned,
         flags=re.IGNORECASE,
     )
+    # "across the , X" / "across the . X" — strip prep+the when followed by punct
+    cleaned = re.sub(
+        rf"\b(?:{_PREPS})\s+the\s*(?=[,.;:]|\Z)",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    # "X the , Y" — orphan "the" with comma
+    cleaned = re.sub(r"\bthe\s+(?=[,.;:])", "", cleaned, flags=re.IGNORECASE)
+    # Empty quoted strings: "' '" / "''" / "\" \"" left after percent/value strip
+    cleaned = re.sub(r"['\"‘’“”]\s*['\"‘’“”]", "", cleaned)
+    # Quoted strings with only punctuation/whitespace inside
+    cleaned = re.sub(r"['\"‘’“”]\s*[,.;:%]?\s*['\"‘’“”]", "", cleaned)
     # Strip leftover empty parens/brackets created by interior strips
     cleaned = re.sub(r"\(\s*\)|\[\s*\]|\{\s*\}", "", cleaned)
+    # Orphan trailing words like ", opacity" / ", weight" / ", inset"
+    cleaned = re.sub(
+        r",\s*(?:opacity|weight|inset|alpha|coverage|saturation|brightness)\b",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
     # Strip orphan punctuation runs
     cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
     cleaned = re.sub(r"([,.;:])(?:\s*\1)+", r"\1", cleaned)
