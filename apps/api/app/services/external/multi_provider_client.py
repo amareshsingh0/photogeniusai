@@ -170,46 +170,44 @@ def _distill_for_imagen(prompt: str) -> str:
     pieces = [p for p in pieces if p and not BAD_SENTENCE.search(p)]
     cleaned = " ".join(pieces)
 
-    # 8) Collapse whitespace, stray punctuation
-    cleaned = re.sub(r"\s+", " ", cleaned)
-    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
-    cleaned = re.sub(r"([,.;:])(?:\s*\1)+", r"\1", cleaned)
-    cleaned = re.sub(r"^[\s,;:.]+|[\s,;:]+$", "", cleaned)
+    # 8) Replace "poster"/"advertisement poster"/"ad poster" with photography
+    #    vocab — "poster" word triggers Imagen's minimalist template bias.
+    cleaned = re.sub(r"\b(?:advertisement\s+|ad\s+)?poster(?:s)?\b", "advertisement photograph", cleaned, flags=re.IGNORECASE)
 
-    # 9) Cap at 60 words (sentence-aware) — Imagen does best with concise scenes
-    words = cleaned.split()
-    if len(words) > 60:
-        truncated = " ".join(words[:60])
-        last_term = max(truncated.rfind("."), truncated.rfind("!"), truncated.rfind("?"))
-        if last_term > 80:
-            truncated = truncated[: last_term + 1]
-        cleaned = truncated
-
-    # 10) Build final prompt — photography-forward framing.
-    # AVOID leading with "poster" — Imagen has a strong "poster template" bias
-    # that overrides scene description. Lead with "commercial advertising
-    # photograph" instead, which pulls Imagen toward photographic output.
-    # Also: strip the upstream "ONE single unified image" anchor (added by
-    # generate_stream.py) to avoid double-anchoring that confuses the model.
+    # 9) Strip the upstream "ONE single unified image" anchor (added by
+    #    generate_stream.py for non-Google providers) — we add our own framing.
     cleaned = re.sub(
         r"^\s*ONE single unified (?:image|photograph)[^.]*\.\s*",
         "",
         cleaned,
         flags=re.IGNORECASE,
     )
+
+    # 10) Grammar repair after strips — remove dangling prepositions left over
+    #     when "lower third"/"upper third" etc. were stripped.
     cleaned = re.sub(
-        r"^\s*one cohesive composition[^.]*\.\s*",
+        r"\b(?:at|in|across|on|over|to|from|along|around|near|by)\s+the\s*(?=[,.;:]|$)",
         "",
         cleaned,
         flags=re.IGNORECASE,
     )
-    # Some Haiku outputs literally start with "A bold ... poster: ..." — strip
-    # the "poster" framing word so it doesn't double up with our anchor below.
-    cleaned = re.sub(
-        r"^[Aa]\s+\w+[\w,\s-]*?\s+(?:poster|advertisement|ad)\s*[:.\-—]?\s*",
-        "",
-        cleaned,
-    )
+    # Strip leftover empty parens/brackets created by interior strips
+    cleaned = re.sub(r"\(\s*\)|\[\s*\]|\{\s*\}", "", cleaned)
+    # Strip orphan punctuation runs
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    cleaned = re.sub(r"([,.;:])(?:\s*\1)+", r"\1", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = re.sub(r"^[\s,;:.]+|[\s,;:]+$", "", cleaned)
+
+    # 11) Cap at 120 words sentence-aware — Imagen handles long-ish prompts
+    #     fine; the issue was BRIEF VOCAB not length. Don't lose scene props.
+    words = cleaned.split()
+    if len(words) > 120:
+        truncated = " ".join(words[:120])
+        last_term = max(truncated.rfind("."), truncated.rfind("!"), truncated.rfind("?"))
+        if last_term > 200:
+            truncated = truncated[: last_term + 1]
+        cleaned = truncated
 
     parts: list[str] = []
     if literals:
