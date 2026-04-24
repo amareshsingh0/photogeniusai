@@ -94,10 +94,17 @@ _IMAGEN_BRACKETS = re.compile(r"\[[^\]\n]{1,80}\]")
 _IMAGEN_BRACES = re.compile(r"\{{1,2}[^}\n]{1,80}\}{1,2}")
 
 # Color percentage breakdowns: "warm cream 60%, turquoise 25%, coral 10%"
-# Only matches when the percentage is part of a palette breakdown — needs at
-# least 2 word tokens before the percentage. Won't match "50% OFF" or "SPF 50".
+# Match ONLY palette-style fragments: a known color word followed by digit%.
+# Critically must NOT match real ad copy like "upto 40% off", "save 40%",
+# "SPF 50", "$50 off". The previous "any 2-3 words + %" rule was too greedy.
 _IMAGEN_COLOR_PERCENT = re.compile(
-    r"\b[\w-]+(?:\s+[\w-]+){1,3}\s+\d{1,3}\s*%(?:\s*[,&;]?)",
+    r"\b(?:warm|cool|deep|pale|soft|bright|dark|light|muted|vibrant|rich|burnt|"
+    r"dusty|misty|vivid|dusky|pastel|neon|electric|charcoal|cream|sand|beige|"
+    r"taupe|rose|coral|peach|amber|mustard|olive|sage|teal|cyan|navy|indigo|"
+    r"violet|magenta|fuchsia|crimson|scarlet|maroon|bronze|copper|brass|gold|"
+    r"silver|platinum|ivory|cobalt|periwinkle|chartreuse|emerald|jade|mint|"
+    r"forest|moss|terracotta|sienna|umber|ochre|saffron|turmeric)"
+    r"(?:[\s-]+\w+){0,3}\s+\d{1,3}\s*%(?:\s*[,&;]?)",
     re.IGNORECASE,
 )
 
@@ -235,37 +242,40 @@ def _distill_for_imagen(prompt: str) -> str:
         else:
             cleaned = truncated
 
+    # Detect if this is an ad/poster intent (so we can add photographic anchor)
+    # — either explicit quoted text, OR ad/poster keywords in the prompt.
+    is_ad_intent = bool(literals) or bool(re.search(
+        r"\b(?:ad|ads|advert|advertisement|poster|banner|hoarding|billboard|"
+        r"sale|offer|discount|brand|logo|product|campaign|flyer|brochure)\b",
+        prompt, re.IGNORECASE,
+    ))
+
     parts: list[str] = []
-    if literals:
-        # This is an ad/poster (has quoted text to render) — anchor with
-        # photographic framing to override Imagen's "minimalist poster
-        # template" default.
-        # CRITICAL: do NOT use structural words ("headline", "subtext",
-        # "subhead", "caption", "tagline", "title") in the framing strings —
-        # Imagen renders them LITERALLY ("Subtext (Simulated)" appearing on
-        # actual outputs). Use natural visual language instead.
+    if is_ad_intent:
+        # Photographic anchor overrides Imagen's "minimalist illustration
+        # template" default. CRITICAL: never use structural words like
+        # "headline", "subtext", "caption", "tagline", "title" — Imagen
+        # renders them LITERALLY (saw "Subtext (Simulated)" on output).
         parts.append(
             "A single high-quality commercial advertising photograph, "
-            "photorealistic, professional studio photography style."
+            "photorealistic, professional studio photography style, "
+            "single unified composition."
         )
         if cleaned:
             parts.append(cleaned)
-        # Build text-rendering instructions WITHOUT structural words.
-        # Imagen renders "subtext"/"caption"/"headline"/"tagline" LITERALLY if
-        # they appear (saw "Subtext (Simulated)" on actual output). Use only
-        # size/position descriptors.
-        text_parts = []
-        for i, t in enumerate(literals):
-            if i == 0:
-                text_parts.append(f'the text "{t}" displayed prominently in very large bold letters')
-            elif i == 1:
-                text_parts.append(f'and the text "{t}" displayed in smaller letters below')
-            else:
-                text_parts.append(f'and the text "{t}" displayed in even smaller letters')
-        parts.append("The image shows " + ", ".join(text_parts) + ".")
+        if literals:
+            # Use only size/position descriptors — no structural words.
+            text_parts = []
+            for i, t in enumerate(literals):
+                if i == 0:
+                    text_parts.append(f'the text "{t}" displayed prominently in very large bold letters')
+                elif i == 1:
+                    text_parts.append(f'and the text "{t}" displayed in smaller letters below')
+                else:
+                    text_parts.append(f'and the text "{t}" displayed in even smaller letters')
+            parts.append("The image shows " + ", ".join(text_parts) + ".")
     else:
-        # No quoted text → pure scene (portrait, photoreal, anime, etc).
-        # Just send the cleaned scene without ad-photography framing.
+        # Non-ad scene (portrait, photoreal, anime, etc) — leave alone.
         if cleaned:
             parts.append(cleaned)
         else:
