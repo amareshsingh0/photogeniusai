@@ -7,6 +7,21 @@ import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 
+# CRITICAL: configure root logger BEFORE any other imports so logger.info() calls
+# from every module (multi_provider_client, simple_prompt_engine, generate_stream,
+# etc.) actually reach stdout / pm2 logs. Without this, Python's default logger
+# has level=WARNING and no handler — every [PAYLOAD], [FINAL-PROMPT], [SANITIZE]
+# log was silently dropped, leaving us blind during debugging.
+_log_level = getattr(logging, (os.getenv("LOG_LEVEL") or "INFO").upper(), logging.INFO)
+logging.basicConfig(
+    level=_log_level,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    stream=sys.stdout,
+    force=True,  # override any handlers Uvicorn / other libs already installed
+)
+# Loud one-shot heartbeat so we can confirm logging is wired:
+logging.getLogger("photogenius.boot").info("[BOOT] root logger configured at level=%s", logging.getLevelName(_log_level))
+
 # Add project root so config.tier_config is importable (main -> app -> api -> apps -> root)
 _root = Path(__file__).resolve().parents[3]
 if str(_root) not in sys.path:
