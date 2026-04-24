@@ -239,26 +239,30 @@ def _distill_for_imagen(prompt: str) -> str:
     if literals:
         # This is an ad/poster (has quoted text to render) — anchor with
         # photographic framing to override Imagen's "minimalist poster
-        # template" default. Without this, Imagen renders cartoon/illustration
-        # styles even when the brief specified photo.
+        # template" default.
+        # CRITICAL: do NOT use structural words ("headline", "subtext",
+        # "subhead", "caption", "tagline", "title") in the framing strings —
+        # Imagen renders them LITERALLY ("Subtext (Simulated)" appearing on
+        # actual outputs). Use natural visual language instead.
         parts.append(
             "A single high-quality commercial advertising photograph, "
             "photorealistic, professional studio photography style."
         )
         if cleaned:
             parts.append(cleaned)
+        # Build text-rendering instructions WITHOUT structural words.
+        # Imagen renders "subtext"/"caption"/"headline"/"tagline" LITERALLY if
+        # they appear (saw "Subtext (Simulated)" on actual output). Use only
+        # size/position descriptors.
         text_parts = []
         for i, t in enumerate(literals):
             if i == 0:
-                text_parts.append(f'"{t}" as the main headline in large bold letters')
+                text_parts.append(f'the text "{t}" displayed prominently in very large bold letters')
             elif i == 1:
-                text_parts.append(f'"{t}" as a smaller subtext line')
+                text_parts.append(f'and the text "{t}" displayed in smaller letters below')
             else:
-                text_parts.append(f'"{t}" as small caption text')
-        parts.append(
-            "The photograph displays this visible text overlaid on the image: "
-            + ", ".join(text_parts) + "."
-        )
+                text_parts.append(f'and the text "{t}" displayed in even smaller letters')
+        parts.append("The image shows " + ", ".join(text_parts) + ".")
     else:
         # No quoted text → pure scene (portrait, photoreal, anime, etc).
         # Just send the cleaned scene without ad-photography framing.
