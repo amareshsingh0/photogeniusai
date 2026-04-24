@@ -121,21 +121,24 @@ _IMAGEN_HASHTAGS = re.compile(r"#\w+(?:\s+#\w+)*")
 def _distill_for_imagen(prompt: str) -> str:
     """Transform a designer-brief prompt into a direct image-gen prompt for Imagen.
 
-    Strips all art-direction vocabulary that triggers Imagen's "render this as
-    a creative brief document" bias. Keeps the scene + literal text only.
-    Output is capped at ~60 words and wrapped with explicit single-image framing.
+    Strategy: SENTENCE-LEVEL filtering, not word-level. Word-level stripping
+    breaks grammar (leaves orphan articles/prepositions). Instead:
+      1. Extract literal text to render (quoted strings) before any stripping
+      2. Strip clean-strip-safe noise: brackets, hashtags, palette percentages
+      3. Split into sentences. For each sentence, count designer-vocab matches.
+         If sentence is mostly designer-brief (>=2 matches OR >15% density),
+         DROP it entirely. Otherwise KEEP it intact (no word-level surgery).
+      4. Replace "poster" → "advertisement photograph" globally
+      5. Wrap with photographic anchor + literal text instructions
     """
     if not prompt:
         return prompt
-    original = prompt
 
-    # 1) Extract literal text-to-render BEFORE stripping anything (we need
-    #    the quotes intact). Take up to 3 distinct quoted strings.
+    # 1) Extract literal text-to-render BEFORE stripping anything.
     seen = set()
     literals: list[str] = []
     for match in _IMAGEN_QUOTED.finditer(prompt):
         text = match.group(1).strip()
-        # Skip noise: percentages, very short fragments, brief-doc labels
         if not text or len(text) < 2:
             continue
         if text.lower() in seen:
@@ -149,40 +152,14 @@ def _distill_for_imagen(prompt: str) -> str:
         if len(literals) >= 3:
             break
 
-    # 2) Strip placeholders (Imagen renders [Website Address] as visible text)
+    # 2) Clean-strip-safe noise: bracketed placeholders, hashtags, markdown.
+    #    These don't break grammar when removed.
     cleaned = _IMAGEN_BRACKETS.sub("", prompt)
     cleaned = _IMAGEN_BRACES.sub("", cleaned)
-
-    # 3) Strip hashtags (rendered literally as #GlowSunscreen etc.)
     cleaned = _IMAGEN_HASHTAGS.sub("", cleaned)
-
-    # 4) Strip color-percentage palette breakdowns: "warm cream 60%, turquoise 25%"
-    #    and designer-context percentages ("60% opacity", "8% inset"), but
-    #    PRESERVE real ad copy like "50% OFF" / "SPF 50".
-    cleaned = _IMAGEN_COLOR_PERCENT.sub("", cleaned)
-    cleaned = _IMAGEN_DESIGN_PERCENT.sub("", cleaned)
-
-    # 5) Strip designer-brief vocabulary
-    cleaned = _IMAGEN_BRIEF_VOCAB.sub("", cleaned)
-
-    # 6) Strip markdown leftovers
     cleaned = _IMAGEN_MD.sub("", cleaned)
 
-    # 7) Drop entire sentences that still mention multi-variant trigger words
-    pieces = re.split(r"(?<=[.!?])\s+|\n+", cleaned)
-    BAD_SENTENCE = re.compile(
-        r"\b(?:option|variant|version|concept|panel|grid|collage|moodboard|"
-        r"mood-board|carousel|slide\s+\d+|comparison|side[\s-]by[\s-]side)\b",
-        re.IGNORECASE,
-    )
-    pieces = [p for p in pieces if p and not BAD_SENTENCE.search(p)]
-    cleaned = " ".join(pieces)
-
-    # 8) Replace "poster"/"advertisement poster"/"ad poster" with photography
-    #    vocab — "poster" word triggers Imagen's minimalist template bias.
-    cleaned = re.sub(r"\b(?:advertisement\s+|ad\s+)?poster(?:s)?\b", "advertisement photograph", cleaned, flags=re.IGNORECASE)
-
-    # 9) Strip the upstream "ONE single unified image" anchor (added by
+    # 3) Strip the upstream "ONE single unified image" anchor (added by
     #    generate_stream.py for non-Google providers) — we add our own framing.
     cleaned = re.sub(
         r"^\s*ONE single unified (?:image|photograph)[^.]*\.\s*",
@@ -191,75 +168,72 @@ def _distill_for_imagen(prompt: str) -> str:
         flags=re.IGNORECASE,
     )
 
-    # 10) Grammar repair after strips — when designer phrases like "upper third",
-    #     "60% opacity" got removed they leave dangling prepositions/articles
-    #     and orphan empty quoted strings.
-    _PREPS = "at|in|across|on|over|to|from|along|around|near|by|with|under|above|below|between"
-    # "across the in" / "across the with" → just keep the second prep
-    cleaned = re.sub(
-        rf"\b(?:{_PREPS})\s+the\s+(?=(?:{_PREPS})\b)",
-        "",
-        cleaned,
-        flags=re.IGNORECASE,
+    # 4) Sentence-level filter — drop sentences that are mostly designer-brief.
+    #    A sentence is "bad" if:
+    #      - it has 2+ designer-vocab matches, OR
+    #      - it has 1+ match AND match density > 12% of words, OR
+    #      - it's a "Palette: X (60%), Y (30%)" line, OR
+    #      - it contains multi-variant trigger words (option/variant/panel/etc).
+    BAD_TRIGGERS = re.compile(
+        r"\b(?:option|variant|version|concept|panel|grid|collage|moodboard|"
+        r"mood-board|carousel|slide\s+\d+|comparison|side[\s-]by[\s-]side|"
+        r"^palette[:\s]|color\s+palette[:\s])\b",
+        re.IGNORECASE,
     )
-    # "across the , X" / "across the . X" — strip prep+the when followed by punct
-    cleaned = re.sub(
-        rf"\b(?:{_PREPS})\s+the\s*(?=[,.;:]|\Z)",
-        "",
-        cleaned,
-        flags=re.IGNORECASE,
-    )
-    # "X the , Y" — orphan "the" with comma
-    cleaned = re.sub(r"\bthe\s+(?=[,.;:])", "", cleaned, flags=re.IGNORECASE)
-    # Empty quoted strings: "' '" / "''" / "\" \"" left after percent/value strip
-    cleaned = re.sub(r"['\"‘’“”]\s*['\"‘’“”]", "", cleaned)
-    # Quoted strings with only punctuation/whitespace inside
-    cleaned = re.sub(r"['\"‘’“”]\s*[,.;:%]?\s*['\"‘’“”]", "", cleaned)
-    # Strip leftover empty parens/brackets created by interior strips
-    cleaned = re.sub(r"\(\s*\)|\[\s*\]|\{\s*\}", "", cleaned)
-    # Orphan trailing words like ", opacity" / ", weight" / ", inset"
-    cleaned = re.sub(
-        r",\s*(?:opacity|weight|inset|alpha|coverage|saturation|brightness)\b",
-        "",
-        cleaned,
-        flags=re.IGNORECASE,
-    )
-    # "The a X" / "the a X" — leftover article when a noun phrase got stripped
-    cleaned = re.sub(r"\b[Tt]he\s+a\s+", "a ", cleaned)
-    cleaned = re.sub(r"\b[Tt]he\s+an\s+", "an ", cleaned)
-    # "The is" / "The was" / "The features" — orphan article before verb
-    cleaned = re.sub(
-        r"\b[Tt]he\s+(?=is|was|were|are|features?|shows?|displays?|contains?|includes?|sits?|sit\s+|locks?|appears?)\b",
-        "",
-        cleaned,
-    )
-    # "the in" / "the of" / "the with" — orphan article before preposition
-    cleaned = re.sub(rf"\b[Tt]he\s+(?=(?:{_PREPS}|of)\b)", "", cleaned)
-    # Empty approximation/parens: "(≈ width)" / "(approximately ,)" / "(>)"
-    cleaned = re.sub(r"\([^)]{0,20}?(?:≈|~|approx\.?|approximately)\s*[\w-]*\s*\)", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\(\s*[≈~]?\s*\w*\s*\)", "", cleaned)
-    # Orphan fragments like "margin from," / "margin from." / "spacing of,"
-    cleaned = re.sub(
-        r"\b(?:margin|spacing|padding|inset|gap|distance|offset)\s+(?:from|to|of|between|above|below)\s*[,.;:]",
-        "",
-        cleaned,
-        flags=re.IGNORECASE,
-    )
-    # Strip orphan punctuation runs
-    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
-    cleaned = re.sub(r"([,.;:])(?:\s*\1)+", r"\1", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned)
-    cleaned = re.sub(r"^[\s,;:.]+|[\s,;:]+$", "", cleaned)
+    PALETTE_LINE = re.compile(r"^\s*palette\s*:", re.IGNORECASE)
+    pieces = re.split(r"(?<=[.!?])\s+|\n+", cleaned)
+    kept: list[str] = []
+    for sentence in pieces:
+        s = sentence.strip()
+        if not s:
+            continue
+        # Hard drops
+        if PALETTE_LINE.match(s):
+            continue
+        if BAD_TRIGGERS.search(s):
+            continue
+        # Count designer vocab matches
+        matches = len(_IMAGEN_BRIEF_VOCAB.findall(s))
+        words = s.split()
+        if not words:
+            continue
+        density = matches / len(words)
+        # Drop if too designer-heavy
+        if matches >= 2 or (matches >= 1 and density > 0.12):
+            continue
+        # Strip color-percentage palette fragments inside sentences that are
+        # otherwise OK (e.g. "...sky (≈60% of frame)..."). These are safe to
+        # remove without breaking grammar — they're parenthetical asides.
+        s = _IMAGEN_COLOR_PERCENT.sub("", s)
+        s = _IMAGEN_DESIGN_PERCENT.sub("", s)
+        # Final per-sentence cleanup: empty parens, doubled punctuation
+        s = re.sub(r"\(\s*\)|\[\s*\]|\{\s*\}", "", s)
+        s = re.sub(r"\s+([,.;:!?])", r"\1", s)
+        s = re.sub(r"([,.;:])(?:\s*\1)+", r"\1", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        if s and len(s.split()) >= 3:
+            kept.append(s)
 
-    # 11) Cap at 120 words sentence-aware — Imagen handles long-ish prompts
-    #     fine; the issue was BRIEF VOCAB not length. Don't lose scene props.
+    cleaned = " ".join(kept)
+
+    # 5) Replace "poster" → "advertisement photograph" — "poster" triggers
+    #    Imagen's minimalist illustration template bias.
+    cleaned = re.sub(
+        r"\b(?:advertisement\s+|ad\s+)?poster(?:s)?\b",
+        "advertisement photograph",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    # 6) Cap at 100 words sentence-aware (sentences are intact so no mid-cut)
     words = cleaned.split()
-    if len(words) > 120:
-        truncated = " ".join(words[:120])
+    if len(words) > 100:
+        truncated = " ".join(words[:100])
         last_term = max(truncated.rfind("."), truncated.rfind("!"), truncated.rfind("?"))
         if last_term > 200:
-            truncated = truncated[: last_term + 1]
-        cleaned = truncated
+            cleaned = truncated[: last_term + 1]
+        else:
+            cleaned = truncated
 
     parts: list[str] = []
     if literals:
