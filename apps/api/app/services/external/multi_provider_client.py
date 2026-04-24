@@ -268,9 +268,9 @@ def _distill_for_imagen(prompt: str) -> str:
             parts.append(prompt)  # safety: never send empty prompt
 
     result = " ".join(parts).strip()
-    if result != original:
-        logger.info("[imagen-distill] %d→%d chars (kept %d literals)",
-                    len(original), len(result), len(literals))
+    if result != prompt:
+        logger.info("[imagen-distill] %d→%d chars (kept %d literals, %d sentences)",
+                    len(prompt), len(result), len(literals), len(kept))
     return result
 
 
