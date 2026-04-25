@@ -865,8 +865,9 @@ export default function GeneratePage() {
 
   // Edit the generated image — open advanced edit modal
   const handleEditGeneratedImage = () => {
-    // Loud visible signal — if click reaches here, user WILL see this
-    try { (window as any).__editClickCount = ((window as any).__editClickCount || 0) + 1 } catch {}
+    // Unmissable debug signal — REMOVE after confirming click fires
+    // eslint-disable-next-line no-alert
+    window.alert("✅ Edit button clicked! image_url=" + (result?.image_url ? "present" : "MISSING"))
     console.log("[EDIT-BTN] click fired. result:", result, "image_url:", result?.image_url)
     toast({ title: "Opening editor…", description: "Loading edit tools" })
     if (!result?.image_url) {
@@ -1243,6 +1244,7 @@ export default function GeneratePage() {
                   Uses a raw <button> instead of the shadcn Button wrapper to
                   sidestep any Radix Slot / ref-forwarding weirdness. */}
               <button
+                id="edit-image-btn"
                 type="button"
                 onClick={handleEditGeneratedImage}
                 className="relative z-20 isolate flex w-full items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
