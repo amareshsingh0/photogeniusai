@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import time
 import json
 from typing import Dict, List, Optional
@@ -43,6 +44,25 @@ from typing import Dict, List, Optional
 import re
 
 import httpx
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WaveSpeed polling — exponential backoff with jitter (Priority 5)
+# ─────────────────────────────────────────────────────────────────────────────
+# Old code: fixed 2s sleep × 60 polls. Under concurrent load every request
+# polled at the same 2s rhythm → synchronized "thundering herd" hits the
+# WaveSpeed API at the same moments, saturating rate limits and triggering
+# cascading 429s + timeouts.
+#
+# New: exponential backoff (each poll waits 1.5× the previous) + ±0.5s
+# random jitter to desync concurrent requests. Total wait budget unchanged
+# (~120s) but the number of polls drops from 60 to ~14, slashing API
+# pressure 4× while still catching fast-finishing tasks early.
+_WAVESPEED_INITIAL_POLL_DELAY = float(os.getenv("WAVESPEED_INITIAL_POLL_DELAY", "2.0"))
+_WAVESPEED_POLL_MULTIPLIER    = float(os.getenv("WAVESPEED_POLL_MULTIPLIER",    "1.5"))
+_WAVESPEED_MAX_POLL_DELAY     = float(os.getenv("WAVESPEED_MAX_POLL_DELAY",     "10.0"))
+_WAVESPEED_POLL_JITTER        = float(os.getenv("WAVESPEED_POLL_JITTER",        "0.5"))
+_WAVESPEED_MAX_TOTAL_WAIT     = float(os.getenv("WAVESPEED_MAX_TOTAL_WAIT",     "120.0"))
 
 logger = logging.getLogger(__name__)
 
@@ -878,12 +898,22 @@ class MultiProviderClient:
                 if urls:
                     return self._ok(urls, model_id, "wavespeed.ai", time.time() - start)
 
-            # 2) Poll result
+            # 2) Poll result with exponential backoff + jitter
+            #    First poll after ~2s (catches fast-finishing tasks early), then
+            #    backs off 1.5× each iteration up to a 10s cap. Jitter of ±0.5s
+            #    prevents synchronized polling across concurrent requests.
             poll_url = f"{_WAVESPEED_BASE}/predictions/{task_id}/result"
             poll_headers = {"Authorization": f"Bearer {api_key}"}
-            max_polls = 60  # ~120s ceiling @ 2s interval
-            for _ in range(max_polls):
-                await asyncio.sleep(2.0)
+            delay = _WAVESPEED_INITIAL_POLL_DELAY
+            elapsed = 0.0
+            poll_count = 0
+            while elapsed < _WAVESPEED_MAX_TOTAL_WAIT:
+                jittered = delay + random.uniform(-_WAVESPEED_POLL_JITTER, _WAVESPEED_POLL_JITTER)
+                actual_sleep = max(0.5, jittered)  # never below 0.5s
+                await asyncio.sleep(actual_sleep)
+                elapsed += actual_sleep
+                poll_count += 1
+
                 poll_resp = await client.get(poll_url, headers=poll_headers, timeout=30.0)
                 poll_resp.raise_for_status()
                 result = (poll_resp.json() or {}).get("data") or {}
@@ -892,11 +922,20 @@ class MultiProviderClient:
                     urls = self._extract_wavespeed_urls(result)
                     if not urls:
                         raise ValueError(f"No images from WaveSpeed: {list(result.keys())}")
+                    logger.info(
+                        "[wavespeed] task %s done after %.1fs / %d polls",
+                        task_id, elapsed, poll_count,
+                    )
                     return self._ok(urls, model_id, "wavespeed.ai", time.time() - start)
                 if status in ("failed", "error"):
                     raise ValueError(f"WaveSpeed task failed: {result.get('error') or result}")
 
-            raise TimeoutError(f"WaveSpeed task {task_id} timed out after {max_polls * 2}s")
+                # Exponential backoff for the next iteration
+                delay = min(delay * _WAVESPEED_POLL_MULTIPLIER, _WAVESPEED_MAX_POLL_DELAY)
+
+            raise TimeoutError(
+                f"WaveSpeed task {task_id} timed out after {elapsed:.1f}s ({poll_count} polls)"
+            )
 
         except Exception as e:
             logger.error("[wavespeed] API error: %s", e)
