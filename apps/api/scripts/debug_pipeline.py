@@ -282,6 +282,10 @@ async def main() -> int:
 
     elif provider == "wavespeed":
         from app.services.external.multi_provider_client import _WAVESPEED_MODEL_PATHS
+        from app.services.smart.simple_prompt_engine import (
+            _AFFIRMATIVE_NO_COLLAGE_ANCHOR,
+            has_anti_collage_signal,
+        )
         size_map = {
             "square_hd": "1024*1024", "landscape_16_9": "1344*768",
             "portrait_9_16": "768*1344", "landscape_4_3": "1152*896",
@@ -290,16 +294,12 @@ async def main() -> int:
             "square_hd": "1:1", "landscape_16_9": "16:9",
             "portrait_9_16": "9:16", "landscape_4_3": "4:3",
         }
-        # Mirror the anti-collage fold-in for wavespeed
+        # Mirror the affirmative anti-collage fold-in (Priority 2):
+        # purely affirmative anchor avoids Reverse Activation in the diffusion
+        # cross-attention. Must match _call_wavespeed in multi_provider_client.
         ws_prompt = enhanced_prompt
-        if negative_prompt:
-            _neg_lower = negative_prompt.lower()
-            if any(k in _neg_lower for k in ("collage", "panel", "grid", "option")):
-                ws_prompt = (
-                    "ONE single unified image, one cohesive composition. "
-                    "Not a collage, not a grid, not multi-panel, not a design sheet. "
-                    + ws_prompt
-                )
+        if has_anti_collage_signal(negative_prompt):
+            ws_prompt = _AFFIRMATIVE_NO_COLLAGE_ANCHOR + ws_prompt
         if provider_model_id == "grok_2_imagine":
             payload = {
                 "prompt":        ws_prompt,
