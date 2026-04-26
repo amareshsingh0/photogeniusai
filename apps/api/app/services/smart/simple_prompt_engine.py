@@ -844,11 +844,14 @@ class SimplePromptEngine:
             # max_retries exhausts). No more loose-JSON parsing.
             output: SimpleEngineOutput = await asyncio.to_thread(self._call_sync, user_msg)
 
-            # Fill any empty-quote pairs (`""`) Haiku left inline using ad_copy
-            # before sanitization — keeps the actual headline/subhead/cta in the
-            # rendered image instead of literal floating quotation marks.
-            filled_prompt = _fill_empty_quotes_from_adcopy(output.prompt.strip(), output.ad_copy)
-            clean_prompt = _sanitize_prompt(filled_prompt)
+            # ORDER MATTERS: sanitize FIRST, then fill empty quotes.
+            # Reason: _sanitize_prompt has a CTA-verb stripper ("Shop Now",
+            # "Click here", etc — line ~674) that would re-empty any quoted
+            # CTA text we just filled. Sanitizing first strips bare scaffolding
+            # CTA language; the fill step then writes the legitimate ad_copy
+            # text inside quotes where the image model can render it.
+            sanitized = _sanitize_prompt(output.prompt.strip())
+            clean_prompt = _fill_empty_quotes_from_adcopy(sanitized, output.ad_copy)
             raw_neg = output.negative_prompt.strip()
             combined_neg = f"{raw_neg}, {_ANTI_COLLAGE_NEGATIVES}" if raw_neg else _ANTI_COLLAGE_NEGATIVES
 
