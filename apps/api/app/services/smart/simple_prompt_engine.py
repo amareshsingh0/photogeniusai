@@ -671,8 +671,13 @@ _LEAK_PATTERNS = [
     (re.compile(r"\b(?:Alternatively|First version|Second version|Initial draft)\b\s*[:.\-–—]?\s*", re.IGNORECASE), ""),
     # Multi-panel / collage / mood-board language
     (re.compile(r"\b(?:collage|grid layout|multi[- ]panel|split[- ]screen|A/B comparison|mood[- ]?board|pitch deck|design sheet|variation sheet|layout options?)\b", re.IGNORECASE), ""),
-    # "Discover Your X" / "Elevate Your X" CTA-button language that gets rendered as button
-    (re.compile(r"\b(?:Click here|Learn more|Shop now|Discover\s+your\s+\w+|Elevate\s+your\s+\w+|Buy\s+now|Order\s+today)\b\s*[.!]?", re.IGNORECASE), ""),
+    # NOTE: Previously had a regex that stripped "Shop Now / Click here / Buy now /
+    # Learn more / Discover your X / Elevate your X / Order today" unconditionally.
+    # That was destructive — it stripped legitimate CTA copy that Haiku wrote inside
+    # quotes (e.g. `reading "Shop Now"`), leaving empty quotes that the image model
+    # rendered as floating quotation marks. Removed 2026-04-26. The ad_copy.cta
+    # field + _fill_empty_quotes_from_adcopy + system-prompt rules already keep
+    # CTA text inside quotes; we don't need a sanitize-time stripper.
 ]
 
 # Always append these to negative_prompt — prevents image model from generating
