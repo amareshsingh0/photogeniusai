@@ -573,7 +573,11 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         # — applies to ALL engine paths (simple_engine / claude_v2 / 4-agent chain).
         # This is defense-in-depth: LLMs sometimes output pitch-deck structure even when
         # told not to, and long walls of copy get rendered verbatim by image models.
-        from app.services.smart.simple_prompt_engine import _sanitize_prompt, _ANTI_COLLAGE_NEGATIVES
+        from app.services.smart.simple_prompt_engine import (
+            _sanitize_prompt,
+            _ANTI_COLLAGE_NEGATIVES,
+            _AFFIRMATIVE_SINGLE_IMAGE_ANCHOR,
+        )
 
         # 1) Strip Option 1/2/3, [Placeholder], brief-doc labels, collage words.
         enhanced_prompt = _sanitize_prompt(enhanced_prompt)
@@ -601,11 +605,10 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                 logger.info("[stream][%s] prompt truncated %d→%d words at sentence boundary",
                             trace_id, len(_words), len(enhanced_prompt.split()))
 
-        # 3) Single-image anchor — short imperative so the image model interprets
-        #    the prompt as ONE composition. Long anchor (22 words) was eating into
-        #    the context budget; this 8-word version is enough to set intent.
-        _single_image_anchor = "ONE single unified image, one cohesive composition. "
-        enhanced_prompt = _single_image_anchor + enhanced_prompt
+        # 3) Single-image anchor — universal short affirmative imperative so the
+        #    image model interprets the prompt as ONE composition. Constant lives
+        #    in simple_prompt_engine for single-source-of-truth across providers.
+        enhanced_prompt = _AFFIRMATIVE_SINGLE_IMAGE_ANCHOR + enhanced_prompt
 
         # 4) Strong anti-collage negative prompt — Seedream/Imagen respect negatives.
         #    simple_engine.enrich() already merges _ANTI_COLLAGE_NEGATIVES into its

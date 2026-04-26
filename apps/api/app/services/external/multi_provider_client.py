@@ -829,18 +829,17 @@ class MultiProviderClient:
         }
         aspect_ratio = aspect_map.get(image_size, "1:1")
 
-        # WaveSpeed endpoints drop negative_prompt entirely. If the caller
-        # passed anti-collage negatives, fold them into the positive prompt
-        # as a hard imperative so the model still gets the signal.
-        if negative_prompt:
-            _neg_lower = negative_prompt.lower()
-            if any(k in _neg_lower for k in ("collage", "panel", "grid", "option", "pitch deck", "design sheet")):
-                prompt = (
-                    "ONE single unified image, one cohesive composition. "
-                    "Not a collage, not a grid, not multi-panel, not a design sheet, "
-                    "not layout options A/B, not a brief document. "
-                    + prompt
-                )
+        # WaveSpeed endpoints drop negative_prompt entirely. When the caller
+        # passed anti-collage negatives, fold an AFFIRMATIVE anchor into the
+        # positive prompt — purely affirmative phrasing avoids "Reverse
+        # Activation" where negated concepts ("Not a collage, not a grid")
+        # get tokenized into early-denoising cross-attention and rendered.
+        from app.services.smart.simple_prompt_engine import (
+            _AFFIRMATIVE_NO_COLLAGE_ANCHOR,
+            has_anti_collage_signal,
+        )
+        if has_anti_collage_signal(negative_prompt):
+            prompt = _AFFIRMATIVE_NO_COLLAGE_ANCHOR + prompt
 
         # Per-model payload (each endpoint accepts different params)
         if model_id == "grok_2_imagine":
@@ -957,15 +956,16 @@ class MultiProviderClient:
         _NO_NEG_PROMPT_MODELS = (
             _SEEDREAM_IDS | _SEEDREAM_EDIT_IDS | _RECRAFT_IDS | _GROK_IDS
         )
-        if model_id in _NO_NEG_PROMPT_MODELS and negative_prompt:
-            _neg_lower = negative_prompt.lower()
-            if any(k in _neg_lower for k in ("collage", "panel", "grid", "option", "pitch deck", "design sheet")):
-                prompt = (
-                    "ONE single unified image, one cohesive composition. "
-                    "Not a collage, not a grid, not multi-panel, not a design sheet, "
-                    "not layout options A/B, not a brief document. "
-                    + prompt
-                )
+        if model_id in _NO_NEG_PROMPT_MODELS:
+            # Affirmative-only anchor (Priority 2 / P-Distill). Mixed pos/neg
+            # phrasing causes Reverse Activation in diffusion models — the
+            # text encoder injects negated concepts into early cross-attention.
+            from app.services.smart.simple_prompt_engine import (
+                _AFFIRMATIVE_NO_COLLAGE_ANCHOR,
+                has_anti_collage_signal,
+            )
+            if has_anti_collage_signal(negative_prompt):
+                prompt = _AFFIRMATIVE_NO_COLLAGE_ANCHOR + prompt
 
         # Set of model IDs that DO honor reference_image_url (either natively
         # in their t2i payload, or via the i2i endpoint swap above).

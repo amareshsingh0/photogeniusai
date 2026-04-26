@@ -695,6 +695,52 @@ _ANTI_COLLAGE_NEGATIVES = (
 )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Affirmative anchors (Priority 2 — P-Distill / Reverse-Activation defense)
+# ─────────────────────────────────────────────────────────────────────────────
+# Research finding (From Orchestration to Oracles, p.4): "Reverse Activation"
+# — when a prompt contains "no collage" / "no grid" / "not multi-panel", the
+# text encoder STILL tokenizes the negated concepts and injects their feature
+# vectors into early-denoising cross-attention. The diffusion model starts
+# generating the negated layouts and then tries (often fails) to suppress
+# them. Affirmative-only constraints score 116/120 vs negative-only 72/120
+# in standardized intent-matching benchmarks across diffusion architectures.
+#
+# Strategy: replace mixed pos/neg anchors ("Not a collage, not a grid...")
+# with purely affirmative phrasings. Used for providers that DROP negative
+# prompts entirely (Seedream / Recraft / Grok / Wan / Imagen) — for those
+# providers, anti-collage signal MUST live inside the positive prompt or it
+# never reaches the model.
+
+# Short universal anchor — prepended to every Stage-2 prompt regardless of
+# provider. Sets the "one cohesive image" intent from the first token.
+_AFFIRMATIVE_SINGLE_IMAGE_ANCHOR = "ONE single unified image, one cohesive composition. "
+
+# Stronger anchor — applied when the prompt's negative_prompt contains
+# anti-collage triggers AND the provider drops negatives. Pure affirmative
+# language, zero "no/not" particles.
+_AFFIRMATIVE_NO_COLLAGE_ANCHOR = (
+    "A single continuous photograph spanning the entire canvas as one unbroken scene, "
+    "one cohesive composition rendered as one committed final design, "
+    "presented as a finished publication-ready artwork. "
+)
+
+# Trigger words that indicate the caller's negative_prompt is anti-collage.
+# When ANY of these appear in the negative, the provider-side fold-in
+# replaces the negatives with the strong affirmative anchor.
+_ANTI_COLLAGE_TRIGGER_WORDS = (
+    "collage", "panel", "grid", "option", "pitch deck", "design sheet",
+)
+
+
+def has_anti_collage_signal(negative_prompt: str) -> bool:
+    """Return True if the negative_prompt contains anti-collage trigger words."""
+    if not negative_prompt:
+        return False
+    lower = negative_prompt.lower()
+    return any(w in lower for w in _ANTI_COLLAGE_TRIGGER_WORDS)
+
+
 # Sentence-level killer — if a sentence/clause mentions any of these multi-variant
 # trigger words, drop the WHOLE sentence. Splits on '.', '!', '?', and newlines.
 # These words almost always mean the LLM is describing a layout with multiple
