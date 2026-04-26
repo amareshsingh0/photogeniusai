@@ -1,0 +1,289 @@
+# PhotoGenius AI — Upgrade Plan
+*Based on: "From Orchestration to Oracles" (PDF) + "Production-Ready Layered Intelligence System" (Docx)*
+*Exclusions: Text-on-image pipeline, Model selection/routing control*
+
+---
+
+## Context
+
+Both research documents analyze the same root problem: the Simple Engine (single Haiku call) is fast and cheap but architecturally immature. It has no structured output guarantee, no intelligent retry, no telemetry, and no consistency system. The documents identify specific, high-ROI fixes that do NOT require changing models or adding text rendering.
+
+Current state: pipeline works but is fragile — one bad Haiku JSON output silently breaks the entire generation. No observability. Retry is dumb (same prompt, same provider). Quality score computed but not used to improve output.
+
+Goal: Make the existing pipeline production-grade without adding new providers or touching model routing.
+
+---
+
+## Priority 1 — Structured Output Validation (Pydantic + Instructor)
+
+**Problem:** `simple_engine.enrich()` uses loose JSON parsing (`_parse_json_loose()`). If Haiku drops `ad_copy`, returns malformed JSON, or omits required fields — the pipeline silently fails. Typography bucket gets no text guidance → blurred/missing headlines. No retries, no error surfacing.
+
+**Fix:** Replace loose JSON parsing with Instructor library + Pydantic schema enforcement.
+
+```python
+from instructor import from_anthropic
+from pydantic import BaseModel, Field
+
+class SimpleEngineOutput(BaseModel):
+    prompt: str = Field(..., min_length=10)
+    negative_prompt: str = Field(default="")
+    intent: str = Field(default="general")
+    aspect_hint: str = Field(default="square_hd")
+    ad_copy: dict | None = Field(default=None)
+
+client = from_anthropic(anthropic.Anthropic())
+# Instructor auto-retries with validation error appended to context
+result = client.messages.create(
+    model="claude-haiku-4-5-20251001",
+    response_model=SimpleEngineOutput,
+    max_retries=2,  # auto-corrects malformed output
+    ...
+)
+```
+
+**Why:** Research shows this is the single highest-ROI fix. Converts a volatile text generator into a deterministic state-machine node. Eliminates the entire category of "Haiku forgot ad_copy" failures.
+
+**Files to change:**
+- `apps/api/app/services/smart/simple_prompt_engine.py` — replace `_parse_json_loose()` + manual JSON handling with Pydantic model + Instructor client
+- Add `instructor` to `apps/api/requirements.txt`
+
+**Expected impact:** Eliminates silent structural failures. Typography generations with missing headlines: 0.
+
+---
+
+## Priority 2 — Affirmative Prompt Transformation (P-Distill)
+
+**Problem:** Current anti-collage defense uses negative prompts ("no collage, no grid, no panels"). Research shows this causes "Reverse Activation" — the text encoder tokenizes "collage" and injects its feature vector into cross-attention. The model generates the concept in early denoising timesteps, then tries to suppress it. Affirmative constraints score 116/120 vs negative-only 72/120 in intent matching tests.
+
+**Fix:** Convert negative constraints to affirmative visual equivalents before sending to any provider.
+
+Conversion table (add to `multi_provider_client.py` or `simple_prompt_engine.py`):
+
+| Negative (current) | Affirmative replacement |
+|--------------------|------------------------|
+| no collage, no grid | A single continuous unbroken photographic scene spanning the entire canvas |
+| no multi-panel | One cohesive unified composition with no divisions |
+| no extra fingers, no deformed hands | Perfectly formed anatomical hands with five distinct fingers and symmetrical proportions |
+| no blurry background | Razor-sharp environmental depth with intentional bokeh only at focal point |
+| no text artifacts | Clean image surface with zero embedded glyphs or stray characters |
+
+**Implementation:** Add `_to_affirmative(negative_prompt: str) -> str` function in `simple_prompt_engine.py`. Call it before merging `_ANTI_COLLAGE_NEGATIVES` into the positive prompt anchor. Keep negative_prompt field for providers that honor it (Ideogram, Flux) — run both affirmative positive AND negative for those.
+
+**Files to change:**
+- `apps/api/app/services/smart/simple_prompt_engine.py` — add `_to_affirmative()`, update `_ANTI_COLLAGE_NEGATIVES` to have affirmative equivalents
+- `apps/api/app/api/v1/endpoints/generate_stream.py` — use affirmative version in single-image anchor
+
+**Expected impact:** Reduces collage/grid output on fal.ai providers (Seedream, Wan) where negative prompts are ignored anyway.
+
+---
+
+## Priority 3 — Intelligent Retry Logic
+
+**Problem:** Current retry is "provider failover" (try fal → try google → try wavespeed). If quality score is low, nothing happens — the bad image is returned to the user. Research calls this "destructive retry" — same prompt + same parameters = same failure.
+
+**Fix:** When quality score < threshold after generation, trigger an intelligent retry that modifies the approach:
+
+```python
+async def _intelligent_retry(
+    original_prompt: str,
+    quality_score: float,
+    failure_reason: str,  # from quality_critic feedback
+    model_key: str,
+    attempt: int
+) -> dict:
+    if attempt >= 2:
+        return None  # give up, return best-effort
+
+    if failure_reason in ("collage_detected", "multi_panel"):
+        # Strengthen single-image anchor
+        retry_prompt = (
+            "A single continuous scene, one photograph, entire canvas used. "
+            + original_prompt
+        )
+        retry_negative = original_prompt  # treat nothing extra
+    
+    elif failure_reason == "anatomy_failure":
+        retry_prompt = original_prompt + ", anatomically correct, natural pose"
+    
+    elif failure_reason == "low_quality":
+        # Switch to next provider in chain (already done in multi_client)
+        return None  # let provider failover handle it
+    
+    return await multi_client.generate(
+        model_key=model_key,
+        prompt=retry_prompt,
+        ...
+    )
+```
+
+**Circuit Breaker:** If a provider fails 3+ times in a 5-minute window → mark as degraded, skip it in routing until 10-minute cooldown passes. Log to PM2.
+
+**Files to change:**
+- `apps/api/app/api/v1/endpoints/generate_stream.py` — add retry loop after quality gate, max 2 attempts
+- `apps/api/app/services/smart/quality_critic.py` — expose `failure_reason` string alongside score
+- `apps/api/app/services/external/multi_provider_client.py` — add circuit breaker state (in-memory dict, keyed by provider name)
+
+**Expected impact:** Images that currently score < 0.4 quality and are returned as-is — retried with modified prompt → better output. Estimated +15% usable rate.
+
+---
+
+## Priority 4 — Telemetry Data Flywheel
+
+**Problem:** Generation logs exist (`[FINAL-PROMPT]` tags in PM2) but are unstructured text. No way to analyze: which prompts fail most, which providers produce best quality scores, which buckets have lowest scores, what Haiku output lengths look like.
+
+**Fix:** Log a structured JSON record per generation to a dedicated log file (or DB table). Do NOT change the DB schema yet — append-only JSON log file is fine for now.
+
+```python
+import json, time
+
+generation_record = {
+    "trace_id":       trace_id,
+    "timestamp":      time.time(),
+    "user_prompt":    req.prompt[:200],
+    "bucket":         bucket,
+    "tier":           quality,
+    "engine":         params.get("_source"),
+    "model_key":      model_key,
+    "provider":       provider_used,
+    "haiku_tokens":   simple_out.get("_tokens"),
+    "haiku_ms":       int(simple_out.get("_elapsed", 0) * 1000),
+    "prompt_words":   len(enhanced_prompt.split()),
+    "quality_score":  quality_score,
+    "failure_reason": failure_reason or None,
+    "retry_count":    retry_count,
+    "total_ms":       int((time.time() - start_time) * 1000),
+    "user_rating":    None,  # filled later via feedback endpoint
+}
+
+with open("/home/ubuntu/photogenius_telemetry.jsonl", "a") as f:
+    f.write(json.dumps(generation_record) + "\n")
+```
+
+**Also:** Expose a `POST /api/v1/feedback/{generation_id}` endpoint that accepts `rating: 1-5` and writes it back to the JSONL log. This creates a feedback learning loop — over time, correlate low ratings with specific buckets/providers/prompt patterns.
+
+**Files to change:**
+- `apps/api/app/api/v1/endpoints/generate_stream.py` — add telemetry write at end of generation
+- `apps/api/app/api/v1/endpoints/` — add `feedback.py` endpoint
+- `apps/web/app/(dashboard)/generate/page.tsx` — wire existing rating component to POST feedback
+
+**Expected impact:** After 2 weeks of data, can identify exactly which scenarios produce bad output. Evidence-based optimization instead of guesswork.
+
+---
+
+## Priority 5 — Exponential Backoff for WaveSpeed Polling
+
+**Problem:** WaveSpeed uses fixed 2s polling, 60 attempts max. Under concurrent load, multiple requests polling simultaneously creates a "thundering herd" — synchronized requests saturate the API rate limit, causing cascading 429s and timeouts.
+
+**Fix:** Replace fixed polling with exponential backoff + jitter.
+
+```python
+async def _poll_wavespeed(task_id: str, max_wait: int = 120) -> dict:
+    delay = 2.0
+    elapsed = 0.0
+    while elapsed < max_wait:
+        await asyncio.sleep(delay + random.uniform(0, 0.5))  # jitter
+        elapsed += delay
+        result = await _check_wavespeed_result(task_id)
+        if result["status"] in ("completed", "succeeded", "failed", "error"):
+            return result
+        delay = min(delay * 1.5, 10.0)  # cap at 10s intervals
+    raise TimeoutError(f"WaveSpeed task {task_id} timed out after {max_wait}s")
+```
+
+**Files to change:**
+- `apps/api/app/services/external/multi_provider_client.py` — `_call_wavespeed()` polling loop
+
+**Expected impact:** Eliminates thundering herd under concurrent load. No functional change to output quality.
+
+---
+
+## Priority 6 — Style Consistency (Reference-Based Style Locking)
+
+**Problem:** Users have no way to say "generate in the same style as this image." Each generation is stateless. For brand campaigns, marketers need visual consistency across assets. Currently Flux Kontext handles reference images for editing but there's no "style lock" for new generations.
+
+**Fix (Phase 1 — simple):** When user uploads a reference image AND prompt has no explicit style → extract a style description from the reference image using Gemini Vision, inject it into the Haiku system prompt as a "style anchor".
+
+```python
+async def _extract_style_description(image_url: str) -> str:
+    """Use Gemini Vision to describe the visual style of a reference image."""
+    result = await gemini_client.generate_content([
+        image_url,
+        "Describe only the visual style: color palette, lighting mood, texture, composition style, atmosphere. "
+        "2-3 sentences max. Do not describe subject matter."
+    ])
+    return result.text[:300]
+```
+
+This style description is then passed to `simple_engine.enrich()` as part of `brand_kit` or a new `style_reference_description` field.
+
+**Files to change:**
+- `apps/api/app/services/smart/simple_prompt_engine.py` — accept `style_reference_description` in enrich(), inject into user message
+- `apps/api/app/api/v1/endpoints/generate_stream.py` — if `req.reference_image_url` present AND no explicit style → call `_extract_style_description()` first
+
+**Expected impact:** Brand consistency for repeat users. Campaign assets look cohesive without user having to describe their style in words.
+
+---
+
+## Priority 7 — Pre-Output Validation
+
+**Problem:** No check before sending payload to provider. Token limit conflicts, aspect ratio mismatches, and empty prompts reach the API and fail with cryptic errors. Failures are logged but user sees generic error message.
+
+**Fix:** Add a `_validate_payload(prompt, negative, model_key, dims) -> list[str]` function that runs before every provider call and returns a list of issues. If critical issues found → fix automatically (truncate, substitute) and log. If unfixable → fail fast with clear error.
+
+```python
+def _validate_payload(prompt, negative, model_key, width, height):
+    issues = []
+    # Token estimate (rough: 1 token ≈ 4 chars)
+    if len(prompt) > 3800:  # ~950 tokens, safe for all providers
+        issues.append(f"prompt_too_long: {len(prompt)} chars")
+    if not prompt.strip():
+        issues.append("prompt_empty")
+    if width * height > 2048 * 2048 and model_key not in _HIGH_RES_MODELS:
+        issues.append(f"resolution_exceeds_model_limit: {width}x{height}")
+    return issues
+```
+
+**Files to change:**
+- `apps/api/app/services/external/multi_provider_client.py` — add `_validate_payload()`, call before `_build_fal_payload()` / `_call_google()` / `_call_wavespeed()`
+
+**Expected impact:** Eliminates cryptic provider errors. Faster failure detection. Better error messages to frontend.
+
+---
+
+## What is NOT in this plan (intentional)
+
+- **Text writing on image** — separate feature, different implementation path, user will decide separately
+- **Model selection / routing control** — user handles this manually by testing new models; BUCKET_MODEL_MAP stays as-is
+- **New providers** — no 4th provider, rule is absolute
+- **ControlNet / spatial conditioning** — requires local GPU, not API-call architecture
+- **IP-Adapter / CharacterFactory** — requires model fine-tuning, out of scope for API-call stack
+
+---
+
+## Implementation Order
+
+| Priority | Feature | Effort | Impact |
+|----------|---------|--------|--------|
+| 1 | Pydantic + Instructor structured output | 2-3 hours | Eliminates silent failures |
+| 2 | Affirmative prompt transformation | 1-2 hours | Reduces collage output |
+| 3 | Intelligent retry logic | 3-4 hours | +15% usable rate |
+| 4 | Telemetry flywheel | 2-3 hours | Enables data-driven decisions |
+| 5 | WaveSpeed exponential backoff | 30 min | Stability under load |
+| 6 | Style consistency via reference | 3-4 hours | Brand campaign use case |
+| 7 | Pre-output validation | 1-2 hours | Better error handling |
+
+**Total estimated effort: ~2-3 days of focused work**
+
+Start with Priority 1 (Pydantic) — it's foundational. Everything else builds on reliable structured output.
+
+---
+
+## Verification After Each Priority
+
+- **Priority 1:** Run `python scripts/debug_pipeline.py "sunscreen ad"` — JSON parse error should never occur even with intentionally malformed Haiku response
+- **Priority 2:** Generate 5 typography prompts, check if "grid" / "collage" language appears in final prompt before provider call (grep `[FINAL-PROMPT]` in PM2 logs)
+- **Priority 3:** Manually set quality threshold to 1.0 (always fail), confirm retry fires and modifies prompt, confirm circuit breaker trips after 3 failures
+- **Priority 4:** Generate 10 images, confirm JSONL file at `/home/ubuntu/photogenius_telemetry.jsonl` has 10 records with all fields populated
+- **Priority 5:** Watch PM2 logs during 5 simultaneous WaveSpeed generations — confirm no 429 errors, confirm polling intervals are non-uniform
+- **Priority 6:** Upload a reference image, generate a new prompt without style keywords, confirm Gemini-extracted style appears in `[FINAL-PROMPT]` log
+- **Priority 7:** Send a 5000-char prompt, confirm it's flagged and truncated before hitting provider

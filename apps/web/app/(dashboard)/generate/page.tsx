@@ -865,9 +865,6 @@ export default function GeneratePage() {
 
   // Edit the generated image — open advanced edit modal
   const handleEditGeneratedImage = () => {
-    // Unmissable debug signal — REMOVE after confirming click fires
-    // eslint-disable-next-line no-alert
-    window.alert("✅ Edit button clicked! image_url=" + (result?.image_url ? "present" : "MISSING"))
     console.log("[EDIT-BTN] click fired. result:", result, "image_url:", result?.image_url)
     toast({ title: "Opening editor…", description: "Loading edit tools" })
     if (!result?.image_url) {

@@ -41,7 +41,9 @@ import logging
 import os
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
+
+from pydantic import BaseModel, Field, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,79 @@ _CLAUDE_MODEL = os.getenv("SIMPLE_ENGINE_MODEL", "claude-haiku-4-5-20251001")
 _MAX_TOKENS   = int(os.getenv("SIMPLE_ENGINE_MAX_TOKENS", "1400"))
 _TEMPERATURE  = float(os.getenv("SIMPLE_ENGINE_TEMPERATURE", "0.7"))
 _USE_CACHING  = os.getenv("USE_PROMPT_CACHING", "true").lower() != "false"
+# Instructor auto-retries up to N times when Haiku violates the schema
+# (each retry appends the validation error to the conversation, so the model
+# self-corrects). 2 retries = 3 total attempts which is plenty.
+_INSTRUCTOR_MAX_RETRIES = int(os.getenv("SIMPLE_ENGINE_MAX_RETRIES", "2"))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pydantic schema — Haiku output shape (Priority 1: structured output validation)
+# ─────────────────────────────────────────────────────────────────────────────
+# Replaces the old loose-JSON parsing. Instructor wraps the Anthropic client
+# with tool-calling-based schema enforcement. If Haiku returns malformed JSON,
+# missing fields, or wrong types, Instructor auto-retries with the validation
+# error injected into the conversation — Haiku self-corrects within max_retries.
+#
+# This eliminates the entire "Haiku silently dropped ad_copy / returned bad
+# JSON" failure category. Typography generations with missing headlines: gone.
+
+# Aspect hints supported by generate_stream's _ASPECT_DIMS map.
+AspectHint = Literal[
+    "square_hd",
+    "portrait_4_3",
+    "landscape_4_3",
+    "portrait_9_16",
+    "landscape_16_9",
+]
+
+
+class AdCopy(BaseModel):
+    """On-image text rendered by the model. Empty strings when not relevant."""
+
+    headline: str = Field(default="", max_length=200)
+    subhead:  str = Field(default="", max_length=400)
+    cta:      str = Field(default="", max_length=120)
+
+
+class SimpleEngineOutput(BaseModel):
+    """Strict schema for Haiku's output. Enforced via Instructor + Pydantic."""
+
+    intent: str = Field(
+        default="general",
+        max_length=80,
+        description=(
+            "Short label classifying the image — e.g. birthday_wishes, "
+            "diwali_wishes, product_ad, social_post, hoarding, poster, "
+            "portrait, scene, logo, sale_ad."
+        ),
+    )
+    prompt: str = Field(
+        ...,
+        min_length=20,
+        max_length=4000,
+        description=(
+            "One flowing image-generation prompt, 80-200 words for typography, "
+            "60-140 for photoreal. NO Option/Version labels, NO bracketed "
+            "placeholders, NO Headline:/Body:/CTA: brief-doc labels."
+        ),
+    )
+    negative_prompt: str = Field(
+        default="",
+        max_length=1000,
+        description="Comma-separated negatives tailored to the image.",
+    )
+    aspect_hint: AspectHint = Field(
+        default="square_hd",
+        description="Best aspect for this image. Inferred from intent.",
+    )
+    ad_copy: Optional[AdCopy] = Field(
+        default=None,
+        description=(
+            "Populated when the image has on-image text (ads, posters, "
+            "wishes, hoardings). Null for pure scenes/portraits."
+        ),
+    )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Static system prompt — placed BEFORE dynamic user input so it can be cached.
@@ -673,19 +748,27 @@ def _parse_json_loose(text: str) -> Dict[str, Any]:
 
 
 class SimplePromptEngine:
-    """Single-call Haiku 4.5 prompt enricher."""
+    """Single-call Haiku 4.5 prompt enricher with Pydantic-validated output."""
 
     def __init__(self):
         self._model = _CLAUDE_MODEL
-        self._client = None  # lazy
+        self._client = None  # lazy — Instructor-wrapped Anthropic client
 
     def _get_client(self):
+        """Return an Instructor-wrapped Anthropic client.
+
+        Instructor patches the client so calls with `response_model=...` enforce
+        the Pydantic schema via Anthropic tool-calling. Schema violations trigger
+        automatic retries (max_retries) with the validation error appended to the
+        conversation — the model corrects its own output before we see it.
+        """
         if self._client is None:
             import anthropic
+            import instructor
             key = os.getenv("ANTHROPIC_API_KEY", "").strip()
             if not key:
                 raise RuntimeError("ANTHROPIC_API_KEY not set — required for simple_prompt_engine")
-            self._client = anthropic.Anthropic(api_key=key)
+            self._client = instructor.from_anthropic(anthropic.Anthropic(api_key=key))
         return self._client
 
     async def enrich(
@@ -709,40 +792,61 @@ class SimplePromptEngine:
             user_msg = _build_user_message(
                 user_prompt, bucket, tier, width, height, style, brand_kit,
             )
-            text = await asyncio.to_thread(self._call_sync, user_msg)
-            data = _parse_json_loose(text)
-            raw_prompt = (data.get("prompt") or user_prompt).strip()
-            clean_prompt = _sanitize_prompt(raw_prompt)
-            raw_neg = (data.get("negative_prompt") or "").strip()
+            # Instructor returns a validated Pydantic instance (or raises after
+            # max_retries exhausts). No more loose-JSON parsing.
+            output: SimpleEngineOutput = await asyncio.to_thread(self._call_sync, user_msg)
+
+            clean_prompt = _sanitize_prompt(output.prompt.strip())
+            raw_neg = output.negative_prompt.strip()
             combined_neg = f"{raw_neg}, {_ANTI_COLLAGE_NEGATIVES}" if raw_neg else _ANTI_COLLAGE_NEGATIVES
+
+            ad_copy_dict: Optional[Dict[str, str]] = None
+            if output.ad_copy is not None:
+                ad_copy_dict = output.ad_copy.model_dump()
+
             return {
                 "prompt":          clean_prompt,
                 "negative_prompt": combined_neg,
-                "intent":          (data.get("intent") or "general").strip(),
-                "aspect_hint":     (data.get("aspect_hint") or "square_hd").strip(),
-                "ad_copy":         data.get("ad_copy"),
+                "intent":          output.intent.strip() or "general",
+                "aspect_hint":     output.aspect_hint,
+                "ad_copy":         ad_copy_dict,
                 "_elapsed":        time.time() - start,
                 "_source":         "simple_engine",
             }
+        except ValidationError as ve:
+            # Instructor exhausted retries — Haiku could not produce valid JSON
+            # even after self-correction. Log the schema errors and fall back.
+            logger.error(
+                "[simple-engine] Pydantic validation failed after %d retries: %s",
+                _INSTRUCTOR_MAX_RETRIES, ve.errors(),
+            )
+            print(f"[SIMPLE-ENGINE-VALIDATION-FAIL] {ve.errors()}", flush=True)
+            return self._fallback(user_prompt, start, f"validation_error: {ve.error_count()} issues")
         except Exception as e:
             logger.exception("[simple-engine] enrich failed: %s — falling back to raw prompt", e)
-            return {
-                "prompt":          user_prompt,
-                "negative_prompt": f"low-quality, blurry, distorted, watermark, extra fingers, {_ANTI_COLLAGE_NEGATIVES}",
-                "intent":          "general",
-                "aspect_hint":     "square_hd",
-                "ad_copy":         None,
-                "_elapsed":        time.time() - start,
-                "_source":         "simple_engine_fallback",
-                "_error":          str(e),
-            }
+            return self._fallback(user_prompt, start, str(e))
 
-    def _call_sync(self, user_msg: str) -> str:
-        """Single Claude call — runs in a worker thread via asyncio.to_thread."""
+    @staticmethod
+    def _fallback(user_prompt: str, start: float, error: str) -> Dict[str, Any]:
+        """Safe fallback so the pipeline never breaks on engine failure."""
+        return {
+            "prompt":          user_prompt,
+            "negative_prompt": f"low-quality, blurry, distorted, watermark, extra fingers, {_ANTI_COLLAGE_NEGATIVES}",
+            "intent":          "general",
+            "aspect_hint":     "square_hd",
+            "ad_copy":         None,
+            "_elapsed":        time.time() - start,
+            "_source":         "simple_engine_fallback",
+            "_error":          error,
+        }
+
+    def _call_sync(self, user_msg: str) -> SimpleEngineOutput:
+        """Single Claude call with Pydantic validation — runs in worker thread."""
         client = self._get_client()
 
         if _USE_CACHING:
-            # Static system prompt cached; user message stays dynamic
+            # Static system prompt cached; user message stays dynamic.
+            # Instructor passes through to Anthropic, so cache_control still works.
             system = [{
                 "type": "text",
                 "text": _SYSTEM_PROMPT,
@@ -751,23 +855,18 @@ class SimplePromptEngine:
         else:
             system = _SYSTEM_PROMPT
 
-        resp = client.messages.create(
+        # response_model + max_retries = automatic schema enforcement.
+        # If Haiku returns malformed output, Instructor re-prompts with the
+        # validation error appended, up to max_retries times.
+        return client.messages.create(
             model=self._model,
             max_tokens=_MAX_TOKENS,
             system=system,
             temperature=_TEMPERATURE,
             messages=[{"role": "user", "content": user_msg}],
+            response_model=SimpleEngineOutput,
+            max_retries=_INSTRUCTOR_MAX_RETRIES,
         )
-
-        text = ""
-        for block in resp.content:
-            if getattr(block, "type", None) == "text":
-                text += block.text
-
-        stop_reason = getattr(resp, "stop_reason", "unknown")
-        if stop_reason == "max_tokens":
-            logger.warning("[simple-engine] response TRUNCATED at max_tokens=%d", _MAX_TOKENS)
-        return text
 
 
 # Singleton
