@@ -47,29 +47,47 @@ Goal: Make the existing pipeline production-grade without adding new providers o
 
 ---
 
-## Priority 2 — Affirmative Prompt Transformation (P-Distill)
+## Priority 2 — Affirmative Prompt Transformation (P-Distill) ✅ DONE 2026-04-26
 
-**Problem:** Current anti-collage defense uses negative prompts ("no collage, no grid, no panels"). Research shows this causes "Reverse Activation" — the text encoder tokenizes "collage" and injects its feature vector into cross-attention. The model generates the concept in early denoising timesteps, then tries to suppress it. Affirmative constraints score 116/120 vs negative-only 72/120 in intent matching tests.
+**Problem:** Anti-collage defense was using mixed pos/neg anchors (`"ONE single unified image... Not a collage, not a grid, not multi-panel..."`) for providers that drop `negative_prompt` (Seedream, Recraft, Grok, Wan). Per research (From Orchestration to Oracles, p.4), this causes **Reverse Activation** — the text encoder tokenizes "collage / grid / multi-panel" and injects their feature vectors into early-denoising cross-attention. The diffusion model starts generating the negated layouts and then tries to suppress them. Affirmative-only constraints score 116/120 vs negative-only 72/120 in standardized intent-matching benchmarks.
 
-**Fix:** Convert negative constraints to affirmative visual equivalents before sending to any provider.
+**Implemented:**
 
-Conversion table (add to `multi_provider_client.py` or `simple_prompt_engine.py`):
+1. **Added two named affirmative anchors** in `simple_prompt_engine.py`:
+   - `_AFFIRMATIVE_SINGLE_IMAGE_ANCHOR` — short universal anchor (`"ONE single unified image, one cohesive composition. "`), prepended to every Stage-2 prompt regardless of provider.
+   - `_AFFIRMATIVE_NO_COLLAGE_ANCHOR` — stronger anchor (`"A single continuous photograph spanning the entire canvas as one unbroken scene, one cohesive composition rendered as one committed final design, presented as a finished publication-ready artwork. "`), used as fold-in for providers that drop negatives. **Zero `not`/`no` particles** — purely affirmative.
 
-| Negative (current) | Affirmative replacement |
-|--------------------|------------------------|
-| no collage, no grid | A single continuous unbroken photographic scene spanning the entire canvas |
-| no multi-panel | One cohesive unified composition with no divisions |
-| no extra fingers, no deformed hands | Perfectly formed anatomical hands with five distinct fingers and symmetrical proportions |
-| no blurry background | Razor-sharp environmental depth with intentional bokeh only at focal point |
-| no text artifacts | Clean image surface with zero embedded glyphs or stray characters |
+2. **Added `has_anti_collage_signal()` helper** to consolidate the trigger-word check (`collage / panel / grid / option / pitch deck / design sheet`) that was duplicated across `_build_fal_payload` and `_call_wavespeed`.
 
-**Implementation:** Add `_to_affirmative(negative_prompt: str) -> str` function in `simple_prompt_engine.py`. Call it before merging `_ANTI_COLLAGE_NEGATIVES` into the positive prompt anchor. Keep negative_prompt field for providers that honor it (Ideogram, Flux) — run both affirmative positive AND negative for those.
+3. **Replaced mixed anchors** at both fold-in sites in `multi_provider_client.py` (`_build_fal_payload` for Seedream/Recraft/Grok, and `_call_wavespeed` for Wan/Hunyuan/Grok). Old text:
+   ```
+   "ONE single unified image, one cohesive composition. Not a collage, not a grid,
+    not multi-panel, not a design sheet, not layout options A/B, not a brief document."
+   ```
+   New text:
+   ```
+   "A single continuous photograph spanning the entire canvas as one unbroken scene,
+    one cohesive composition rendered as one committed final design,
+    presented as a finished publication-ready artwork."
+   ```
 
-**Files to change:**
-- `apps/api/app/services/smart/simple_prompt_engine.py` — add `_to_affirmative()`, update `_ANTI_COLLAGE_NEGATIVES` to have affirmative equivalents
-- `apps/api/app/api/v1/endpoints/generate_stream.py` — use affirmative version in single-image anchor
+4. **`generate_stream.py` Stage-2** now imports the named constant instead of using an inline string — single source of truth for the anchor across the codebase.
 
-**Expected impact:** Reduces collage/grid output on fal.ai providers (Seedream, Wan) where negative prompts are ignored anyway.
+5. **`_ANTI_COLLAGE_NEGATIVES` retained** — providers that honor negatives (Ideogram, Flux) still receive them as defense-in-depth. Affirmative fold-in only fires for the no-negative providers.
+
+**Files modified:**
+- `apps/api/app/services/smart/simple_prompt_engine.py` — added 2 anchor constants, trigger words tuple, `has_anti_collage_signal()` helper
+- `apps/api/app/services/external/multi_provider_client.py` — replaced mixed anchors at lines 832 (`_call_wavespeed`) and 957 (`_build_fal_payload`)
+- `apps/api/app/api/v1/endpoints/generate_stream.py` — imports + uses named constant
+
+**Verification:** End-to-end debug pipeline tested on production server.
+- Ideogram path (honors negatives): short anchor + full negatives ✓
+- Seedream path (no negatives): `"A single continuous photograph spanning the entire canvas as one unbroken scene..."` confirmed in payload prompt prefix ✓
+- All 3 files pass AST syntax check.
+
+**Production deploy:** commit `9e9b0e4`. Confirmed via direct `_build_fal_payload(...)` invocation with Seedream model_id on server.
+
+**Impact achieved:** Reverse Activation eliminated for Seedream/Recraft/Grok/Wan/Hunyuan paths. Pitch-deck/grid output frequency expected to drop on these providers.
 
 ---
 
@@ -261,7 +279,7 @@ def _validate_payload(prompt, negative, model_key, width, height):
 | Priority | Feature | Effort | Impact | Status |
 |----------|---------|--------|--------|--------|
 | 1 | Pydantic + Instructor structured output | 2-3 hours | Eliminates silent failures | ✅ DONE 2026-04-26 |
-| 2 | Affirmative prompt transformation | 1-2 hours | Reduces collage output | 🚧 IN PROGRESS |
+| 2 | Affirmative prompt transformation | 1-2 hours | Reduces collage output | ✅ DONE 2026-04-26 |
 | 3 | Intelligent retry logic | 3-4 hours | +15% usable rate | ⏳ pending |
 | 4 | Telemetry flywheel | 2-3 hours | Enables data-driven decisions | ⏳ pending |
 | 5 | WaveSpeed exponential backoff | 30 min | Stability under load | ⏳ pending |
