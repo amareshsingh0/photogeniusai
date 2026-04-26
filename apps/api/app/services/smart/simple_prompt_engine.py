@@ -526,6 +526,7 @@ Notice: you stripped the messy phrasing, kept the spine (Bandra café, Sunday br
 When the output needs words on the image:
 - ALWAYS write the actual line. Never leave "a headline about X". Invent it.
 - Use straight double quotes for exact render: `"Mornings, Upgraded"`.
+- **NEVER leave empty quotes `""` inline.** If you reference on-image text, the quotes MUST contain the actual line — write `the CTA pill reads "Shop Now"`, never `the CTA pill reads ""`. Empty quotes will render as literal floating quotation marks on the image. Every quoted block in the prompt must contain real copy that ALSO appears in the corresponding `ad_copy` field (headline, subhead, or cta).
 - Keep headlines ≤ 8 words, subheads ≤ 14, CTA ≤ 4.
 - For wishes: write a warm specific line, not "Happy Birthday" generic. Think of what a thoughtful friend would write.
 - For ads: write a line that sells the feeling, not the feature. "Mornings, Upgraded" beats "Premium Coffee Machine".
@@ -735,6 +736,53 @@ def _sanitize_prompt(text: str) -> str:
     return text
 
 
+def _fill_empty_quotes_from_adcopy(prompt: str, ad_copy: Optional["AdCopy"]) -> str:
+    """Replace empty quote pairs `""` in prompt with matching ad_copy field.
+
+    Haiku occasionally writes `the CTA button reads ""` — putting the actual
+    CTA only in `ad_copy.cta` and forgetting to inline it. The image model then
+    renders literal floating quotation marks. We fix this by:
+
+      1. Finding each `""` pair in the prompt
+      2. Looking at the 80 chars BEFORE it for noun cues (cta/button → cta;
+         subhead/subtitle → subhead; default → headline)
+      3. Substituting the matching ad_copy text, OR dropping the empty quotes
+         entirely if no ad_copy field is available.
+
+    Idempotent — does nothing if prompt has no `""` pairs.
+    """
+    if not prompt or '""' not in prompt:
+        return prompt
+    original = prompt
+
+    def _pick_field(context_lower: str) -> str:
+        if ad_copy is None:
+            return ""
+        if any(k in context_lower for k in ("cta", "button", "pill", "call to action", "call-to-action")):
+            return (ad_copy.cta or "").strip()
+        if any(k in context_lower for k in ("subhead", "subtitle", "sub-head", "sub-headline", "supporting line")):
+            return (ad_copy.subhead or "").strip()
+        # Default: assume the empty quote was meant for the headline
+        return (ad_copy.headline or "").strip()
+
+    def _replace(match):
+        start = max(0, match.start() - 80)
+        context = original[start:match.start()].lower()
+        text = _pick_field(context)
+        return f'"{text}"' if text else ""
+
+    cleaned = re.sub(r'""', _replace, prompt)
+    # Tidy up any double spaces / orphan punctuation left by drops
+    cleaned = re.sub(r"  +", " ", cleaned)
+    cleaned = re.sub(r" ([,.;:])", r"\1", cleaned).strip()
+
+    if cleaned != original:
+        dropped = original.count('""') - cleaned.count('""')
+        logger.info("[simple-engine] filled %d empty-quote pairs from ad_copy", dropped)
+        print(f"[EMPTY-QUOTE-FIX] filled/dropped {dropped} empty quote pairs", flush=True)
+    return cleaned
+
+
 def _parse_json_loose(text: str) -> Dict[str, Any]:
     """Extract a JSON object from the model output, tolerating stray fences."""
     cleaned = _JSON_FENCE_RE.sub("", text).strip()
@@ -796,7 +844,11 @@ class SimplePromptEngine:
             # max_retries exhausts). No more loose-JSON parsing.
             output: SimpleEngineOutput = await asyncio.to_thread(self._call_sync, user_msg)
 
-            clean_prompt = _sanitize_prompt(output.prompt.strip())
+            # Fill any empty-quote pairs (`""`) Haiku left inline using ad_copy
+            # before sanitization — keeps the actual headline/subhead/cta in the
+            # rendered image instead of literal floating quotation marks.
+            filled_prompt = _fill_empty_quotes_from_adcopy(output.prompt.strip(), output.ad_copy)
+            clean_prompt = _sanitize_prompt(filled_prompt)
             raw_neg = output.negative_prompt.strip()
             combined_neg = f"{raw_neg}, {_ANTI_COLLAGE_NEGATIVES}" if raw_neg else _ANTI_COLLAGE_NEGATIVES
 
