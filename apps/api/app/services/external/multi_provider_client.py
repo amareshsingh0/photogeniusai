@@ -64,6 +64,126 @@ _WAVESPEED_MAX_POLL_DELAY     = float(os.getenv("WAVESPEED_MAX_POLL_DELAY",     
 _WAVESPEED_POLL_JITTER        = float(os.getenv("WAVESPEED_POLL_JITTER",        "0.5"))
 _WAVESPEED_MAX_TOTAL_WAIT     = float(os.getenv("WAVESPEED_MAX_TOTAL_WAIT",     "120.0"))
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pre-output validation (Priority 7)
+# ─────────────────────────────────────────────────────────────────────────────
+# Catch payload defects BEFORE they hit a provider — saves a network round-trip
+# and a cryptic provider error. Auto-fix where the fix is unambiguous (clamp
+# steps, default invalid sizes, truncate too-long prompts at sentence boundary).
+# Hard-fail on unfixable issues (empty prompt) so the caller can surface a
+# clean error to the user.
+_VALID_IMAGE_SIZES = frozenset({
+    "square_hd",
+    "portrait_4_3",
+    "landscape_4_3",
+    "portrait_9_16",
+    "landscape_16_9",
+})
+
+# Conservative byte budgets — keep all providers happy.
+# fal.ai / WaveSpeed / Imagen all accept up to ~4000 chars in practice.
+_MAX_PROMPT_CHARS = int(os.getenv("MAX_PROMPT_CHARS", "3800"))
+_MAX_NEGATIVE_PROMPT_CHARS = int(os.getenv("MAX_NEGATIVE_PROMPT_CHARS", "1500"))
+
+
+def _truncate_at_sentence(text: str, max_chars: int) -> str:
+    """Cut text to <= max_chars, preferring the last sentence terminator."""
+    if len(text) <= max_chars:
+        return text
+    cut = text[:max_chars]
+    # Prefer cutting at the last . ! ? — if found in the second half of the cut.
+    last_term = max(cut.rfind("."), cut.rfind("!"), cut.rfind("?"))
+    if last_term > max_chars // 2:
+        return cut[: last_term + 1]
+    # Fallback: cut at last whitespace
+    last_space = cut.rfind(" ")
+    if last_space > max_chars // 2:
+        return cut[:last_space].rstrip() + "..."
+    return cut + "..."
+
+
+def _validate_and_normalize_payload(
+    prompt: str,
+    negative_prompt: str,
+    num_images: int,
+    image_size: str,
+    num_inference_steps: int,
+    guidance_scale: float,
+) -> Dict:
+    """Validate + auto-fix payload values before provider call.
+
+    Returns a dict with:
+        ok            (bool)  — False if a hard failure occurred (no auto-fix)
+        error         (str)   — populated when ok=False
+        warnings      (list)  — auto-fixes applied (logged; non-fatal)
+        prompt        (str)   — possibly truncated
+        negative_prompt (str) — possibly truncated
+        num_images    (int)   — clamped to [1, 4]
+        image_size    (str)   — defaulted to square_hd if invalid
+        num_inference_steps (int) — clamped to [1, 100]
+        guidance_scale (float) — clamped to [0.0, 20.0]
+    """
+    warnings: List[str] = []
+
+    # Hard failure: empty prompt
+    if not prompt or not prompt.strip():
+        return {
+            "ok":        False,
+            "error":     "prompt_empty",
+            "warnings":  [],
+        }
+
+    cleaned_prompt = prompt.strip()
+    if len(cleaned_prompt) > _MAX_PROMPT_CHARS:
+        original_len = len(cleaned_prompt)
+        cleaned_prompt = _truncate_at_sentence(cleaned_prompt, _MAX_PROMPT_CHARS)
+        warnings.append(f"prompt truncated {original_len}→{len(cleaned_prompt)} chars")
+
+    cleaned_negative = (negative_prompt or "").strip()
+    if len(cleaned_negative) > _MAX_NEGATIVE_PROMPT_CHARS:
+        original_len = len(cleaned_negative)
+        # Negatives are comma-separated lists — cut at last comma in safe range
+        cut = cleaned_negative[:_MAX_NEGATIVE_PROMPT_CHARS]
+        last_comma = cut.rfind(",")
+        if last_comma > _MAX_NEGATIVE_PROMPT_CHARS // 2:
+            cleaned_negative = cut[:last_comma].rstrip()
+        else:
+            cleaned_negative = cut.rstrip()
+        warnings.append(f"negative_prompt truncated {original_len}→{len(cleaned_negative)} chars")
+
+    # Clamp num_images to [1, 4]
+    clamped_num_images = max(1, min(int(num_images or 1), 4))
+    if clamped_num_images != num_images:
+        warnings.append(f"num_images clamped {num_images}→{clamped_num_images}")
+
+    # Default invalid image_size to square_hd
+    clean_size = image_size if image_size in _VALID_IMAGE_SIZES else "square_hd"
+    if clean_size != image_size:
+        warnings.append(f"image_size invalid ({image_size!r}), defaulted to square_hd")
+
+    # Clamp num_inference_steps to [1, 100]
+    clamped_steps = max(1, min(int(num_inference_steps or 20), 100))
+    if clamped_steps != num_inference_steps:
+        warnings.append(f"num_inference_steps clamped {num_inference_steps}→{clamped_steps}")
+
+    # Clamp guidance_scale to [0.0, 20.0]
+    clamped_guidance = max(0.0, min(float(guidance_scale or 7.5), 20.0))
+    if abs(clamped_guidance - guidance_scale) > 0.01:
+        warnings.append(f"guidance_scale clamped {guidance_scale}→{clamped_guidance}")
+
+    return {
+        "ok":                  True,
+        "error":               None,
+        "warnings":            warnings,
+        "prompt":              cleaned_prompt,
+        "negative_prompt":     cleaned_negative,
+        "num_images":          clamped_num_images,
+        "image_size":          clean_size,
+        "num_inference_steps": clamped_steps,
+        "guidance_scale":      clamped_guidance,
+    }
+
 logger = logging.getLogger(__name__)
 
 
@@ -607,6 +727,31 @@ class MultiProviderClient:
         chain = MODEL_PROVIDER_CHAIN.get(model_key)
         if not chain:
             return self._error(requested_model_key, f"Unknown model_key: {requested_model_key}", 0.0)
+
+        # Pre-output validation — catch payload defects before any provider call
+        validated = _validate_and_normalize_payload(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_images=num_images,
+            image_size=image_size,
+            num_inference_steps=num_inference_steps,
+            guidance_scale=guidance_scale,
+        )
+        if not validated["ok"]:
+            logger.error("[multi] payload validation FAILED: %s", validated["error"])
+            return self._error(requested_model_key, f"validation: {validated['error']}", 0.0)
+        if validated["warnings"]:
+            for w in validated["warnings"]:
+                logger.warning("[multi] payload auto-fix: %s", w)
+            print(f"[VALIDATION] applied {len(validated['warnings'])} auto-fixes: "
+                  f"{'; '.join(validated['warnings'])}", flush=True)
+        # Use the normalized values for the rest of the call
+        prompt              = validated["prompt"]
+        negative_prompt     = validated["negative_prompt"]
+        num_images          = validated["num_images"]
+        image_size          = validated["image_size"]
+        num_inference_steps = validated["num_inference_steps"]
+        guidance_scale      = validated["guidance_scale"]
 
         last_error = "No providers available"
         for provider, model_id, cost_usd in chain:

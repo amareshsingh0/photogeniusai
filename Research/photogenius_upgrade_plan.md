@@ -220,7 +220,9 @@ with open("/home/ubuntu/photogenius_telemetry.jsonl", "a") as f:
 
 **Verification:** AST syntax check pass. Schedule simulation confirms 15 polls vs 60 (75% reduction in API call pressure) over the same ~120s window. Fast-finishing tasks (5-10s) still caught early at poll 2-3.
 
-**Production deploy:** pending (will be in next push).
+**Production deploy:** commit `990d9d9` + debug-script sync `5ed4bd9`.
+
+**End-to-end verification (2026-04-26):** Real WaveSpeed API call (`wan_2_7`, $0.03 cost) succeeded with the new exponential-backoff polling — image URL returned, no timeout, no errors. Functional path confirmed end-to-end.
 
 **Impact achieved:** 4× fewer WaveSpeed API requests per generation, ±0.5s jitter desyncs concurrent polling. No change to user-facing latency for normal-completion tasks.
 
@@ -253,29 +255,39 @@ This style description is then passed to `simple_engine.enrich()` as part of `br
 
 ---
 
-## Priority 7 — Pre-Output Validation
+## Priority 7 — Pre-Output Validation ✅ DONE 2026-04-27
 
-**Problem:** No check before sending payload to provider. Token limit conflicts, aspect ratio mismatches, and empty prompts reach the API and fail with cryptic errors. Failures are logged but user sees generic error message.
+**Problem:** No check before sending payload to provider. Token-limit conflicts, invalid `image_size` strings, out-of-range steps/guidance, and empty prompts reached the API and failed with cryptic errors. Failures were logged but the user saw a generic error message.
 
-**Fix:** Add a `_validate_payload(prompt, negative, model_key, dims) -> list[str]` function that runs before every provider call and returns a list of issues. If critical issues found → fix automatically (truncate, substitute) and log. If unfixable → fail fast with clear error.
+**Implemented:**
 
-```python
-def _validate_payload(prompt, negative, model_key, width, height):
-    issues = []
-    # Token estimate (rough: 1 token ≈ 4 chars)
-    if len(prompt) > 3800:  # ~950 tokens, safe for all providers
-        issues.append(f"prompt_too_long: {len(prompt)} chars")
-    if not prompt.strip():
-        issues.append("prompt_empty")
-    if width * height > 2048 * 2048 and model_key not in _HIGH_RES_MODELS:
-        issues.append(f"resolution_exceeds_model_limit: {width}x{height}")
-    return issues
-```
+1. **Added `_validate_and_normalize_payload()`** module-level function in `multi_provider_client.py`. Returns a dict with `ok`, `error`, `warnings`, and the cleaned/clamped values. Hard-fails on unfixable issues (empty prompt); auto-fixes on everything else with a logged warning.
 
-**Files to change:**
-- `apps/api/app/services/external/multi_provider_client.py` — add `_validate_payload()`, call before `_build_fal_payload()` / `_call_google()` / `_call_wavespeed()`
+2. **Auto-fix rules (no provider round-trip needed):**
+   - **Empty/whitespace prompt** → hard fail (`error="prompt_empty"`)
+   - **Prompt > 3800 chars** → truncate at last sentence terminator (`. ! ?`) in safe zone, fallback to whitespace
+   - **Negative > 1500 chars** → truncate at last comma (negatives are comma-separated)
+   - **`num_images` outside [1,4]** → clamp
+   - **`image_size` not in valid set** → default to `square_hd`
+   - **`num_inference_steps` outside [1,100]** → clamp
+   - **`guidance_scale` outside [0.0,20.0]** → clamp
 
-**Expected impact:** Eliminates cryptic provider errors. Faster failure detection. Better error messages to frontend.
+3. **Wired into `MultiProviderClient.generate()`** — runs once at the top, before chain iteration. All providers receive normalized values; cryptic provider errors from these defects no longer happen.
+
+4. **Added `_truncate_at_sentence()` helper** for sentence-aware prompt cutoff (preserves grammatical tail).
+
+5. **Env-tunable byte budgets:** `MAX_PROMPT_CHARS` (default 3800), `MAX_NEGATIVE_PROMPT_CHARS` (default 1500).
+
+6. **Loud `[VALIDATION]` log** when auto-fixes apply, so we can see in PM2 logs what was normalized.
+
+**Files modified:**
+- `apps/api/app/services/external/multi_provider_client.py` — added `_VALID_IMAGE_SIZES` frozenset, `_truncate_at_sentence()`, `_validate_and_normalize_payload()`, validation block at top of `generate()`
+
+**Verification:** 9 unit tests pass (clean / empty / whitespace / oversized prompt / invalid size / steps clamp / guidance clamp / images clamp / oversized negative). Syntax check OK.
+
+**Production deploy:** pending push.
+
+**Impact achieved:** Cryptic provider errors eliminated for the entire class of payload defects. Empty-prompt requests fail fast with a clean `validation: prompt_empty` message instead of a 400/500 from the provider. All other defects are auto-fixed silently with PM2-visible warnings for telemetry.
 
 ---
 
@@ -299,7 +311,7 @@ def _validate_payload(prompt, negative, model_key, width, height):
 | 4 | Telemetry flywheel | 2-3 hours | Enables data-driven decisions | ⏳ pending |
 | 5 | WaveSpeed exponential backoff | 30 min | Stability under load | ✅ DONE 2026-04-26 |
 | 6 | Style consistency via reference | 3-4 hours | Brand campaign use case | ⏳ pending |
-| 7 | Pre-output validation | 1-2 hours | Better error handling | ⏳ pending |
+| 7 | Pre-output validation | 1-2 hours | Better error handling | ✅ DONE 2026-04-27 |
 
 **Total estimated effort: ~2-3 days of focused work**
 
