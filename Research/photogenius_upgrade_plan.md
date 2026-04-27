@@ -4,7 +4,7 @@
 
 ---
 
-## Status — 7 / 7 priorities live in production
+## Status — 7 / 7 priorities + Phase B live in production
 
 As of **2026-04-27**, the production pipeline now sandwiches every generation between input and output validation, runs Pydantic-enforced structured prompts, defends affirmatively against pitch-deck rendering, circuit-breaks misbehaving providers, and locks brand aesthetics from a user-uploaded reference image. The original "fragile" Simple Engine has been hardened into a layered, self-recovering system.
 
@@ -184,6 +184,45 @@ self._provider_open_until: Dict[str, float]    = {}      # provider → unix-ts 
 **Expected impact:** Eliminates "every-request-pays-the-timeout" pattern when a provider goes down. After the breaker trips, subsequent requests skip the bad provider instantly and go straight to the next one in the chain → user latency stays normal during provider outages.
 
 **Phase B (deferred):** Quality-aware retry — when `quality_critic` returns score < threshold AND classifies a `failure_reason`, modify the prompt (strengthen anchor, add anatomy cues, etc.) and re-generate. Needs `quality_critic` refactor first.
+
+---
+
+## Priority 3 Phase B — Quality-Aware Retry Mutation ✅ DONE 2026-04-27
+
+**Original concern:** Phase B was "deferred — needs quality_critic refactor first." On second look the existing `quality_critic.critique()` already exposes everything Phase B needs: `overall_score`, `dimensions[*].below_floor`, `beast_gates[*].pass + name`, `revision_route_to`. No refactor required — just a classifier on the consumer side (generate_stream.py) and a swap of the existing generic mutation prompt for a failure-reason-targeted one.
+
+**Existing image-2 retry loop (pre-Phase-B):** when `verdict == REVISE` and `images_generated < max_images_total`, generate a 2nd image with `mutation_prompt = f"{enhanced_prompt} — IMPROVE: {revision_notes}"[:500]`. Critic checks both. Best score wins. Generic — same suffix regardless of failure type.
+
+**Phase B upgrade:**
+
+1. **Module-level helpers** in `generate_stream.py`:
+   - `_classify_failure_reason(critique)` — derives one of `'collage_detected' | 'anatomy_failure' | 'text_failure' | 'composition_failure' | 'low_quality' | ''` from the existing critic dict by inspecting failed gate names (case-insensitive substring match on "collage / panel / split / anatomy / hand / finger / text legibility / typography") and dimension `below_floor` flags.
+   - `_build_targeted_retry_prompt(base_prompt, failure_reason, revision_notes, base_negative)` — returns `(mutated_prompt, mutated_negative)` per failure type:
+     - `collage_detected` → prepend the strong affirmative anchor `"A single continuous photograph spanning the entire canvas as one unbroken scene..."` (research-backed positive phrasing instead of negation).
+     - `anatomy_failure` → append `, anatomically correct human figure with natural pose, well-formed hands with five distinct fingers, symmetric facial features, realistic proportions` + merge anatomy negatives.
+     - `text_failure` → append `, crisp legible typography with clear consistent character shapes, all on-image text rendered cleanly, professional letterforms` + merge text negatives.
+     - `composition_failure` → append `, professional composition with clear focal point at rule-of-thirds intersection, generous negative space, balanced visual hierarchy, tack-sharp hero with intentional bokeh`.
+     - `low_quality` → append `, professional photography polish, tack-sharp focus, high-quality finish, editorial-grade detail` + merge generic quality negatives.
+     - Unknown reason → falls back to the legacy `f"{base} — IMPROVE: {revision_notes}"[:500]` so we never lose the existing baseline.
+
+2. **Wired at the existing image-2 generation site** (replaces the old generic `mutation_prompt = f"{enhanced_prompt} — IMPROVE: ..."` line). The new mutation prompt + targeted negatives flow into `multi_client.generate()` exactly like before — no new API surface, just a smarter input.
+
+3. **Loud `[QUALITY-RETRY]` stdout log** with the classified reason + mutation_chars so PM2 captures every retry for tuning. Also added `failure_reason` to the existing `revision_triggered` SSE event so the frontend can surface what kind of fix was attempted.
+
+**Why this stayed minimal:**
+- No `quality_critic.py` changes needed — the data was already there.
+- No new SSE events — extended the existing `revision_triggered` payload.
+- No new env vars — reuses the existing image-2 retry budget (max_images_total).
+- No infinite-loop risk — `revision_cycle` already advances per cycle, max_cycles enforced by critic.
+
+**Files modified:**
+- `apps/api/app/api/v1/endpoints/generate_stream.py` — added 2 module-level helpers (`_classify_failure_reason`, `_build_targeted_retry_prompt`), updated typing imports, swapped the mutation_prompt construction inline.
+
+**Verification:** 10 unit tests pass — 6 classification cases (collage / anatomy / text / composition / low / approved) + 4 prompt-builder cases (collage prefix / anatomy suffix+neg / text suffix+neg / unknown→legacy fallback).
+
+**Production deploy:** pending push.
+
+**Expected impact:** When the critic flags REVISE due to a known-pattern failure, the retry now applies the matching research-backed fix instead of a generic "improve" hint. Each known-pattern retry has a documented intervention that we can iterate on as PM2 logs surface real failure_reason distributions over time.
 
 **Implemented (Phase A):**
 - Module-level constants `_CB_WINDOW_SEC` (300), `_CB_THRESHOLD` (3), `_CB_COOLDOWN_SEC` (600), all env-tunable.

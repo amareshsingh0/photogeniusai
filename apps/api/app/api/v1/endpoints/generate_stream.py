@@ -18,7 +18,7 @@ import logging
 import os
 import time
 import uuid
-from typing import AsyncIterator, Optional
+from typing import Any, AsyncIterator, Dict, Optional, Tuple
 
 import httpx
 from fastapi import APIRouter, Request
@@ -121,6 +121,114 @@ _MODEL_GUIDANCE = {
     "wan_2_7":          4.0,
 }
 _DEFAULT_GUIDANCE = 3.5
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Quality-aware retry (Priority 3 Phase B)
+# ─────────────────────────────────────────────────────────────────────────────
+# When critic returns REVISE, we already generate a 2nd image as a tie-breaker.
+# Phase B upgrades the mutation prompt from generic "— IMPROVE: <notes>" to a
+# failure-reason-classified targeted rewrite — strengthen anti-collage anchor
+# for grid output, add anatomy cues for bad hands, etc.
+def _classify_failure_reason(critique: Dict[str, Any]) -> str:
+    """Derive a single dominant failure label from the critic result.
+
+    Returns one of: 'collage_detected', 'anatomy_failure', 'text_failure',
+    'composition_failure', 'low_quality', or '' when nothing classifies.
+    """
+    dims = critique.get("dimensions", {}) or {}
+    gates = critique.get("beast_gates", {}) or {}
+    score = float(critique.get("overall_score", 10.0))
+
+    failed_gate_text = " ".join(
+        str(g.get("name", "")).lower()
+        for g in gates.values()
+        if isinstance(g, dict) and not g.get("pass", True)
+    )
+
+    # Multi-panel / collage / split detection — highest priority because
+    # the affirmative anchor in the retry prompt is an exact known fix.
+    if any(k in failed_gate_text for k in ("collage", "panel", "split", "grid", "single image", "single subject")):
+        return "collage_detected"
+
+    # Anatomy issues
+    if any(k in failed_gate_text for k in ("anatomy", "hand", "finger", "face symmetry", "limb")):
+        return "anatomy_failure"
+
+    # Typography / text issues
+    if (
+        dims.get("text_legibility", {}).get("below_floor")
+        or dims.get("typography", {}).get("below_floor")
+        or any(k in failed_gate_text for k in ("text legibility", "typography", "garbled", "illegible"))
+    ):
+        return "text_failure"
+
+    # Composition / polish below floor
+    if dims.get("composition", {}).get("below_floor") or dims.get("polish", {}).get("below_floor"):
+        return "composition_failure"
+
+    # Generic low-quality fallback
+    if score < 6.0:
+        return "low_quality"
+
+    return ""
+
+
+def _build_targeted_retry_prompt(
+    base_prompt: str,
+    failure_reason: str,
+    revision_notes: str,
+    base_negative: str,
+) -> Tuple[str, str]:
+    """Return (mutated_prompt, mutated_negative) for a quality-aware retry.
+
+    Each branch is a tested fix for a specific failure mode. Falls back to the
+    legacy generic "— IMPROVE: <notes>" suffix when the reason is unclassified.
+    """
+    base = base_prompt.rstrip()
+    if failure_reason == "collage_detected":
+        # Stronger affirmative anchor — research shows pure-positive phrasing
+        # outperforms negative chains in diffusion cross-attention.
+        prefix = (
+            "A single continuous photograph spanning the entire canvas as one "
+            "unbroken scene, one cohesive composition rendered as one committed "
+            "final design. "
+        )
+        return (prefix + base, base_negative)
+    if failure_reason == "anatomy_failure":
+        suffix = (
+            ", anatomically correct human figure with natural pose, "
+            "well-formed hands with five distinct fingers, symmetric facial "
+            "features, realistic proportions"
+        )
+        neg_extras = "extra fingers, deformed hands, asymmetric face, bad anatomy"
+        merged_neg = f"{base_negative}, {neg_extras}" if base_negative else neg_extras
+        return (base + suffix, merged_neg)
+    if failure_reason == "text_failure":
+        suffix = (
+            ", crisp legible typography with clear consistent character shapes, "
+            "all on-image text rendered cleanly, professional letterforms"
+        )
+        neg_extras = "distorted text, garbled letters, misspelled words, extra characters"
+        merged_neg = f"{base_negative}, {neg_extras}" if base_negative else neg_extras
+        return (base + suffix, merged_neg)
+    if failure_reason == "composition_failure":
+        suffix = (
+            ", professional composition with clear focal point at rule-of-thirds "
+            "intersection, generous negative space, balanced visual hierarchy, "
+            "tack-sharp hero with intentional bokeh"
+        )
+        return (base + suffix, base_negative)
+    if failure_reason == "low_quality":
+        suffix = (
+            ", professional photography polish, tack-sharp focus, "
+            "high-quality finish, editorial-grade detail"
+        )
+        neg_extras = "low-quality, blurry, jpeg artifacts, oversaturated"
+        merged_neg = f"{base_negative}, {neg_extras}" if base_negative else neg_extras
+        return (base + suffix, merged_neg)
+    # Fallback: legacy behavior — append revision notes as a generic hint
+    return (f"{base} — IMPROVE: {revision_notes}"[:500], base_negative)
 
 # Models that actually honor `reference_image_url` end-to-end. Either:
 #  (a) Native: standard Flux + Kontext payloads include `image_url`
@@ -867,25 +975,40 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                         if dim_data.get("score", 10) < dim_data.get("floor", 7.0)
                     ]
 
-                    logger.info("[stream][%s] Image 1 REVISE - generating Image 2 (weak: %s)",
-                              trace_id, weak_dims)
+                    # Phase B — classify the failure type for a targeted rewrite
+                    failure_reason = _classify_failure_reason(critique_1)
+                    mutation_prompt, mutation_neg = _build_targeted_retry_prompt(
+                        base_prompt=enhanced_prompt,
+                        failure_reason=failure_reason,
+                        revision_notes=revision_notes,
+                        base_negative=negative_prompt or "",
+                    )
+                    mutation_prompt = mutation_prompt[:1000]  # safety cap (P7 truncates further)
+
+                    logger.info(
+                        "[stream][%s] Image 1 REVISE — generating Image 2 (weak: %s, reason: %s)",
+                        trace_id, weak_dims, failure_reason or "unclassified",
+                    )
+                    print(
+                        f"[QUALITY-RETRY] reason={failure_reason or 'unclassified'} "
+                        f"cycle=1 mutation_chars={len(mutation_prompt)}",
+                        flush=True,
+                    )
 
                     yield _sse("revision_triggered", {
                         "image_number": 2,
                         "route_to": route_to,
                         "notes": revision_notes,
                         "weak_dimensions": weak_dims,
+                        "failure_reason": failure_reason,
                         "trace_id": trace_id,
                     })
-
-                    # Build targeted prompt with specific fixes
-                    mutation_prompt = f"{enhanced_prompt} — IMPROVE: {revision_notes}"[:500]
 
                     # ━━━ GENERATE IMAGE 2 ━━━
                     gen_2 = await multi_client.generate(
                         model_key=fal_model_key,
                         prompt=mutation_prompt,
-                        negative_prompt=negative_prompt,
+                        negative_prompt=mutation_neg,
                         num_images=1,
                         image_size=_pick_image_size(effective_width, effective_height),
                         num_inference_steps=inference_steps,
