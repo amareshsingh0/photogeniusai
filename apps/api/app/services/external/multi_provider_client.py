@@ -87,6 +87,18 @@ _MAX_PROMPT_CHARS = int(os.getenv("MAX_PROMPT_CHARS", "3800"))
 _MAX_NEGATIVE_PROMPT_CHARS = int(os.getenv("MAX_NEGATIVE_PROMPT_CHARS", "1500"))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Provider circuit breaker (Priority 3 Phase A)
+# ─────────────────────────────────────────────────────────────────────────────
+# Track failure timestamps per provider in a sliding window. When N failures
+# accumulate within W seconds, mark the provider "open" — skip it in the
+# generate() chain for the cooldown period. On any success, clear the failure
+# list immediately (instant recovery on first good response).
+_CB_WINDOW_SEC    = float(os.getenv("CIRCUIT_BREAKER_WINDOW_SEC",   "300"))   # 5 min
+_CB_THRESHOLD     = int(os.getenv("CIRCUIT_BREAKER_THRESHOLD",      "3"))     # 3 failures
+_CB_COOLDOWN_SEC  = float(os.getenv("CIRCUIT_BREAKER_COOLDOWN_SEC", "600"))   # 10 min
+
+
 def _truncate_at_sentence(text: str, max_chars: int) -> str:
     """Cut text to <= max_chars, preferring the last sentence terminator."""
     if len(text) <= max_chars:
@@ -666,6 +678,9 @@ class MultiProviderClient:
         self._clients: Dict[str, httpx.AsyncClient] = {}
         self._keys = {p: os.getenv(env, "") for p, env in _PROVIDER_KEYS.items()}
         self._log_missing_keys()
+        # Circuit breaker state (Priority 3 Phase A) — in-memory, single-process
+        self._provider_failures: Dict[str, List[float]] = {}    # provider → [ts, ts, ...]
+        self._provider_open_until: Dict[str, float]    = {}     # provider → unix-ts breaker reopens
 
     def _log_missing_keys(self):
         for provider, key in self._keys.items():
@@ -700,6 +715,48 @@ class MultiProviderClient:
                 headers={"Authorization": auth_header, "Content-Type": "application/json"},
             )
         return self._clients[provider]
+
+    # ── Circuit breaker helpers (Priority 3 Phase A) ───────────────────────────
+
+    def _provider_circuit_open(self, provider: str) -> bool:
+        """True if the breaker is tripped for this provider (skip in routing)."""
+        until = self._provider_open_until.get(provider, 0.0)
+        if until <= 0.0:
+            return False
+        if time.time() >= until:
+            # Cooldown elapsed — reset breaker. Failure list stays so we can
+            # re-trip quickly if the provider is still bad.
+            self._provider_open_until.pop(provider, None)
+            return False
+        return True
+
+    def _record_provider_failure(self, provider: str, reason: str) -> None:
+        """Append a failure timestamp; trip the breaker if threshold crossed."""
+        now = time.time()
+        ts_list = self._provider_failures.setdefault(provider, [])
+        # Prune entries outside the window
+        cutoff = now - _CB_WINDOW_SEC
+        ts_list[:] = [t for t in ts_list if t >= cutoff]
+        ts_list.append(now)
+        if len(ts_list) >= _CB_THRESHOLD:
+            self._provider_open_until[provider] = now + _CB_COOLDOWN_SEC
+            logger.error(
+                "[multi] CIRCUIT-OPEN provider=%s — %d failures in %.0fs window, "
+                "cooldown %.0fs (last reason: %s)",
+                provider, len(ts_list), _CB_WINDOW_SEC, _CB_COOLDOWN_SEC, reason,
+            )
+            print(
+                f"[CIRCUIT-OPEN] {provider} tripped after {len(ts_list)} failures "
+                f"in {_CB_WINDOW_SEC:.0f}s — cooldown {_CB_COOLDOWN_SEC:.0f}s",
+                flush=True,
+            )
+
+    def _record_provider_success(self, provider: str) -> None:
+        """Clear failure tracking for a provider that just succeeded."""
+        if provider in self._provider_failures:
+            self._provider_failures.pop(provider, None)
+        if provider in self._provider_open_until:
+            self._provider_open_until.pop(provider, None)
 
     # ── Post-output image validation (Priority 4) ──────────────────────────────
 
@@ -809,6 +866,15 @@ class MultiProviderClient:
             if not key:
                 logger.debug("[multi] skip %s — no API key", provider)
                 continue
+            if self._provider_circuit_open(provider):
+                until = self._provider_open_until.get(provider, 0.0)
+                remaining = max(0, int(until - time.time()))
+                logger.warning(
+                    "[multi] skip %s — circuit breaker OPEN for %ds more",
+                    provider, remaining,
+                )
+                last_error = f"circuit_open: {provider} ({remaining}s left)"
+                continue
 
             logger.info("[multi] trying %s / %s (cost=$%.4f)", provider, model_id, cost_usd)
             result = await self._call_provider(
@@ -839,8 +905,11 @@ class MultiProviderClient:
                     )
                     print(f"[POST-VALIDATION] {provider}/{model_id} → {validation_err}", flush=True)
                     last_error = f"post-output: {validation_err}"
+                    self._record_provider_failure(provider, f"post-output: {validation_err}")
                     continue  # provider chain failover
 
+                # Real success — clear circuit-breaker state for this provider
+                self._record_provider_success(provider)
                 result["provider"] = provider
                 result["cost_usd"] = cost_usd
                 result["cost_inr"] = round(cost_usd * 84, 2)
@@ -851,6 +920,7 @@ class MultiProviderClient:
                 return result
 
             last_error = result.get("metadata", {}).get("error", "unknown")
+            self._record_provider_failure(provider, last_error)
             logger.warning("[multi] %s failed (%s), trying next provider", provider, last_error)
 
         return self._error(model_key, f"All providers failed. Last: {last_error}", 0.0)

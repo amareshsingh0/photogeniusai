@@ -91,53 +91,48 @@ Goal: Make the existing pipeline production-grade without adding new providers o
 
 ---
 
-## Priority 3 — Intelligent Retry Logic
+## Priority 3 — Provider Circuit Breaker (Phase A; quality-aware retry deferred)
 
-**Problem:** Current retry is "provider failover" (try fal → try google → try wavespeed). If quality score is low, nothing happens — the bad image is returned to the user. Research calls this "destructive retry" — same prompt + same parameters = same failure.
+**Re-scope rationale:** Original priority bundled two things — (1) circuit breaker for misbehaving providers, (2) quality-aware retry that modifies the prompt based on `quality_critic` feedback. Phase B (quality-aware retry) is invasive — needs `quality_critic` to expose `failure_reason` strings, and the prompt-modification rules are guesswork until we have telemetry. Phase A (circuit breaker) is self-contained, immediately impactful, and reuses the existing provider chain failover. Doing Phase A first; Phase B can come back as a separate iteration once we have real failure data.
 
-**Fix:** When quality score < threshold after generation, trigger an intelligent retry that modifies the approach:
+**Problem:** Currently every new generation re-tries the full provider chain in cost order. If `fal.ai` is down for 5 minutes, every generation in that window pays the full timeout penalty before falling over to Google or WaveSpeed. With Priority 4's post-output validation now actively flagging bad provider responses, this gets worse — buggy providers stay in rotation indefinitely and burn user-facing latency on every request.
 
+**Fix:** Add an in-memory circuit breaker keyed by provider name. Track failure timestamps in a sliding window; once N failures land within W seconds, mark the provider "open" and skip it in `generate()`'s chain loop for a cooldown period. Successes clear the failure list immediately (instant recovery on first good response).
+
+**State (in-memory only — single-process FastAPI):**
 ```python
-async def _intelligent_retry(
-    original_prompt: str,
-    quality_score: float,
-    failure_reason: str,  # from quality_critic feedback
-    model_key: str,
-    attempt: int
-) -> dict:
-    if attempt >= 2:
-        return None  # give up, return best-effort
-
-    if failure_reason in ("collage_detected", "multi_panel"):
-        # Strengthen single-image anchor
-        retry_prompt = (
-            "A single continuous scene, one photograph, entire canvas used. "
-            + original_prompt
-        )
-        retry_negative = original_prompt  # treat nothing extra
-    
-    elif failure_reason == "anatomy_failure":
-        retry_prompt = original_prompt + ", anatomically correct, natural pose"
-    
-    elif failure_reason == "low_quality":
-        # Switch to next provider in chain (already done in multi_client)
-        return None  # let provider failover handle it
-    
-    return await multi_client.generate(
-        model_key=model_key,
-        prompt=retry_prompt,
-        ...
-    )
+self._provider_failures: Dict[str, List[float]] = {}     # provider → [ts, ts, ...]
+self._provider_open_until: Dict[str, float]    = {}      # provider → unix-ts breaker reopens
 ```
 
-**Circuit Breaker:** If a provider fails 3+ times in a 5-minute window → mark as degraded, skip it in routing until 10-minute cooldown passes. Log to PM2.
+**Tunable env vars:**
+- `CIRCUIT_BREAKER_WINDOW_SEC` (default 300 = 5 min) — sliding window for counting failures
+- `CIRCUIT_BREAKER_THRESHOLD` (default 3) — failures within window that trip the breaker
+- `CIRCUIT_BREAKER_COOLDOWN_SEC` (default 600 = 10 min) — how long to skip after tripping
+
+**Logic:**
+1. Before calling each provider in `generate()`, check `_provider_circuit_open(provider)` — if True, log + skip.
+2. On any provider failure (timeout, exception, validation fail, post-output fail), append `time.time()` to `_provider_failures[provider]`. Prune entries older than the window. If count >= threshold, set `_provider_open_until[provider] = now + cooldown` and emit a loud `[CIRCUIT-OPEN]` log.
+3. On success, clear `_provider_failures[provider]` and `_provider_open_until[provider]`.
 
 **Files to change:**
-- `apps/api/app/api/v1/endpoints/generate_stream.py` — add retry loop after quality gate, max 2 attempts
-- `apps/api/app/services/smart/quality_critic.py` — expose `failure_reason` string alongside score
-- `apps/api/app/services/external/multi_provider_client.py` — add circuit breaker state (in-memory dict, keyed by provider name)
+- `apps/api/app/services/external/multi_provider_client.py` — add state dicts in `__init__`, helpers `_record_failure / _record_success / _provider_circuit_open`, wire into `generate()` for-loop.
 
-**Expected impact:** Images that currently score < 0.4 quality and are returned as-is — retried with modified prompt → better output. Estimated +15% usable rate.
+**Expected impact:** Eliminates "every-request-pays-the-timeout" pattern when a provider goes down. After the breaker trips, subsequent requests skip the bad provider instantly and go straight to the next one in the chain → user latency stays normal during provider outages.
+
+**Phase B (deferred):** Quality-aware retry — when `quality_critic` returns score < threshold AND classifies a `failure_reason`, modify the prompt (strengthen anchor, add anatomy cues, etc.) and re-generate. Needs `quality_critic` refactor first.
+
+**Implemented (Phase A):**
+- Module-level constants `_CB_WINDOW_SEC` (300), `_CB_THRESHOLD` (3), `_CB_COOLDOWN_SEC` (600), all env-tunable.
+- Per-instance state on `MultiProviderClient`: `_provider_failures` (sliding-window timestamps) + `_provider_open_until` (cooldown deadlines).
+- `_provider_circuit_open(provider)` — auto-resets after cooldown.
+- `_record_provider_failure(provider, reason)` — prunes old entries, appends fresh, trips breaker on threshold (loud `[CIRCUIT-OPEN]` log + stdout print).
+- `_record_provider_success(provider)` — clears state immediately on first good response.
+- Wired into `generate()` chain loop: skip provider if breaker open (sets `last_error="circuit_open: provider (Xs left)"`), record failure on each path that bumps `last_error`, record success only when validation passes too.
+
+**Verification:** 7 unit tests pass (initial closed → 2 failures still closed → 3 failures open → other providers unaffected → cooldown reopens → success clears → old entries auto-prune).
+
+**Production deploy:** pending push.
 
 ---
 
@@ -302,7 +297,7 @@ This style description is then passed to `simple_engine.enrich()` as part of `br
 |----------|---------|--------|--------|--------|
 | 1 | Pydantic + Instructor structured output | 2-3 hours | Eliminates silent failures | ✅ DONE 2026-04-26 |
 | 2 | Affirmative prompt transformation | 1-2 hours | Reduces collage output | ✅ DONE 2026-04-26 |
-| 3 | Intelligent retry logic | 3-4 hours | +15% usable rate | ⏳ pending |
+| 3 | Provider circuit breaker (was: Intelligent retry, Phase A only) | 1-2 hours | Eliminates timeout penalty on provider outages | ✅ DONE 2026-04-27 |
 | 4 | Post-output validation (was: Telemetry flywheel) | 1-2 hours | Eliminates broken-image-on-success failures | ✅ DONE 2026-04-27 |
 | 5 | WaveSpeed exponential backoff | 30 min | Stability under load | ✅ DONE 2026-04-26 |
 | 6 | Style consistency via reference | 3-4 hours | Brand campaign use case | ⏳ pending |
