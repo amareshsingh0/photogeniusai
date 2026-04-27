@@ -141,46 +141,41 @@ async def _intelligent_retry(
 
 ---
 
-## Priority 4 — Telemetry Data Flywheel
+## Priority 4 — Post-Output Validation (revised from "Telemetry Flywheel")
 
-**Problem:** Generation logs exist (`[FINAL-PROMPT]` tags in PM2) but are unstructured text. No way to analyze: which prompts fail most, which providers produce best quality scores, which buckets have lowest scores, what Haiku output lengths look like.
+**Why revised:** Original plan was a JSONL telemetry log. User pointed out that data without action is just garbage — telemetry is only useful once retry/decision logic is in place to consume it. Post-output validation directly changes behavior (catches bad provider responses + triggers failover) so it's higher-ROI as the next step. Telemetry can be reintroduced later as a foundation for Priority 3 (intelligent retry).
 
-**Fix:** Log a structured JSON record per generation to a dedicated log file (or DB table). Do NOT change the DB schema yet — append-only JSON log file is fine for now.
+**Problem:** Currently `generate()` checks `success: True` from the provider but doesn't verify the returned `image_url` is actually a real, fetchable image. Providers occasionally return:
+- A success flag with an empty/null `image_url`
+- A URL that 404s (CDN propagation lag)
+- A URL that returns HTML / JSON instead of an image (auth-wall, error page)
+- A URL pointing to a tiny placeholder (provider error)
 
-```python
-import json, time
+These slip past the current `if not raw_hero_url` check and result in broken images on the frontend.
 
-generation_record = {
-    "trace_id":       trace_id,
-    "timestamp":      time.time(),
-    "user_prompt":    req.prompt[:200],
-    "bucket":         bucket,
-    "tier":           quality,
-    "engine":         params.get("_source"),
-    "model_key":      model_key,
-    "provider":       provider_used,
-    "haiku_tokens":   simple_out.get("_tokens"),
-    "haiku_ms":       int(simple_out.get("_elapsed", 0) * 1000),
-    "prompt_words":   len(enhanced_prompt.split()),
-    "quality_score":  quality_score,
-    "failure_reason": failure_reason or None,
-    "retry_count":    retry_count,
-    "total_ms":       int((time.time() - start_time) * 1000),
-    "user_rating":    None,  # filled later via feedback endpoint
-}
+**Fix:** Add `_validate_generated_image(image_url)` — a lightweight HEAD request that verifies:
+1. URL is reachable (200 OK)
+2. `Content-Type` starts with `image/`
+3. `Content-Length` (when present) is > 512 bytes (real images are always bigger)
+4. `data:` URLs (Google Imagen base64) — verify the MIME prefix inline, no network call
 
-with open("/home/ubuntu/photogenius_telemetry.jsonl", "a") as f:
-    f.write(json.dumps(generation_record) + "\n")
-```
+Wire this into `MultiProviderClient.generate()` AFTER each provider's success but BEFORE returning. On failure → log the reason, mark the response invalid, and continue to the next provider in the chain (reuses existing failover).
 
-**Also:** Expose a `POST /api/v1/feedback/{generation_id}` endpoint that accepts `rating: 1-5` and writes it back to the JSONL log. This creates a feedback learning loop — over time, correlate low ratings with specific buckets/providers/prompt patterns.
+**Strict vs lenient:** Only fail on UNAMBIGUOUS errors — 4xx/5xx, wrong MIME, ridiculously small content. Network blips / timeouts → log warning but pass through (assume CDN catches up). Goal: catch obvious bad outputs without false-positive retries.
 
 **Files to change:**
-- `apps/api/app/api/v1/endpoints/generate_stream.py` — add telemetry write at end of generation
-- `apps/api/app/api/v1/endpoints/` — add `feedback.py` endpoint
-- `apps/web/app/(dashboard)/generate/page.tsx` — wire existing rating component to POST feedback
+- `apps/api/app/services/external/multi_provider_client.py` — add `_validate_generated_image()` async method, call it in `generate()` between `result["success"]` and the result return.
 
-**Expected impact:** After 2 weeks of data, can identify exactly which scenarios produce bad output. Evidence-based optimization instead of guesswork.
+**Implemented:**
+- `_validate_generated_image(image_url)` async method on `MultiProviderClient`. Strict-on-clear-failure, lenient-on-network-blip (HTTP error / timeout → soft-pass with logger warning; 4xx/5xx / wrong MIME / content-length<512 → hard fail).
+- `data:` URL fast path — checks MIME prefix and base64 size inline, no network call (Google Imagen returns base64 — local-only verification).
+- Wired into `generate()` immediately after `result["success"]`. On validation failure: logs `[POST-VALIDATION] provider/model → reason`, sets `last_error`, and `continue`s the for-loop → next provider in chain takes over.
+
+**Verification:** 6 unit tests pass (empty URL / valid data URL / wrong MIME / tiny data / 404 / real PNG).
+
+**Production deploy:** pending push.
+
+**Expected impact:** Eliminates "success-flag-but-broken-image" class of failures. Triggers automatic failover to the next provider when a provider misbehaves. Cost: one HEAD request per successful generation (~50-200ms).
 
 ---
 
@@ -308,7 +303,7 @@ This style description is then passed to `simple_engine.enrich()` as part of `br
 | 1 | Pydantic + Instructor structured output | 2-3 hours | Eliminates silent failures | ✅ DONE 2026-04-26 |
 | 2 | Affirmative prompt transformation | 1-2 hours | Reduces collage output | ✅ DONE 2026-04-26 |
 | 3 | Intelligent retry logic | 3-4 hours | +15% usable rate | ⏳ pending |
-| 4 | Telemetry flywheel | 2-3 hours | Enables data-driven decisions | ⏳ pending |
+| 4 | Post-output validation (was: Telemetry flywheel) | 1-2 hours | Eliminates broken-image-on-success failures | ✅ DONE 2026-04-27 |
 | 5 | WaveSpeed exponential backoff | 30 min | Stability under load | ✅ DONE 2026-04-26 |
 | 6 | Style consistency via reference | 3-4 hours | Brand campaign use case | ⏳ pending |
 | 7 | Pre-output validation | 1-2 hours | Better error handling | ✅ DONE 2026-04-27 |

@@ -701,6 +701,53 @@ class MultiProviderClient:
             )
         return self._clients[provider]
 
+    # ── Post-output image validation (Priority 4) ──────────────────────────────
+
+    async def _validate_generated_image(self, image_url: str) -> tuple:
+        """Verify the URL returns a real image. Returns (ok: bool, error: str).
+
+        Strict-on-clear-failure, lenient-on-network-blips:
+          • Hard fail: 4xx/5xx, wrong MIME, content-length < 512 bytes
+          • Soft pass: HEAD timeout / DNS error → assume CDN catches up
+
+        For data: URLs (Google Imagen base64), check the MIME prefix inline
+        without a network round-trip.
+        """
+        if not image_url:
+            return False, "image_url empty"
+
+        # data: URL — inline MIME check
+        if image_url.startswith("data:"):
+            head = image_url[:50].lower()
+            if "image/" not in head:
+                return False, f"data URL not image MIME: {head!r}"
+            # Crude size check: base64 payload after the comma
+            comma = image_url.find(",")
+            if comma == -1 or len(image_url) - comma < 1024:
+                return False, "data URL payload too small"
+            return True, ""
+
+        # Remote URL — HEAD request
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0),
+                follow_redirects=True,
+            ) as client:
+                resp = await client.head(image_url)
+                if resp.status_code >= 400:
+                    return False, f"HTTP {resp.status_code}"
+                ctype = resp.headers.get("content-type", "").lower()
+                if ctype and not ctype.startswith("image/"):
+                    return False, f"content-type not image: {ctype}"
+                clen = resp.headers.get("content-length")
+                if clen and clen.isdigit() and int(clen) < 512:
+                    return False, f"image too small: {clen} bytes"
+                return True, ""
+        except httpx.HTTPError as e:
+            # Network blip / timeout — soft pass with warning, let caller decide
+            logger.warning("[multi] post-output HEAD failed (soft pass): %s", e)
+            return True, ""
+
     # ── Main generate with auto-failover ──────────────────────────────────────
 
     async def generate(
@@ -780,6 +827,20 @@ class MultiProviderClient:
                 style=style,
             )
             if result["success"]:
+                # Post-output validation (Priority 4): verify the returned URL
+                # is a real, fetchable image. Catches success-flag-but-broken-
+                # image responses that providers occasionally emit.
+                returned_url = result.get("image_url") or ""
+                ok, validation_err = await self._validate_generated_image(returned_url)
+                if not ok:
+                    logger.warning(
+                        "[multi] post-output validation FAILED for %s/%s: %s — trying next provider",
+                        provider, model_id, validation_err,
+                    )
+                    print(f"[POST-VALIDATION] {provider}/{model_id} → {validation_err}", flush=True)
+                    last_error = f"post-output: {validation_err}"
+                    continue  # provider chain failover
+
                 result["provider"] = provider
                 result["cost_usd"] = cost_usd
                 result["cost_inr"] = round(cost_usd * 84, 2)
