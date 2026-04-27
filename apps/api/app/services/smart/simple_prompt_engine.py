@@ -606,6 +606,7 @@ def _build_user_message(
     height: Optional[int],
     style: Optional[str],
     brand_kit: Optional[Dict[str, Any]],
+    style_reference_description: Optional[str] = None,
 ) -> str:
     parts = [f"USER REQUEST:\n{user_prompt.strip()}"]
     bucket_hint = _BUCKET_HINTS.get(bucket)
@@ -616,6 +617,16 @@ def _build_user_message(
         parts.append(f"REQUESTED CANVAS: {width}x{height} (use this to pick aspect_hint)")
     if style:
         parts.append(f"USER STYLE PREFERENCE: {style}")
+    if style_reference_description:
+        # Priority 6 — Style anchor extracted from a reference image via Gemini Vision.
+        # Haiku should treat this as a hard aesthetic anchor (palette / lighting /
+        # texture / composition style), NOT as a description of the new scene's
+        # subject matter. The user's actual subject is in USER REQUEST.
+        parts.append(
+            "STYLE REFERENCE (extracted from user's uploaded reference image — "
+            "anchor the new image's aesthetic to this; do NOT copy the subject):\n"
+            + style_reference_description.strip()
+        )
     if brand_kit:
         bk_bits = []
         if brand_kit.get("brand_name"):    bk_bits.append(f"brand={brand_kit['brand_name']}")
@@ -879,8 +890,16 @@ class SimplePromptEngine:
         height: Optional[int] = None,
         style: Optional[str] = None,
         brand_kit: Optional[Dict[str, Any]] = None,
+        style_reference_description: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Enrich a user prompt into a production-ready image-gen prompt.
+
+        Args:
+            style_reference_description: 2-3 sentence visual style summary
+                (palette/lighting/texture) extracted from a user's uploaded
+                reference image via Gemini Vision (Priority 6). Optional —
+                empty string when the user provided no reference or the
+                extraction failed.
 
         Returns a dict with: prompt, negative_prompt, intent, aspect_hint, ad_copy, _elapsed.
         On failure, falls back to a minimal dict echoing the user prompt so the
@@ -890,6 +909,7 @@ class SimplePromptEngine:
         try:
             user_msg = _build_user_message(
                 user_prompt, bucket, tier, width, height, style, brand_kit,
+                style_reference_description=style_reference_description,
             )
             # Instructor returns a validated Pydantic instance (or raises after
             # max_retries exhausts). No more loose-JSON parsing.

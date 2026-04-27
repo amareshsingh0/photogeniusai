@@ -448,6 +448,26 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
 
         if use_simple:
             from app.services.smart.simple_prompt_engine import simple_engine
+
+            # Priority 6 — Style consistency: when user uploads a reference image
+            # AND has not specified an explicit style keyword, extract a 2-3
+            # sentence visual style summary via Gemini Vision and feed it to
+            # Haiku as a hard aesthetic anchor. Cached per reference URL — same
+            # reference reused across N generations costs 1 Vision call total.
+            style_reference_description = ""
+            if req.reference_image_url and not (req.style or "").strip():
+                try:
+                    from app.services.smart.style_extractor import extract_style_description
+                    style_reference_description = await extract_style_description(req.reference_image_url)
+                    if style_reference_description:
+                        logger.info(
+                            "[stream][%s] style-extractor produced %d chars",
+                            trace_id, len(style_reference_description),
+                        )
+                except Exception as _se_err:
+                    logger.warning("[stream][%s] style-extractor failed (non-fatal): %s",
+                                   trace_id, _se_err)
+
             simple_out = await simple_engine.enrich(
                 user_prompt=req.prompt,
                 bucket=bucket,
@@ -456,6 +476,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                 height=req.height,
                 style=req.style,
                 brand_kit=req.brand_kit,
+                style_reference_description=style_reference_description or None,
             )
             logger.info(
                 "[stream][%s] SimpleEngine done in %.2fs intent=%s aspect=%s",
