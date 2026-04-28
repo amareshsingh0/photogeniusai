@@ -78,6 +78,7 @@ _MODEL_LABELS = {
     "hunyuan_image":     "Hunyuan Image",
     "flux_kontext":      "Flux Kontext",
     "flux_kontext_max":  "Flux Kontext Max",
+    "gpt_image_2":       "GPT Image 2",
 }
 
 _MODEL_ALIASES = {
@@ -95,6 +96,8 @@ _MODEL_ALIASES = {
     "xai_grok_imagine_image": "grok_2_imagine",
     "fal_ai_recraft_v4_pro_text_to_image": "recraft_v4_pro",
 }
+
+_USE_GPT_IMAGE = os.getenv("USE_GPT_IMAGE", "false").lower() == "true"
 
 _QUALITY_SECONDS = {
     QualityTier.RES_1K.value: 10,

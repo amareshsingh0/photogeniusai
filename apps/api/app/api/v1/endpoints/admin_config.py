@@ -140,6 +140,13 @@ FEATURE_FLAGS = [
         "type": "boolean",
         "default": "true",
     },
+    {
+        "key": "USE_GPT_IMAGE",
+        "category": "Model Selection",
+        "description": "Enable OpenAI GPT Image 2 (gpt-image-1) as a generation provider",
+        "type": "boolean",
+        "default": "false",
+    },
 
     # Quality & Testing
     {

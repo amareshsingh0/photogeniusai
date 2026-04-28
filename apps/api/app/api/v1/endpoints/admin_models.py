@@ -227,6 +227,15 @@ DEFAULT_MODELS = [
         "isActive": True,
         "isTestingEnabled": True,
     },
+    {
+        "modelId": "gpt_image_2",
+        "provider": "openai.com",
+        "displayName": "GPT Image 2",
+        "buckets": ["photorealism", "artistic", "fast"],
+        "costPerImage": 0.040,
+        "isActive": True,
+        "isTestingEnabled": False,
+    },
 ]
 
 DEFAULT_MODELS_BY_ID = {model["modelId"]: model for model in DEFAULT_MODELS}

@@ -478,6 +478,7 @@ _PROVIDER_KEYS = {
     "fal":       "FAL_KEY",              # fal.ai — Primary aggregator (Flux, Ideogram, Recraft, Seedream)
     "google":    "GEMINI_API_KEY",       # Google AI Studio — Imagen models
     "wavespeed": "WAVESPEED_API_KEY",    # WaveSpeed — Grok 2, Wan 2.7, Hunyuan
+    "openai":    "OPENAI_API_KEY",       # OpenAI — GPT Image 2 (gpt-image-1)
 }
 
 # ── Model routing table — ordered by cheapest provider ────────────────────────
@@ -515,6 +516,9 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
     ],
     "wan_2_7": [
         ("wavespeed", "wan_2_7",                                     0.030),
+    ],
+    "gpt_image_2": [
+        ("openai",   "gpt-image-1",                                  0.040),
     ],
     "recraft_v4_pro": [
         ("fal",      "fal-ai/recraft/v4/pro/text-to-image",         0.030),
@@ -940,13 +944,15 @@ class MultiProviderClient:
     # ── Provider-specific callers ─────────────────────────────────────────────
 
     async def _call_provider(self, provider: str, model_id: str, **kwargs) -> Dict:
-        """Route to appropriate provider client (fal.ai, Google Vertex, WaveSpeed only)."""
+        """Route to appropriate provider client."""
         if provider == "fal":
             return await self._call_fal(model_id, **kwargs)
         elif provider == "google":
             return await self._call_google(model_id, **kwargs)
         elif provider == "wavespeed":
             return await self._call_wavespeed(model_id, **kwargs)
+        elif provider == "openai":
+            return await self._call_openai(model_id, **kwargs)
         return self._error(model_id, f"Unknown provider: {provider}", 0.0)
 
     async def _call_fal(self, model_id: str, prompt: str, negative_prompt: str,
@@ -1216,6 +1222,71 @@ class MultiProviderClient:
         except Exception as e:
             logger.error("[wavespeed] API error: %s", e)
             return self._error(model_id, str(e), time.time() - start)
+
+    async def _call_openai(
+        self, model_id: str, prompt: str, negative_prompt: str = "",
+        num_images: int = 1, image_size: str = "square_hd",
+        num_inference_steps: int = 28, guidance_scale: float = 3.5,
+        seed=None, reference_image_url=None, **kwargs,
+    ) -> Dict:
+        """OpenAI GPT Image 2 (gpt-image-1) generation."""
+        start = time.time()
+        api_key = self._keys.get("openai", "")
+        if not api_key:
+            logger.error("[openai] OPENAI_API_KEY not set")
+            return self._error(model_id, "OPENAI_API_KEY not set", 0.0)
+
+        _SIZE_MAP = {
+            "square_hd":      "1024x1024",
+            "landscape_16_9": "1536x1024",
+            "portrait_9_16":  "1024x1536",
+            "landscape_4_3":  "1536x1024",
+            "portrait_4_3":   "1024x1536",
+        }
+        size = _SIZE_MAP.get(image_size, "1024x1024")
+
+        # GPT Image 2 has no native negative_prompt — fold a short hint into positive
+        full_prompt = prompt
+        if negative_prompt:
+            full_prompt = f"{prompt}. Do not include: {negative_prompt[:200]}"
+
+        payload = {
+            "model":           model_id,          # "gpt-image-1"
+            "prompt":          full_prompt[:32000],
+            "n":               min(num_images, 1),
+            "size":            size,
+            "quality":         "high",
+            "output_format":   "png",
+            "response_format": "b64_json",
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type":  "application/json",
+        }
+
+        logger.info("[PAYLOAD][openai] model=%s size=%s", model_id, size)
+
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(
+                    "https://api.openai.com/v1/images/generations",
+                    json=payload, headers=headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+            images = data.get("data") or []
+            b64_list = [img["b64_json"] for img in images if img.get("b64_json")]
+            if not b64_list:
+                raise ValueError(f"No images in OpenAI response: {list(data.keys())}")
+
+            # Convert base64 → data URI (same pattern as _call_google)
+            urls = [f"data:image/png;base64,{b64}" for b64 in b64_list]
+            return self._ok(urls, model_id, "openai.com", time.time() - start)
+
+        except Exception as exc:
+            logger.error("[openai] error: %s", exc)
+            return self._error(model_id, str(exc), time.time() - start)
 
     def _extract_wavespeed_urls(self, task: Dict) -> List[str]:
         """Pull image URLs out of a WaveSpeed task result (shape varies by model)."""

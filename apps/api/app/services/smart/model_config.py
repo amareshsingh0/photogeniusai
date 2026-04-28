@@ -20,10 +20,10 @@ from typing import Dict, List, Optional
 from enum import Enum
 
 class ModelProvider(str, Enum):
-    """Only 3 providers: fal.ai (aggregator), Google Vertex AI, WaveSpeed."""
     FAL = "fal"
     GOOGLE = "google"
     WAVESPEED = "wavespeed"
+    OPENAI = "openai"
 
 class QualityTier(str, Enum):
     RES_1K = "1k"
@@ -262,6 +262,22 @@ MODEL_REGISTRY = {
         "rating": 7.9,
     },
 
+    # ═══ GPT IMAGE 2 (OpenAI) ═══
+    # General purpose + photorealism, excellent instruction following
+    "gpt_image_2": {
+        "provider": ModelProvider.OPENAI,
+        "endpoint": "gpt-image-1",
+        "display_name": "GPT Image 2",
+        "cost_per_image": 0.040,
+        "avg_latency": 15.0,
+        "max_resolution": 1536,
+        "supports_aspects": True,
+        "best_for": ["photorealism", "artistic", "general"],
+        "strengths": ["instruction_following", "detail_accuracy", "versatility"],
+        "tier": "Premium",
+        "rating": 9.0,
+    },
+
     # ═══ IMAGEN 3 (Google AI) — Legacy alias ═══
     "imagen_3": {
         "provider": ModelProvider.GOOGLE,
@@ -373,6 +389,7 @@ MODEL_SUPPORTED_TIERS: Dict[str, List[str]] = {
     "imagen_4_base":     ["1k", "2k"],
     "imagen_3":          ["1k", "2k"],   # alias → gemini_3_imagen
     "imagen_4_ultra":    ["1k", "2k", "4k"],
+    "gpt_image_2":       ["1k", "2k"],
 }
 
 
