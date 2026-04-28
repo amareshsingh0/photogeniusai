@@ -7,6 +7,7 @@ Allows admins to:
 3. Enable/disable models for parallel testing
 4. View model performance metrics (avg rating, cost, latency)
 """
+import asyncio
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime
@@ -389,88 +390,61 @@ async def seed_models():
 @router.get("/admin/models")
 async def get_all_models():
     """
-    Get all models with their current configuration and stats.
-
-    Returns model configs with performance metrics:
-    - totalGenerations (calculated from Generation table)
-    - avgRating (from user ratings)
-    - avgCost
-    - avgLatency
+    Get all models with stats. All per-model DB queries run in parallel via asyncio.gather.
     """
     try:
         from prisma import Prisma
         prisma = Prisma()
         await prisma.connect()
 
-        models = await prisma.modelconfig.find_many(
-            order={"displayName": "asc"}
-        )
-
+        models = await prisma.modelconfig.find_many(order={"displayName": "asc"})
         display_models = sorted(
-            (_merged_model_config(model) for model in _preferred_model_rows(models).values()),
-            key=lambda model: model["displayName"].lower(),
+            (_merged_model_config(m) for m in _preferred_model_rows(models).values()),
+            key=lambda m: m["displayName"].lower(),
         )
 
-        # Calculate stats for each model from Generation table
-        models_data = []
-        for model in display_models:
+        async def _fetch_stats(model: dict):
             model_ids = _equivalent_model_ids(model["modelId"])
-            # Count generations for this model
-            total_gens = await prisma.generation.count(
-                where={
-                    "modelUsed": {"in": model_ids},
-                    "isDeleted": False
-                }
+            where_base = {"modelUsed": {"in": model_ids}, "isDeleted": False}
+            where_rated = {**where_base, "userRating": {"not": None}}
+
+            total_gens, rated_gens = await asyncio.gather(
+                prisma.generation.count(where=where_base),
+                prisma.generation.find_many(where=where_rated),
+                return_exceptions=True,
             )
 
-            # Get average rating from user ratings (Python Prisma doesn't support select)
-            # Wrapped in try-except to handle schema mismatches (userReason column may not exist yet)
-            avg_rating = None
-            avg_cost = None
-            avg_latency = None
+            avg_rating = avg_cost = avg_latency = None
+            if isinstance(rated_gens, list) and rated_gens:
+                ratings   = [g.userRating            for g in rated_gens if g.userRating            is not None]
+                costs     = [g.creditsUsed            for g in rated_gens if g.creditsUsed            is not None]
+                latencies = [g.generationTimeSeconds  for g in rated_gens if g.generationTimeSeconds  is not None]
+                avg_rating  = sum(ratings)   / len(ratings)   if ratings   else None
+                avg_cost    = sum(costs)     / len(costs)     if costs     else None
+                avg_latency = sum(latencies) / len(latencies) if latencies else None
 
-            try:
-                rated_gens = await prisma.generation.find_many(
-                    where={
-                        "modelUsed": {"in": model_ids},
-                        "userRating": {"not": None},
-                        "isDeleted": False
-                    }
-                )
-
-                if rated_gens:
-                    # Calculate averages (extract fields after fetch)
-                    ratings = [g.userRating for g in rated_gens if g.userRating is not None]
-                    costs = [g.creditsUsed for g in rated_gens if g.creditsUsed is not None]
-                    latencies = [g.generationTimeSeconds for g in rated_gens if g.generationTimeSeconds is not None]
-
-                    avg_rating = sum(ratings) / len(ratings) if ratings else None
-                    avg_cost = sum(costs) / len(costs) if costs else None
-                    avg_latency = sum(latencies) / len(latencies) if latencies else None
-            except Exception as e:
-                # Schema mismatch (userReason column doesn't exist) - skip averages for now
-                logger.warning(f"[admin_models] Could not calculate averages for {model['modelId']}: {e}")
-
-            models_data.append({
-                "id": model["id"],
-                "modelId": model["modelId"],
-                "provider": model["provider"],
-                "displayName": model["displayName"],
-                "buckets": model["buckets"],
-                "isActive": model["isActive"],
+            return {
+                "id":               model["id"],
+                "modelId":          model["modelId"],
+                "provider":         model["provider"],
+                "displayName":      model["displayName"],
+                "buckets":          model["buckets"],
+                "isActive":         model["isActive"],
                 "isTestingEnabled": model["isTestingEnabled"],
-                "totalGenerations": total_gens,
-                "avgRating": round(avg_rating, 2) if avg_rating else None,
-                "avgCost": round(avg_cost, 2) if avg_cost else None,
-                "avgLatency": round(avg_latency, 2) if avg_latency else None,
-                "costPerImage": model["costPerImage"],
-                "createdAt": model["createdAt"],
-                "updatedAt": model["updatedAt"],
-            })
+                "totalGenerations": total_gens if isinstance(total_gens, int) else 0,
+                "avgRating":        round(avg_rating,  2) if avg_rating  else None,
+                "avgCost":          round(avg_cost,    2) if avg_cost    else None,
+                "avgLatency":       round(avg_latency, 2) if avg_latency else None,
+                "costPerImage":     model["costPerImage"],
+                "createdAt":        model["createdAt"],
+                "updatedAt":        model["updatedAt"],
+            }
+
+        # All models in parallel — was 38 sequential queries, now one parallel batch
+        models_data = await asyncio.gather(*[_fetch_stats(m) for m in display_models])
 
         await prisma.disconnect()
-
-        return {"models": models_data}
+        return {"models": list(models_data)}
 
     except Exception as e:
         logger.error(f"[admin_models] Error fetching models: {e}", exc_info=True)

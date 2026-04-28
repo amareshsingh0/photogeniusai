@@ -311,8 +311,8 @@ export default function AdminDashboard() {
     }
   };
 
-  const fetchModels = async () => {
-    setModelsLoading(true);
+  const fetchModels = async (background = false) => {
+    if (!background) setModelsLoading(true);
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.creatives.bimoraai.com";
       const res = await fetch(`${apiUrl}/api/v1/admin/models`);
@@ -322,7 +322,7 @@ export default function AdminDashboard() {
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setModelsLoading(false);
+      if (!background) setModelsLoading(false);
     }
   };
 
@@ -340,8 +340,11 @@ export default function AdminDashboard() {
 
       if (!res.ok) throw new Error("Failed to update model");
 
-      // Refresh models list
-      fetchModels();
+      // Optimistic update — flip the toggle immediately, refresh in background
+      setModels(prev => prev.map(m =>
+        m.modelId === modelId ? { ...m, [field]: !currentValue } : m
+      ));
+      fetchModels(true);
     } catch (err: any) {
       setError(err.message);
     }
