@@ -40,143 +40,74 @@ class ConfigUpdateRequest(BaseModel):
 # ── Feature Flag Definitions ─────────────────────────────────────────────────
 
 FEATURE_FLAGS = [
-    # Core Architecture
+    # ── Prompt Engine ────────────────────────────────────────────────────────
     {
-        "key": "USE_MASTER_STRATEGIST",
-        "category": "Core Architecture",
-        "description": "Consolidated Triage + Brand Intel + Creative Director (3→1 agent)",
+        "key": "USE_SIMPLE_ENGINE",
+        "category": "Prompt Engine",
+        "description": "Single Claude Haiku 4.5 call enriches the prompt. Recommended ON — fastest path with the cleanest output.",
         "type": "boolean",
         "default": "true",
     },
     {
         "key": "USE_CLAUDE_ENGINE",
-        "category": "Core Architecture",
-        "description": "Use Claude Haiku 4.5 for prompt engine (vs Gemini)",
-        "type": "boolean",
-        "default": "true",
-    },
-    {
-        "key": "USE_SIMPLE_ENGINE",
-        "category": "Core Architecture",
-        "description": "Single-call Haiku enrichment (skips agent chain + Stage A/B). Overrides everything else when on.",
-        "type": "boolean",
-        "default": "false",
-    },
-    {
-        "key": "USE_BEAST_2026_ROUTER",
-        "category": "Core Architecture",
-        "description": "Predictive routing + Best-of-N generation",
+        "category": "Prompt Engine",
+        "description": "Use Claude (vs Gemini) for the Stage A/B prompt engine. Only applies when Simple Engine is OFF.",
         "type": "boolean",
         "default": "true",
     },
 
-    # Cost Optimizations
+    # ── Cost Optimization ────────────────────────────────────────────────────
     {
         "key": "USE_PROMPT_CACHING",
         "category": "Cost Optimization",
-        "description": "Claude prompt caching (70-90% input token savings)",
+        "description": "Claude prompt caching (70–90% input token savings on repeat system prompts).",
         "type": "boolean",
         "default": "true",
     },
     {
         "key": "USE_SMART_CACHE",
         "category": "Cost Optimization",
-        "description": "Semantic + exact match caching (20-30% queries FREE)",
+        "description": "Semantic + exact-match response cache (20–30% of queries served free).",
         "type": "boolean",
         "default": "true",
     },
     {
         "key": "USE_LLMLINGUA_COMPRESSION",
         "category": "Cost Optimization",
-        "description": "LLMLingua-2 prompt compression (50% token reduction)",
+        "description": "LLMLingua-2 compression on long prompts (~50% token reduction).",
         "type": "boolean",
         "default": "true",
     },
 
-    # BEAST Features
-    {
-        "key": "USE_SEMANTIC_JUDGE",
-        "category": "BEAST Features",
-        "description": "LLM-as-Judge for variant selection (cross-provider)",
-        "type": "boolean",
-        "default": "true",
-    },
-    {
-        "key": "USE_ADAPTIVE_THINKING",
-        "category": "BEAST Features",
-        "description": "Dynamic thinking budget (1024-2000 tokens based on complexity)",
-        "type": "boolean",
-        "default": "true",
-    },
-    {
-        "key": "BEAST_ROUTER_TYPE",
-        "category": "BEAST Features",
-        "description": "Router model selection",
-        "type": "string",
-        "options": ["gemini_lite", "gemini_flash", "claude_haiku"],
-        "default": "gemini_lite",
-    },
-    {
-        "key": "BEAST_COPY_WRITER_N",
-        "category": "BEAST Features",
-        "description": "Number of copy variants to generate (Best-of-N)",
-        "type": "number",
-        "options": ["1", "2", "3", "4", "5"],
-        "default": "3",
-    },
-    {
-        "key": "BEAST_JUDGE_CROSS_PROVIDER",
-        "category": "BEAST Features",
-        "description": "Use different LLM for judging (reduces bias)",
-        "type": "boolean",
-        "default": "true",
-    },
-
-    # Model Selection
+    # ── Models ───────────────────────────────────────────────────────────────
     {
         "key": "USE_IDEOGRAM",
-        "category": "Model Selection",
-        "description": "Enable Ideogram v3 for typography bucket",
+        "category": "Models",
+        "description": "Enable Ideogram v3 in typography routing.",
         "type": "boolean",
-        "default": "true",
+        "default": "false",
     },
     {
         "key": "USE_GPT_IMAGE",
-        "category": "Model Selection",
-        "description": "Enable OpenAI GPT Image 2 (gpt-image-1) as a generation provider",
+        "category": "Models",
+        "description": "Enable OpenAI GPT Image 2 (gpt-image-2) as a generation provider.",
         "type": "boolean",
         "default": "false",
     },
 
-    # Quality & Testing
-    {
-        "key": "USE_DETERMINISTIC_LAYOUT",
-        "category": "Quality Features",
-        "description": "Computer vision-based layout (vs LLM)",
-        "type": "boolean",
-        "default": "false",
-    },
-    {
-        "key": "USE_HYBRID_QUALITY_CRITIC",
-        "category": "Quality Features",
-        "description": "Hybrid VLM + Python quality validation",
-        "type": "boolean",
-        "default": "false",
-    },
-
-    # Advanced
+    # ── Quality ──────────────────────────────────────────────────────────────
     {
         "key": "QUALITY_CRITIC_THRESHOLD",
-        "category": "Advanced",
-        "description": "Minimum quality score to approve (0-10)",
+        "category": "Quality",
+        "description": "Minimum Gemini-Vision aesthetic score (0–10) required to ship the image.",
         "type": "number",
         "options": ["7.0", "7.5", "8.0", "8.5", "9.0"],
         "default": "8.5",
     },
     {
         "key": "QUALITY_CRITIC_PROVIDER",
-        "category": "Advanced",
-        "description": "Quality critic LLM provider",
+        "category": "Quality",
+        "description": "LLM used by the quality critic.",
         "type": "string",
         "options": ["gemini", "claude", "groq"],
         "default": "gemini",
@@ -309,8 +240,8 @@ async def update_config(request: ConfigUpdateRequest):
     Body:
         {
             "updates": {
-                "USE_MASTER_STRATEGIST": "true",
-                "BEAST_COPY_WRITER_N": "3",
+                "USE_SIMPLE_ENGINE": "true",
+                "USE_GPT_IMAGE": "false",
                 ...
             }
         }

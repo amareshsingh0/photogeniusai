@@ -655,7 +655,7 @@ export default function AdminDashboard() {
                 <p className="text-zinc-400 mt-1">Manage AI models for image generation</p>
               </div>
               <button
-                onClick={fetchModels}
+                onClick={() => fetchModels()}
                 disabled={modelsLoading}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium transition-colors disabled:opacity-50"
               >
@@ -911,49 +911,6 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* BEAST Architecture */}
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4">BEAST Architecture</h3>
-              <div className="space-y-3">
-                <SettingToggle
-                  label="Master Strategist"
-                  description="Consolidate 3 agents → 1 (58% faster, 60% token savings)"
-                  enabled={settings.beast.useMasterStrategist}
-                  onToggle={() =>
-                    handleToggleSetting(
-                      "beast",
-                      "useMasterStrategist",
-                      settings.beast.useMasterStrategist
-                    )
-                  }
-                />
-                <SettingToggle
-                  label="Deterministic Layout"
-                  description="Python + OpenCV layout engine (100% reliability)"
-                  enabled={settings.beast.useDeterministicLayout}
-                  onToggle={() =>
-                    handleToggleSetting(
-                      "beast",
-                      "useDeterministicLayout",
-                      settings.beast.useDeterministicLayout
-                    )
-                  }
-                />
-                <SettingToggle
-                  label="Hybrid Quality Critic"
-                  description="VLM + Python validation (95% accuracy)"
-                  enabled={settings.beast.useHybridQualityCritic}
-                  onToggle={() =>
-                    handleToggleSetting(
-                      "beast",
-                      "useHybridQualityCritic",
-                      settings.beast.useHybridQualityCritic
-                    )
-                  }
-                />
-              </div>
-            </div>
-
             {/* Quality Settings */}
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
               <h3 className="text-lg font-semibold mb-4">Quality Critic</h3>
@@ -987,17 +944,6 @@ export default function AdminDashboard() {
                   <input
                     type="number"
                     value={settings.quality.maxImages}
-                    readOnly
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">
-                    Beast Gates Min
-                  </label>
-                  <input
-                    type="number"
-                    value={settings.quality.beastGatesMin}
                     readOnly
                     className="w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white"
                   />

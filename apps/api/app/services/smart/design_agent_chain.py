@@ -78,37 +78,8 @@ except ImportError as e:
     logger.warning("[design_chain] motion_designer not available: %s", e)
     _MOTION_DESIGNER_AVAILABLE = False
 
-# Import Master Strategist (BEAST Architecture Phase 2)
-try:
-    from app.services.smart.master_strategist import master_strategist, StrategyConfig
-    _MASTER_STRATEGIST_AVAILABLE = True
-except ImportError as e:
-    logger.warning("[design_chain] master_strategist not available: %s", e)
-    _MASTER_STRATEGIST_AVAILABLE = False
-
-# Import BEAST 2026 Router (Production-Grade Multi-Agent Routing)
-try:
-    from app.services.smart.beast_router_2026 import (
-        beast_copy_writer_pipeline,
-        RouterConfig as BeastRouterConfig
-    )
-    _BEAST_2026_ROUTER_AVAILABLE = True
-except ImportError as e:
-    logger.warning("[design_chain] beast_router_2026 not available: %s", e)
-    _BEAST_2026_ROUTER_AVAILABLE = False
-
-# Feature Flags: BEAST Architecture + 2026 Enhancements (controlled from .env)
-_USE_MASTER_STRATEGIST = os.getenv("USE_MASTER_STRATEGIST", "false").lower() == "true"
-_USE_BEAST_2026_ROUTER = os.getenv("USE_BEAST_2026_ROUTER", "false").lower() == "true"
 _USE_PROMPT_CACHING = os.getenv("USE_PROMPT_CACHING", "false").lower() == "true"
-_USE_SEMANTIC_JUDGE = os.getenv("USE_SEMANTIC_JUDGE", "false").lower() == "true"
-_USE_ADAPTIVE_THINKING = os.getenv("USE_ADAPTIVE_THINKING", "false").lower() == "true"
-
-logger.info(f"[design_chain] BEAST Master Strategist: {'ENABLED' if _USE_MASTER_STRATEGIST else 'DISABLED'}")
-logger.info(f"[design_chain] BEAST 2026 Router: {'ENABLED' if _USE_BEAST_2026_ROUTER else 'DISABLED'}")
 logger.info(f"[design_chain] Prompt Caching: {'ENABLED' if _USE_PROMPT_CACHING else 'DISABLED'}")
-logger.info(f"[design_chain] Semantic Judge: {'ENABLED' if _USE_SEMANTIC_JUDGE else 'DISABLED'}")
-logger.info(f"[design_chain] Adaptive Thinking: {'ENABLED' if _USE_ADAPTIVE_THINKING else 'DISABLED'}")
 
 # ── Hex color validator ──────────────────────────────────────────────────────
 _HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
@@ -3530,70 +3501,17 @@ async def _agent_copy_writer(
         f"Audience: {triage.get('audience','general')}"
     )
 
-    # ═══════════════════════════════════════════════════════════════════════════
-    # BEAST 2026 Router Integration (APR 13, 2026)
-    # ═══════════════════════════════════════════════════════════════════════════
-    if _USE_BEAST_2026_ROUTER and _BEAST_2026_ROUTER_AVAILABLE:
-        logger.info("[copy_writer][BEAST_2026] Using production-grade routing pipeline")
-        logger.info("[copy_writer][BEAST_2026] Predictive router → Best-of-N → Semantic judge")
+    # Direct Claude Haiku 4.5 copy writer call
+    raw = await _acall_claude(system, context, temperature=0.85, agent_name="copy_writer", use_thinking=True)
+    r = _extract_json(raw)
 
-        try:
-            # Build BEAST router config from env
-            router_config = BeastRouterConfig(
-                router_type=os.getenv("BEAST_ROUTER_TYPE", "gemini_lite"),
-                copy_writer_n=int(os.getenv("BEAST_COPY_WRITER_N", "3")),
-                judge_cross_provider=os.getenv("BEAST_JUDGE_CROSS_PROVIDER", "true").lower() == "true",
-                enable_caching=_USE_PROMPT_CACHING,
-            )
-
-            # Call BEAST pipeline
-            beast_result = await beast_copy_writer_pipeline(
-                system=system,
-                context=context,
-                platform=platform,
-                brief={
-                    "prompt": prompt,
-                    "platform": platform,
-                    "industry": triage.get("industry", "general"),
-                    "goal": triage.get("goal", ""),
-                    "tone": brand.get("tone", ""),
-                    "audience": triage.get("audience", "general"),
-                },
-                config=router_config
-            )
-
-            # Extract result
-            r = beast_result
-
-            # Log routing info
-            if beast_result.get("_route"):
-                logger.info(f"[copy_writer][BEAST_2026] Route taken: {beast_result['_route']}")
-            if beast_result.get("_judgment"):
-                judgment = beast_result["_judgment"]
-                logger.info(f"[copy_writer][BEAST_2026] Winner: Variant {judgment.get('winner_id')} - {judgment.get('winner_reasoning', 'N/A')}")
-
-        except Exception as e:
-            logger.error(f"[copy_writer][BEAST_2026] Pipeline failed: {e}, falling back to direct Claude")
-            # Fallback to existing logic
-            raw = await _acall_claude(system, context, temperature=0.85, agent_name="copy_writer", use_thinking=True)
-            r = _extract_json(raw)
-
-    else:
-        # ═══════════════════════════════════════════════════════════════════════════
-        # Legacy Path: Direct Claude Haiku 4.5 (when BEAST router disabled)
-        # ═══════════════════════════════════════════════════════════════════════════
-        logger.info("[copy_writer][LEGACY] Using direct Claude Haiku 4.5")
-
-        raw = await _acall_claude(system, context, temperature=0.85, agent_name="copy_writer", use_thinking=True)
-        r = _extract_json(raw)
-
-        # If main call failed entirely (parse error or missing headline), retry full call once
-        if r.get("_parse_error") or not str(r.get("headline") or "").strip():
-            logger.warning("[copy_writer] main call missing headline, retrying full call")
-            raw2 = await _acall_claude(system, context, temperature=0.7, agent_name="copy_writer", use_thinking=True)
-            r2 = _extract_json(raw2)
-            if not r2.get("_parse_error") and str(r2.get("headline") or "").strip():
-                r = r2  # full retry succeeded
+    # If main call failed entirely (parse error or missing headline), retry full call once
+    if r.get("_parse_error") or not str(r.get("headline") or "").strip():
+        logger.warning("[copy_writer] main call missing headline, retrying full call")
+        raw2 = await _acall_claude(system, context, temperature=0.7, agent_name="copy_writer", use_thinking=True)
+        r2 = _extract_json(raw2)
+        if not r2.get("_parse_error") and str(r2.get("headline") or "").strip():
+            r = r2  # full retry succeeded
 
     # Validate features — if AI returned good ones use them, else retry with stricter prompt
     raw_features = r.get("features")
@@ -4895,100 +4813,27 @@ class DesignAgentChain:
             resolved_width = width
             resolved_height = height
 
-            # ═══════════════════════════════════════════════════════════════════════
-            # BEAST ARCHITECTURE PHASE 2: Master Strategist (Consolidate 3→1)
-            # ═══════════════════════════════════════════════════════════════════════
-            master_strategist_succeeded = False  # Track success to prevent palette UnboundLocalError
+            # ── Stage 1: Triage (serial — everything depends on it) ──────────
+            t = time.time()
+            triage = await _agent_triage(safe_prompt)
+            triage["original_prompt"] = safe_prompt  # pass through for image_prompter context
+            agent_times["triage"] = round(time.time() - t, 2)
+            if width == 1024 and height == 1024:
+                resolved_width = int(triage.get("recommended_width") or width)
+                resolved_height = int(triage.get("recommended_height") or height)
+            aspect_ratio = resolved_width / max(resolved_height, 1)
 
-            if _USE_MASTER_STRATEGIST and _MASTER_STRATEGIST_AVAILABLE:
-                logger.info("[design_chain][BEAST] Using Master Strategist with Claude Haiku 4.5 (Triage+Brand+CD consolidated)")
-                t = time.time()
+            # ── Stage 2: Brand Intel → Creative Director (sequential) ────────
+            t = time.time()
+            brand = await _agent_brand_intel(triage, brand_kit, safe_prompt)
+            agent_times["brand_intel"] = round(time.time() - t, 2)
 
-                try:
-                    strategy = await master_strategist(
-                        prompt=safe_prompt,
-                        brand_data=brand_kit,  # Pass scraped brand data
-                        claude_client=_get_claude_client(),  # Changed from gemini_client
-                        width=resolved_width,
-                        height=resolved_height,
-                        tier=quality,
-                        platform=None,  # Let Master Strategist detect
-                        trace_id=None,  # Auto-generated
-                        config=StrategyConfig(
-                            max_retries=3,
-                            timeout_seconds=15.0,
-                            enable_caching=True,
-                            fallback_on_error=True,
-                        ),
-                    )
+            t = time.time()
+            creative = await _agent_creative_director(triage, brand, safe_prompt)
+            agent_times["creative_director"] = round(time.time() - t, 2)
+            creative["aspect_ratio"] = _aspect_ratio_label(resolved_width, resolved_height)
 
-                    # Extract consolidated outputs
-                    triage = strategy["triage"]
-                    triage["original_prompt"] = safe_prompt
-                    brand = strategy["brand"]
-                    creative = strategy["creative"]
-                    palette = strategy["palette"]
-
-                    # Merge agent times
-                    agent_times.update(strategy.get("_agent_times", {}))
-
-                    # Log performance metrics
-                    meta = strategy.get("_meta", {})
-                    logger.info(
-                        f"[design_chain][BEAST] Master Strategist SUCCESS — "
-                        f"latency={meta.get('latency_ms')}ms, "
-                        f"source={meta.get('source')}, "
-                        f"cache_hit={meta.get('cache_hit')}, "
-                        f"platform={triage.get('platform')}, "
-                        f"industry={triage.get('industry')}"
-                    )
-
-                    # Update dimensions if recommended
-                    if width == 1024 and height == 1024:
-                        resolved_width = int(triage.get("recommended_width") or width)
-                        resolved_height = int(triage.get("recommended_height") or height)
-                    aspect_ratio = resolved_width / max(resolved_height, 1)
-                    creative["aspect_ratio"] = _aspect_ratio_label(resolved_width, resolved_height)
-
-                except Exception as e:
-                    logger.error(f"[design_chain][BEAST] Master Strategist FAILED: {e}, falling back to 3-agent chain", exc_info=True)
-                    # Fall through to old 3-agent chain below
-                    master_strategist_succeeded = False
-                    _USE_MASTER_STRATEGIST_THIS_REQUEST = False
-                else:
-                    master_strategist_succeeded = True
-                    _USE_MASTER_STRATEGIST_THIS_REQUEST = True
-
-            # ═══════════════════════════════════════════════════════════════════════
-            # LEGACY 3-AGENT CHAIN (Triage → Brand Intel → Creative Director)
-            # Runs if Master Strategist is disabled OR if it failed
-            # ═══════════════════════════════════════════════════════════════════════
-            if not master_strategist_succeeded:
-                logger.info("[design_chain][LEGACY] Using 3-agent chain (Triage → Brand Intel → Creative Director)")
-
-                # ── Stage 1: Triage (serial — everything depends on it) ──────────
-                t = time.time()
-                triage = await _agent_triage(safe_prompt)
-                triage["original_prompt"] = safe_prompt  # pass through for image_prompter context
-                agent_times["triage"] = round(time.time() - t, 2)
-                if width == 1024 and height == 1024:
-                    resolved_width = int(triage.get("recommended_width") or width)
-                    resolved_height = int(triage.get("recommended_height") or height)
-                aspect_ratio = resolved_width / max(resolved_height, 1)
-
-                # ── Stage 2: Brand Intel first, then Creative Director with real brand ─
-                # Sequential (not parallel) — saves 1 Gemini call vs old double-CD pattern,
-                # and Creative Director gets accurate brand colors/tone from the start.
-                t = time.time()
-                brand = await _agent_brand_intel(triage, brand_kit, safe_prompt)
-                agent_times["brand_intel"] = round(time.time() - t, 2)
-
-                t = time.time()
-                creative = await _agent_creative_director(triage, brand, safe_prompt)
-                agent_times["creative_director"] = round(time.time() - t, 2)
-                creative["aspect_ratio"] = _aspect_ratio_label(resolved_width, resolved_height)
-
-                palette = creative.get("palette", {})
+            palette = creative.get("palette", {})
 
             # Personal-intent override: strip brand fabrication for greetings
             # (birthday, wedding, anniversary, etc). Runs for both Master

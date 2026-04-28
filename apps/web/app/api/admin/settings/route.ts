@@ -51,17 +51,11 @@ export async function GET() {
         threshold: parseFloat(apiSettings.QUALITY_CRITIC_THRESHOLD || "8.5"),
         dimensionFloor: parseFloat(apiSettings.QUALITY_DIMENSION_FLOOR || "7.0"),
         maxImages: parseInt(apiSettings.QUALITY_MAX_IMAGES || "2"),
-        beastGatesMin: parseInt(apiSettings.QUALITY_BEAST_GATES_MIN || "9"),
         thresholds: {
           standard: parseFloat(apiSettings.QUALITY_CRITIC_THRESHOLD_STANDARD || "8.0"),
           premium: parseFloat(apiSettings.QUALITY_CRITIC_THRESHOLD_PREMIUM || "8.5"),
           ultra: parseFloat(apiSettings.QUALITY_CRITIC_THRESHOLD_ULTRA || "9.0"),
         },
-      },
-      beast: {
-        useMasterStrategist: apiSettings.USE_MASTER_STRATEGIST === "true",
-        useDeterministicLayout: apiSettings.USE_DETERMINISTIC_LAYOUT === "true",
-        useHybridQualityCritic: apiSettings.USE_HYBRID_QUALITY_CRITIC === "true",
       },
       aws: {
         region: apiSettings.AWS_REGION || "us-east-1",
@@ -116,10 +110,6 @@ export async function PATCH(req: Request) {
       "quality.threshold": "QUALITY_CRITIC_THRESHOLD",
       "quality.dimensionFloor": "QUALITY_DIMENSION_FLOOR",
       "quality.maxImages": "QUALITY_MAX_IMAGES",
-      "quality.beastGatesMin": "QUALITY_BEAST_GATES_MIN",
-      "beast.useMasterStrategist": "USE_MASTER_STRATEGIST",
-      "beast.useDeterministicLayout": "USE_DETERMINISTIC_LAYOUT",
-      "beast.useHybridQualityCritic": "USE_HYBRID_QUALITY_CRITIC",
     };
 
     const envKey = envKeyMap[`${category}.${key}`];

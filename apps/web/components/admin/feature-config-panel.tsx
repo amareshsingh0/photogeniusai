@@ -216,7 +216,7 @@ export default function FeatureConfigPanel() {
         <div>
           <h2 className="text-2xl font-bold text-white">Feature Configuration</h2>
           <p className="text-zinc-400 mt-1">
-            Control BEAST 2026 architecture features and optimizations
+            Runtime feature flags. Changes write to .env — restart the API to apply.
           </p>
         </div>
         <div className="flex gap-2">
