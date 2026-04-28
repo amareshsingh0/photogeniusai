@@ -284,6 +284,7 @@ class StreamRequest(BaseModel):
     brand_kit: Optional[dict] = Field(default=None)
     prompt_dna: Optional[dict] = Field(default=None)   # User.preferences.prompt_dna from Next.js
     testing_mode: Optional[bool] = Field(default=False)  # Admin testing mode (parallel models)
+    model_key: Optional[str] = Field(default=None)      # Force a specific model (bypasses bucket routing)
 
     @field_validator("quality")
     @classmethod
@@ -461,47 +462,61 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         )
 
         bucket = detect_capability_bucket(req.prompt)
-
-        # DB-DRIVEN MODEL PICKER (admin /admin → Models tab controls this).
-        # Pick from ModelConfig where isActive=True AND bucket ∈ model.buckets[]
-        # AND model supports requested tier. Cheapest wins on tie.
-        # Falls back to static BUCKET_MODEL_MAP if no DB match.
-        model_cfg = None
         norm_tier = normalize_quality_tier(quality)
         db_bucket = bucket.split("_")[0] if "_" in bucket else bucket
-        try:
-            from prisma import Prisma
-            _prisma = Prisma()
-            await _prisma.connect()
-            _db_models = await _prisma.modelconfig.find_many(where={"isActive": True})
-            await _prisma.disconnect()
-            _candidates = [
-                m for m in _db_models
-                if (bucket in (m.buckets or []) or db_bucket in (m.buckets or []))
-                and norm_tier in get_model_supported_tiers(m.modelId)
-                and _canonical_model_key(m.modelId, default="") in MODEL_REGISTRY
-            ]
-            if _candidates:
-                _candidates.sort(key=lambda m: m.costPerImage or 0)
-                _chosen_key = _canonical_model_key(_candidates[0].modelId, default="")
-                _spec = MODEL_REGISTRY[_chosen_key]
+        model_cfg = None
+
+        # ── model_key override — bypasses bucket routing entirely ──────────
+        if req.model_key:
+            _mk = _canonical_model_key(req.model_key, default="")
+            if _mk and _mk in MODEL_REGISTRY:
+                _spec = MODEL_REGISTRY[_mk]
                 model_cfg = {
-                    "model_key": _chosen_key,
-                    "model": _spec["endpoint"],
-                    "provider": _spec["provider"].value,
+                    "model_key": _mk,
+                    "model":     _spec["endpoint"],
+                    "provider":  _spec["provider"].value,
                     "display_name": _spec["display_name"],
                     "tier_used": norm_tier,
                     "cost_per_image": _spec["cost_per_image"],
                     "num_images": 1,
                 }
-                logger.info(
-                    "[stream][%s] DB-picker chose %s for bucket=%s tier=%s (from %d candidates)",
-                    trace_id, _chosen_key, bucket, norm_tier, len(_candidates),
-                )
-        except Exception as _e:
-            logger.warning("[stream][%s] DB-picker failed, falling back to static map: %s", trace_id, _e)
+                logger.info("[stream][%s] model_key override → %s", trace_id, _mk)
+            else:
+                logger.warning("[stream][%s] model_key=%s not in registry, using bucket routing", trace_id, req.model_key)
 
-        # Fallback: static BUCKET_MODEL_MAP (hardcoded routing).
+        # ── DB-driven model picker (only if no model_key override) ────────
+        if not model_cfg:
+            try:
+                from prisma import Prisma
+                _prisma = Prisma()
+                await _prisma.connect()
+                _db_models = await _prisma.modelconfig.find_many(where={"isActive": True})
+                await _prisma.disconnect()
+                _candidates = [
+                    m for m in _db_models
+                    if (bucket in (m.buckets or []) or db_bucket in (m.buckets or []))
+                    and norm_tier in get_model_supported_tiers(m.modelId)
+                    and _canonical_model_key(m.modelId, default="") in MODEL_REGISTRY
+                ]
+                if _candidates:
+                    _candidates.sort(key=lambda m: m.costPerImage or 0)
+                    _chosen_key = _canonical_model_key(_candidates[0].modelId, default="")
+                    _spec = MODEL_REGISTRY[_chosen_key]
+                    model_cfg = {
+                        "model_key": _chosen_key,
+                        "model":     _spec["endpoint"],
+                        "provider":  _spec["provider"].value,
+                        "display_name": _spec["display_name"],
+                        "tier_used": norm_tier,
+                        "cost_per_image": _spec["cost_per_image"],
+                        "num_images": 1,
+                    }
+                    logger.info("[stream][%s] DB-picker chose %s for bucket=%s tier=%s (from %d candidates)",
+                                trace_id, _chosen_key, bucket, norm_tier, len(_candidates))
+            except Exception as _e:
+                logger.warning("[stream][%s] DB-picker failed, falling back to static map: %s", trace_id, _e)
+
+        # ── Fallback: static BUCKET_MODEL_MAP ─────────────────────────────
         if not model_cfg:
             model_cfg = get_model_for_request(bucket, quality)
             logger.info("[stream][%s] Static-map picked %s for bucket=%s tier=%s",
@@ -513,7 +528,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         )
         if not model_cfg.get("model"):
             fal_model_key = "flux_2_pro"
-            logger.warning("[stream][%s] model_cfg missing 'model' key for bucket=%s quality=%s, falling back to flux_2_pro", trace_id, bucket, quality)
+            logger.warning("[stream][%s] model_cfg missing 'model' key, falling back to flux_2_pro", trace_id)
 
         # Ideogram fallback
         use_ideogram = _parse_bool_env("USE_IDEOGRAM", default=True)
