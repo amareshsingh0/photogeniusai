@@ -9,7 +9,7 @@ import { cookies } from "next/headers";
 import { prisma, isPrismaDbUnavailable } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120; // 2 min — fal.ai fast/standard well within this
+export const maxDuration = 300; // 5 min — covers GPT Image 2 thinking mode (~3 min max)
 
 const MODE_MAP: Record<string, string> = {
   photorealism:          "REALISM",
