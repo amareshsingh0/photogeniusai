@@ -518,7 +518,7 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
         ("wavespeed", "wan_2_7",                                     0.030),
     ],
     "gpt_image_2": [
-        ("openai",   "gpt-image-1",                                  0.040),
+        ("openai",   "gpt-image-2",                                  0.040),
     ],
     "recraft_v4_pro": [
         ("fal",      "fal-ai/recraft/v4/pro/text-to-image",         0.030),
@@ -1251,13 +1251,11 @@ class MultiProviderClient:
             full_prompt = f"{prompt}. Do not include: {negative_prompt[:200]}"
 
         payload = {
-            "model":           model_id,          # "gpt-image-1"
-            "prompt":          full_prompt[:32000],
-            "n":               min(num_images, 1),
-            "size":            size,
-            "quality":         "high",
-            "output_format":   "png",
-            "response_format": "b64_json",
+            "model":   model_id,          # "gpt-image-2"
+            "prompt":  full_prompt[:32000],
+            "n":       min(num_images, 1),
+            "size":    size,
+            "quality": "high",
         }
         headers = {
             "Authorization": f"Bearer {api_key}",

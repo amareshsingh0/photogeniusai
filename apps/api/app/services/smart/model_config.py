@@ -266,7 +266,7 @@ MODEL_REGISTRY = {
     # General purpose + photorealism, excellent instruction following
     "gpt_image_2": {
         "provider": ModelProvider.OPENAI,
-        "endpoint": "gpt-image-1",
+        "endpoint": "gpt-image-2",
         "display_name": "GPT Image 2",
         "cost_per_image": 0.040,
         "avg_latency": 15.0,
