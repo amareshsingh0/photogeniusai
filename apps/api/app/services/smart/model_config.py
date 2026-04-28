@@ -262,20 +262,21 @@ MODEL_REGISTRY = {
         "rating": 7.9,
     },
 
-    # ═══ GPT IMAGE 2 (OpenAI) ═══
-    # General purpose + photorealism, excellent instruction following
+    # ═══ GPT IMAGE 2 (OpenAI — ChatGPT Images 2.0, Apr 21 2026) ═══
+    # Instant mode: 8-15s | Thinking mode: longer (reasoning before drawing)
+    # 4K support, character consistency, real-time web references
     "gpt_image_2": {
         "provider": ModelProvider.OPENAI,
         "endpoint": "gpt-image-2",
         "display_name": "GPT Image 2",
-        "cost_per_image": 0.040,
-        "avg_latency": 15.0,
-        "max_resolution": 1536,
+        "cost_per_image": 0.053,  # medium quality (1K/2K); high quality (4K) = $0.211
+        "avg_latency": 12.0,
+        "max_resolution": 4096,
         "supports_aspects": True,
-        "best_for": ["photorealism", "artistic", "general"],
-        "strengths": ["instruction_following", "detail_accuracy", "versatility"],
+        "best_for": ["photorealism", "artistic", "general", "character_consistency"],
+        "strengths": ["instruction_following", "detail_accuracy", "thinking_mode", "4k_resolution"],
         "tier": "Premium",
-        "rating": 9.0,
+        "rating": 9.2,
     },
 
     # ═══ IMAGEN 3 (Google AI) — Legacy alias ═══
@@ -389,7 +390,7 @@ MODEL_SUPPORTED_TIERS: Dict[str, List[str]] = {
     "imagen_4_base":     ["1k", "2k"],
     "imagen_3":          ["1k", "2k"],   # alias → gemini_3_imagen
     "imagen_4_ultra":    ["1k", "2k", "4k"],
-    "gpt_image_2":       ["1k", "2k"],
+    "gpt_image_2":       ["1k", "2k", "4k"],
 }
 
 

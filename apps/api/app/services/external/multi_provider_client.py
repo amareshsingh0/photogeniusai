@@ -518,7 +518,7 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
         ("wavespeed", "wan_2_7",                                     0.030),
     ],
     "gpt_image_2": [
-        ("openai",   "gpt-image-2",                                  0.040),
+        ("openai",   "gpt-image-2",                                  0.053),  # medium; 4K high = $0.211
     ],
     "recraft_v4_pro": [
         ("fal",      "fal-ai/recraft/v4/pro/text-to-image",         0.030),
@@ -1242,8 +1242,15 @@ class MultiProviderClient:
             "portrait_9_16":  "1024x1536",
             "landscape_4_3":  "1536x1024",
             "portrait_4_3":   "1024x1536",
+            "square_4k":      "4096x4096",
+            "landscape_4k":   "4096x2304",
+            "portrait_4k":    "2304x4096",
         }
         size = _SIZE_MAP.get(image_size, "1024x1024")
+
+        # Map resolution → quality (controls cost: medium=$0.053, high=$0.211)
+        is_4k = image_size in ("square_4k", "landscape_4k", "portrait_4k")
+        openai_quality = "high" if is_4k else "medium"
 
         # GPT Image 2 has no native negative_prompt — fold a short hint into positive
         full_prompt = prompt
@@ -1255,7 +1262,7 @@ class MultiProviderClient:
             "prompt":  full_prompt[:32000],
             "n":       min(num_images, 1),
             "size":    size,
-            "quality": "high",
+            "quality": openai_quality,
         }
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -1265,7 +1272,7 @@ class MultiProviderClient:
         logger.info("[PAYLOAD][openai] model=%s size=%s", model_id, size)
 
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=300.0) as client:
                 resp = await client.post(
                     "https://api.openai.com/v1/images/generations",
                     json=payload, headers=headers,
