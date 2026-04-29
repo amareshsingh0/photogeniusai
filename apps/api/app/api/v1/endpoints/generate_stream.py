@@ -97,8 +97,6 @@ _MODEL_ALIASES = {
     "fal_ai_recraft_v4_pro_text_to_image": "recraft_v4_pro",
 }
 
-_USE_GPT_IMAGE = os.getenv("USE_GPT_IMAGE", "false").lower() == "true"
-
 _QUALITY_SECONDS = {
     QualityTier.RES_1K.value: 10,
     QualityTier.RES_2K.value: 30,
@@ -529,12 +527,6 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         if not model_cfg.get("model"):
             fal_model_key = "flux_2_pro"
             logger.warning("[stream][%s] model_cfg missing 'model' key, falling back to flux_2_pro", trace_id)
-
-        # Ideogram fallback
-        use_ideogram = _parse_bool_env("USE_IDEOGRAM", default=True)
-        if not use_ideogram and fal_model_key in ("ideogram_turbo", "ideogram_quality"):
-            fal_model_key = "flux_2_pro"
-            logger.info("[stream][%s] Ideogram disabled (USE_IDEOGRAM=false), using flux_2_pro", trace_id)
 
         # ── Img2Img override ───────────────────────────────────────────────
         # If a reference image was uploaded, the selected text-to-image model

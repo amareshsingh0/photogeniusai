@@ -62,7 +62,6 @@ export async function GET(req: Request) {
         select: {
           id: true,
           originalPrompt: true,
-          enhancedPrompt: true,
           mode: true,
           creditsUsed: true,
           qualityTierUsed: true,
@@ -71,7 +70,6 @@ export async function GET(req: Request) {
           selectedOutputUrl: true,
           thumbnailUrl: true,
           userRating: true,
-          // userReason: true,  // TODO: Enable after DB migration adds this column
           generationTimeSeconds: true,
           overallScore: true,
           createdAt: true,

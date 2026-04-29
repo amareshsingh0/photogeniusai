@@ -79,22 +79,6 @@ FEATURE_FLAGS = [
         "default": "true",
     },
 
-    # ── Models ───────────────────────────────────────────────────────────────
-    {
-        "key": "USE_IDEOGRAM",
-        "category": "Models",
-        "description": "Enable Ideogram v3 in typography routing.",
-        "type": "boolean",
-        "default": "false",
-    },
-    {
-        "key": "USE_GPT_IMAGE",
-        "category": "Models",
-        "description": "Enable OpenAI GPT Image 2 (gpt-image-2) as a generation provider.",
-        "type": "boolean",
-        "default": "false",
-    },
-
     # ── Quality ──────────────────────────────────────────────────────────────
     {
         "key": "QUALITY_CRITIC_THRESHOLD",

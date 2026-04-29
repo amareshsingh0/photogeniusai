@@ -42,6 +42,8 @@ import json
 from typing import Dict, List, Optional
 
 import re
+import base64
+import uuid
 
 import httpx
 
@@ -762,6 +764,64 @@ class MultiProviderClient:
         if provider in self._provider_open_until:
             self._provider_open_until.pop(provider, None)
 
+    # ── Persist data: URIs to S3 to avoid 1-5 MB blobs in Postgres ─────────────
+
+    async def _persist_data_uris_to_s3(self, urls: List[str]) -> List[str]:
+        """
+        Convert any `data:image/...;base64,...` URIs to permanent S3 HTTPS URLs.
+
+        Why: Google Imagen and OpenAI GPT Image 2 return base64 payloads. If we
+        store the data URI directly in Postgres, every gallery / admin query
+        re-loads multi-MB strings per row → minutes of latency.
+
+        HTTPS URLs pass through untouched.
+        """
+        if not urls or not any(isinstance(u, str) and u.startswith("data:image") for u in urls):
+            return urls
+
+        try:
+            from app.services.storage.s3_service import get_s3_service
+        except Exception as exc:
+            logger.error("[multi] S3 service unavailable, leaving data URIs in place: %s", exc)
+            return urls
+
+        s3 = get_s3_service()
+        out: List[str] = []
+        for url in urls:
+            if not isinstance(url, str) or not url.startswith("data:image"):
+                out.append(url)
+                continue
+
+            try:
+                comma = url.find(",")
+                if comma == -1:
+                    out.append(url)
+                    continue
+                header = url[:comma].lower()
+                if "png" in header:
+                    mime, ext = "image/png", "png"
+                elif "jpeg" in header or "jpg" in header:
+                    mime, ext = "image/jpeg", "jpg"
+                elif "webp" in header:
+                    mime, ext = "image/webp", "webp"
+                else:
+                    mime, ext = "image/png", "png"
+
+                img_bytes = base64.b64decode(url[comma + 1:])
+                s3_key = f"generations/{uuid.uuid4()}.{ext}"
+                await s3.upload_file_async(file_data=img_bytes, s3_key=s3_key, content_type=mime)
+
+                bucket = getattr(s3, "bucket", None) or os.getenv("S3_BUCKET", "")
+                region = getattr(s3, "region", None) or os.getenv("AWS_REGION", "us-east-1")
+                https_url = f"https://{bucket}.s3.{region}.amazonaws.com/{s3_key}"
+                out.append(https_url)
+                logger.info("[multi] Uploaded data URI to S3 (%d bytes) → %s", len(img_bytes), s3_key)
+            except Exception as exc:
+                logger.error("[multi] S3 upload failed, keeping data URI: %s", exc)
+                out.append(url)
+
+        return out
+
     # ── Post-output image validation (Priority 4) ──────────────────────────────
 
     async def _validate_generated_image(self, image_url: str) -> tuple:
@@ -1079,6 +1139,7 @@ class MultiProviderClient:
             if not urls:
                 raise ValueError(f"No images from Imagen: {list(data.keys())}")
 
+            urls = await self._persist_data_uris_to_s3(urls)
             return self._ok(urls, model_id, "google.ai", time.time() - start)
 
         except Exception as e:
@@ -1287,6 +1348,7 @@ class MultiProviderClient:
 
             # Convert base64 → data URI (same pattern as _call_google)
             urls = [f"data:image/png;base64,{b64}" for b64 in b64_list]
+            urls = await self._persist_data_uris_to_s3(urls)
             return self._ok(urls, model_id, "openai.com", time.time() - start)
 
         except Exception as exc:
