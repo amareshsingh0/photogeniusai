@@ -232,10 +232,10 @@ DEFAULT_MODELS = [
         "modelId": "gpt_image_2",
         "provider": "openai.com",
         "displayName": "GPT Image 2",
-        "buckets": ["photorealism", "artistic", "fast"],
+        "buckets": ["photorealism", "artistic", "fast", "typography"],
         "costPerImage": 0.053,
         "isActive": True,
-        "isTestingEnabled": False,
+        "isTestingEnabled": True,
     },
 ]
 
@@ -404,22 +404,37 @@ async def get_all_models():
         )
 
         # Two aggregate queries cover all models — no per-model round trips.
-        totals_rows, rated_rows = await asyncio.gather(
-            prisma.query_raw(
-                'SELECT "modelUsed" AS model_used, COUNT(*)::int AS total '
-                'FROM "Generation" WHERE "isDeleted" = false AND "modelUsed" IS NOT NULL '
-                'GROUP BY "modelUsed"'
-            ),
-            prisma.query_raw(
-                'SELECT "modelUsed" AS model_used, '
-                'AVG("userRating")::float AS avg_rating, '
-                'AVG("creditsUsed")::float AS avg_cost, '
-                'AVG("generationTimeSeconds")::float AS avg_latency '
-                'FROM "Generation" WHERE "isDeleted" = false AND "userRating" IS NOT NULL '
-                'GROUP BY "modelUsed"'
-            ),
-        )
-        await prisma.disconnect()
+        totals_rows: list = []
+        rated_rows: list = []
+        try:
+            results = await asyncio.gather(
+                prisma.query_raw(
+                    'SELECT "modelUsed" AS model_used, COUNT(*)::int AS total '
+                    'FROM "Generation" WHERE "isDeleted" = false AND "modelUsed" IS NOT NULL '
+                    'GROUP BY "modelUsed"'
+                ),
+                prisma.query_raw(
+                    'SELECT "modelUsed" AS model_used, '
+                    'AVG("userRating")::float AS avg_rating, '
+                    'AVG("creditsUsed")::float AS avg_cost, '
+                    'AVG("generationTimeSeconds")::float AS avg_latency '
+                    'FROM "Generation" WHERE "isDeleted" = false AND "userRating" IS NOT NULL '
+                    'GROUP BY "modelUsed"'
+                ),
+                return_exceptions=True,
+            )
+            if isinstance(results[0], list):
+                totals_rows = results[0]
+            else:
+                logger.error("[admin_models] totals aggregate failed: %s", results[0])
+            if isinstance(results[1], list):
+                rated_rows = results[1]
+            else:
+                logger.error("[admin_models] rated aggregate failed: %s", results[1])
+        except Exception as exc:
+            logger.error("[admin_models] aggregate query crashed: %s", exc, exc_info=True)
+        finally:
+            await prisma.disconnect()
 
         totals_by_id = {row["model_used"]: row["total"] for row in (totals_rows or [])}
         rated_by_id = {
