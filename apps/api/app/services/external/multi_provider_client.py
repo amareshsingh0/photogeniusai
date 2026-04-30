@@ -779,57 +779,79 @@ class MultiProviderClient:
 
     async def _persist_data_uris_to_s3(self, urls: List[str]) -> List[str]:
         """
-        Convert any `data:image/...;base64,...` URIs to permanent S3 HTTPS URLs.
+        Convert any `data:image/...;base64,...` URIs to permanent HTTPS URLs.
 
         Why: Google Imagen and OpenAI GPT Image 2 return base64 payloads. If we
         store the data URI directly in Postgres, every gallery / admin query
         re-loads multi-MB strings per row → minutes of latency.
 
+        Strategy: try fal.ai storage first (always available — FAL_KEY is the
+        only required credential). Fall back to S3 if fal.ai upload fails.
         HTTPS URLs pass through untouched.
         """
         if not urls or not any(isinstance(u, str) and u.startswith("data:image") for u in urls):
             return urls
 
-        try:
-            from app.services.storage.s3_service import get_s3_service
-        except Exception as exc:
-            logger.error("[multi] S3 service unavailable, leaving data URIs in place: %s", exc)
-            return urls
-
-        s3 = get_s3_service()
         out: List[str] = []
         for url in urls:
             if not isinstance(url, str) or not url.startswith("data:image"):
                 out.append(url)
                 continue
 
-            try:
-                comma = url.find(",")
-                if comma == -1:
-                    out.append(url)
-                    continue
-                header = url[:comma].lower()
-                if "png" in header:
-                    mime, ext = "image/png", "png"
-                elif "jpeg" in header or "jpg" in header:
-                    mime, ext = "image/jpeg", "jpg"
-                elif "webp" in header:
-                    mime, ext = "image/webp", "webp"
-                else:
-                    mime, ext = "image/png", "png"
-
-                img_bytes = base64.b64decode(url[comma + 1:])
-                s3_key = f"generations/{uuid.uuid4()}.{ext}"
-                await s3.upload_file_async(file_data=img_bytes, s3_key=s3_key, content_type=mime)
-
-                bucket = getattr(s3, "bucket", None) or os.getenv("S3_BUCKET", "")
-                region = getattr(s3, "region", None) or os.getenv("AWS_REGION", "us-east-1")
-                https_url = f"https://{bucket}.s3.{region}.amazonaws.com/{s3_key}"
-                out.append(https_url)
-                logger.info("[multi] Uploaded data URI to S3 (%d bytes) → %s", len(img_bytes), s3_key)
-            except Exception as exc:
-                logger.error("[multi] S3 upload failed, keeping data URI: %s", exc)
+            comma = url.find(",")
+            if comma == -1:
                 out.append(url)
+                continue
+
+            header = url[:comma].lower()
+            if "png" in header:
+                mime, ext = "image/png", "png"
+            elif "jpeg" in header or "jpg" in header:
+                mime, ext = "image/jpeg", "jpg"
+            elif "webp" in header:
+                mime, ext = "image/webp", "webp"
+            else:
+                mime, ext = "image/png", "png"
+
+            try:
+                img_bytes = base64.b64decode(url[comma + 1:])
+            except Exception as exc:
+                logger.error("[multi] base64 decode failed, keeping data URI: %s", exc)
+                out.append(url)
+                continue
+
+            uploaded_url: Optional[str] = None
+
+            # 1) S3 (primary) — owned infrastructure, permanent URLs
+            try:
+                from app.services.storage.s3_service import get_s3_service
+                s3 = get_s3_service()
+                if getattr(s3, "bucket", None) and getattr(s3, "access_key", None):
+                    s3_key = f"generations/{uuid.uuid4()}.{ext}"
+                    await s3.upload_file_async(
+                        file_data=img_bytes, s3_key=s3_key, content_type=mime,
+                    )
+                    bucket = s3.bucket
+                    region = getattr(s3, "region", None) or os.getenv("AWS_REGION", "us-east-1")
+                    uploaded_url = f"https://{bucket}.s3.{region}.amazonaws.com/{s3_key}"
+                    logger.info("[multi] Uploaded data URI to S3 (%d bytes) → %s",
+                                len(img_bytes), s3_key)
+            except Exception as exc:
+                logger.warning("[multi] S3 upload failed, trying fal storage: %s", exc)
+
+            # 2) fal.ai storage (fallback) — works as long as FAL_KEY is set
+            if not uploaded_url:
+                try:
+                    from app.services.external.fal_client import fal_client
+                    uploaded_url = await fal_client.upload_bytes(
+                        img_bytes, content_type=mime, filename=f"generation.{ext}"
+                    )
+                    logger.info("[multi] Uploaded data URI to fal storage (%d bytes) → %s",
+                                len(img_bytes), uploaded_url[:80])
+                except Exception as exc:
+                    logger.error("[multi] fal upload also failed, keeping data URI: %s", exc)
+
+            out.append(uploaded_url or url)
 
         return out
 
