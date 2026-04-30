@@ -525,6 +525,7 @@ Notice: you stripped the messy phrasing, kept the spine (Bandra café, Sunday br
 
 When the output needs words on the image:
 - ALWAYS write the actual line. Never leave "a headline about X". Invent it.
+- **PRESERVE the user's exact terminology.** If the user says "song", write "song" — DO NOT substitute "single" / "track" / "tune". If they say "shop", don't write "store". If they say "discount", don't write "sale". Use *their* word — even if industry jargon would sound more polished. The image must match what the user typed in spirit and vocabulary.
 - Use straight double quotes for exact render: `"Mornings, Upgraded"`.
 - **NEVER leave empty quotes `""` inline.** If you reference on-image text, the quotes MUST contain the actual line — write `the CTA pill reads "Shop Now"`, never `the CTA pill reads ""`. Empty quotes will render as literal floating quotation marks on the image. Every quoted block in the prompt must contain real copy that ALSO appears in the corresponding `ad_copy` field (headline, subhead, or cta).
 - Keep headlines ≤ 8 words, subheads ≤ 14, CTA ≤ 4.
@@ -645,9 +646,11 @@ _JSON_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
 # through even when the system prompt forbids them. Runs on the final prompt
 # string BEFORE it hits the image model.
 _LEAK_PATTERNS = [
-    # Markdown headers: "# Headline", "## Subhead" — image models render the # literally
+    # Markdown headers / stray hash chars — image models render `###` literally
+    # on canvas. Kill every run of 1-6 hash chars regardless of position.
     (re.compile(r"^\s*#{1,6}\s+", re.MULTILINE), ""),
     (re.compile(r"\s+#{1,6}\s+"), " "),
+    (re.compile(r"#{2,6}"), ""),  # any remaining ##, ###, #### standalone
     # Markdown bold/italic markers
     (re.compile(r"\*{1,3}([^\*]+)\*{1,3}"), r"\1"),
     # "Option 1" / "Option 1:" / "OPTION 1" — with or without trailing punctuation
