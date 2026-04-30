@@ -320,6 +320,17 @@ def _distill_for_imagen(prompt: str) -> str:
     cleaned = _IMAGEN_HASHTAGS.sub("", cleaned)
     cleaned = _IMAGEN_MD.sub("", cleaned)
 
+    # 2b) Hard-strip designer-brief enumerator phrases that Imagen renders
+    #     literally on the image even when they appear inside ordinary
+    #     sentences (e.g. "Option 2 features..." → image with "Option 2"
+    #     painted on it). Quoted-text handling already covered above.
+    cleaned = re.sub(
+        r"\b(?:Option|Variant|Version|Concept|Panel|Slide)\s+\d+\b[:\.\)]?",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
     # 3) Strip the upstream "ONE single unified image" anchor (added by
     #    generate_stream.py for non-Google providers) — we add our own framing.
     cleaned = re.sub(
