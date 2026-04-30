@@ -113,7 +113,7 @@ async def _find_candidate_ids(prisma) -> List[str]:
     the giant base64 payload over the wire just to identify candidates."""
     rows = await prisma.query_raw(
         '''
-        SELECT id FROM "Generation"
+        SELECT id FROM "generations"
         WHERE LEFT("selectedOutputUrl", 12) = 'data:image/'
            OR "outputUrls"::text LIKE '%data:image/%'
         ORDER BY "createdAt" DESC

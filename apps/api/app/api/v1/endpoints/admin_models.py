@@ -410,7 +410,7 @@ async def get_all_models():
             results = await asyncio.gather(
                 prisma.query_raw(
                     'SELECT "modelUsed" AS model_used, COUNT(*)::int AS total '
-                    'FROM "Generation" WHERE "isDeleted" = false AND "modelUsed" IS NOT NULL '
+                    'FROM "generations" WHERE "isDeleted" = false AND "modelUsed" IS NOT NULL '
                     'GROUP BY "modelUsed"'
                 ),
                 prisma.query_raw(
@@ -418,7 +418,7 @@ async def get_all_models():
                     'AVG("userRating")::float AS avg_rating, '
                     'AVG("creditsUsed")::float AS avg_cost, '
                     'AVG("generationTimeSeconds")::float AS avg_latency '
-                    'FROM "Generation" WHERE "isDeleted" = false AND "userRating" IS NOT NULL '
+                    'FROM "generations" WHERE "isDeleted" = false AND "userRating" IS NOT NULL '
                     'GROUP BY "modelUsed"'
                 ),
                 return_exceptions=True,
