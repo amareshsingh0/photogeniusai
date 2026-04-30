@@ -72,14 +72,29 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def resolve_aws_credentials(self) -> "Settings":
-        """Resolve AWS credentials from legacy S3_* vars if AWS_* not set"""
-        # If AWS_* not set but S3_* is set, use S3_* values
+        """Cross-resolve AWS_* and legacy S3_* env vars in both directions."""
+        # S3_* → AWS_*
         if not self.AWS_ACCESS_KEY_ID and self.S3_ACCESS_KEY:
             object.__setattr__(self, "AWS_ACCESS_KEY_ID", self.S3_ACCESS_KEY)
         if not self.AWS_SECRET_ACCESS_KEY and self.S3_SECRET_KEY:
             object.__setattr__(self, "AWS_SECRET_ACCESS_KEY", self.S3_SECRET_KEY)
         if self.S3_REGION and self.S3_REGION != "auto" and self.AWS_REGION == "us-east-1":
             object.__setattr__(self, "AWS_REGION", self.S3_REGION)
+
+        # AWS_* → S3_* (so S3Service works when only AWS_* are set)
+        if not self.S3_ACCESS_KEY and self.AWS_ACCESS_KEY_ID:
+            object.__setattr__(self, "S3_ACCESS_KEY", self.AWS_ACCESS_KEY_ID)
+        if not self.S3_SECRET_KEY and self.AWS_SECRET_ACCESS_KEY:
+            object.__setattr__(self, "S3_SECRET_KEY", self.AWS_SECRET_ACCESS_KEY)
+        if (not self.S3_REGION or self.S3_REGION == "auto") and self.AWS_REGION:
+            object.__setattr__(self, "S3_REGION", self.AWS_REGION)
+
+        # Bucket alias: support S3_BUCKET (no _NAME) too
+        import os as _os
+        if not self.S3_BUCKET_NAME:
+            alt = _os.getenv("S3_BUCKET") or _os.getenv("AWS_S3_BUCKET")
+            if alt:
+                object.__setattr__(self, "S3_BUCKET_NAME", alt)
         return self
 
     # ==================== AI/ML ====================
