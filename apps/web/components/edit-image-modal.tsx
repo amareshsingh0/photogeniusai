@@ -530,9 +530,10 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
           </button>
         </div>
 
-        {/* Operation picker */}
-        <div className="px-5 pt-3 pb-2 border-b border-white/[0.04] overflow-x-auto">
-          <div className="flex gap-1.5 min-w-max">
+        {/* Operation picker — wraps to multiple rows on narrow viewports so
+            no option (e.g. "Background") gets hidden behind a scrollbar. */}
+        <div className="px-5 pt-3 pb-2 border-b border-white/[0.04]">
+          <div className="flex flex-wrap gap-1.5">
             {OPERATIONS.map(o => (
               <button
                 key={o.id}
