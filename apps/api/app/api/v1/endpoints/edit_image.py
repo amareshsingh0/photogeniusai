@@ -160,28 +160,54 @@ def _resolve_edit_mode(request: EditRequest) -> str:
 
 
 def _instruction_for_mode(edit_mode: str, instruction: str) -> str:
-    """Prepend a verb hint so the model interprets the instruction correctly.
+    """Wrap the instruction with subject-preservation language.
 
-    Kontext / Seedream respond well to imperative phrasing. We add a short
-    prefix so "a hat" becomes "Add a hat to the subject", etc.
+    Flux Kontext / Seedream / Ideogram all interpret short instructions as
+    fresh text-to-image prompts unless we explicitly tell them to keep the
+    reference subject identical. Without this wrapping, "beach sunset" on a
+    portrait → fresh beach sunset photo (subject lost).
     """
     raw = instruction.strip()
-    raw_low = raw.lower()
-    prefixes = {
-        "object_add":      "Add to the scene: ",
-        "object_remove":   "Remove from the scene cleanly: ",
-        "background_swap": "Replace the background with: ",
-        "text_replace":    "Replace the visible text with: ",
-        "style_remix":     "Restyle in the style of: ",
-        "compose":         "Combine the reference images so that: ",
+    if not raw:
+        return raw
+
+    templates = {
+        "object_add":
+            "Keep everything in the reference image identical (subject, pose, "
+            "lighting, composition). Add only this to the scene: {instr}.",
+        "object_remove":
+            "Keep everything in the reference image identical (subject, pose, "
+            "lighting, composition). Remove only this from the scene cleanly, "
+            "filling the area to match the surrounding context: {instr}.",
+        "background_swap":
+            "Keep the subject EXACTLY identical — same face, hair, expression, "
+            "skin tone, clothing, pose, body, and proportions. Do NOT change "
+            "the person at all. Replace ONLY the background behind the subject "
+            "with: {instr}. Match the lighting on the subject to the new "
+            "background naturally.",
+        "text_replace":
+            "Keep the image identical in every way (composition, layout, "
+            "colors, typography style, all visual elements). Change ONLY the "
+            "visible text content to: {instr}.",
+        "style_remix":
+            "Keep the same subject, composition, and core content from the "
+            "reference image, but restyle the rendering in this style: {instr}.",
+        "compose":
+            "Combine the reference images into a single cohesive scene so "
+            "that: {instr}.",
+        "instruction_edit":
+            "Keep everything in the reference image as-is unless the "
+            "instruction explicitly asks to change it. Apply this edit: {instr}.",
     }
-    pref = prefixes.get(edit_mode)
-    if not pref:
+    tpl = templates.get(edit_mode)
+    if not tpl:
         return raw
-    # Don't double-prefix if the user already wrote it that way
-    if raw_low.startswith(pref.strip().lower()[:6]):
+    # Avoid double-wrapping if the user already wrote a long instruction with
+    # subject-preservation language.
+    raw_low = raw.lower()
+    if "keep the" in raw_low and "identical" in raw_low:
         return raw
-    return f"{pref}{raw}"
+    return tpl.format(instr=raw)
 
 
 @router.post("/edit", response_model=EditResponse)
