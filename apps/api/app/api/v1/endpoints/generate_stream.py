@@ -1331,6 +1331,33 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
             "trace_id":     trace_id,
         })
 
+        # Enrich the raw prompt ONCE before dispatching to all models. Without
+        # this, vague prompts ("ek artist ka song launch poster") cause models
+        # to render placeholder text like [ARTIST'S NAME], invent fake names,
+        # or use wrong date formats. Same enriched prompt → same input for all
+        # models → comparison stays fair.
+        try:
+            from app.services.smart.simple_prompt_engine import simple_engine
+            enrich = await simple_engine.enrich(
+                user_prompt=req.prompt,
+                bucket=db_bucket,
+                tier=requested_tier,
+                width=req.width,
+                height=req.height,
+                style=req.style,
+            )
+            enriched_prompt = enrich.get("prompt") or req.prompt
+            enriched_neg = enrich.get("negative_prompt") or (req.negative_prompt or "")
+            logger.info(
+                "[parallel][%s] enriched prompt via simple_engine (raw=%d chars, enriched=%d chars)",
+                trace_id, len(req.prompt), len(enriched_prompt),
+            )
+            req.prompt = enriched_prompt
+            if not req.negative_prompt:
+                req.negative_prompt = enriched_neg
+        except Exception as exc:
+            logger.warning("[parallel][%s] simple_engine enrich failed, using raw prompt: %s", trace_id, exc)
+
         # Launch all (model, tier) pairs in parallel — wrap as Tasks so we can
         # interleave heartbeat events while waiting. Heartbeats (every ~15s)
         # keep the nginx/Cloudflare SSE proxy connection alive during long
