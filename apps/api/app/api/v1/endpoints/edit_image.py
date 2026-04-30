@@ -101,6 +101,53 @@ async def upload_data_url(request: UploadDataUrlRequest):
         raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
 
 
+async def _save_edit_to_db(
+    instruction: str,
+    edit_mode: str,
+    image_url: str,
+    original_url: str,
+    model_key: str,
+    quality: str,
+    elapsed: float,
+) -> None:
+    """Persist an edit as a Generation row so it shows up in admin Generations
+    and the user's gallery. Non-fatal — any DB error is logged and swallowed
+    so the edit response still reaches the client."""
+    try:
+        import json
+        from prisma import Prisma
+        prisma = Prisma()
+        await prisma.connect()
+        try:
+            await prisma.generation.create(
+                data={
+                    "userId": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c",  # DEV_USER UUID
+                    "mode": "REALISM",
+                    "originalPrompt": (instruction or f"[edit:{edit_mode}]")[:1000],
+                    "enhancedPrompt": instruction or "",
+                    "numInferenceSteps": 28,
+                    "guidanceScale": 7.0,
+                    "width": 1024,
+                    "height": 1024,
+                    "outputUrls": json.dumps([image_url]),
+                    "selectedOutputUrl": image_url,
+                    "creditsUsed": 0,
+                    "qualityTierUsed": quality,
+                    "modelUsed": model_key,
+                    "bucket": f"edit_{edit_mode}",
+                    "generationTimeSeconds": elapsed,
+                    "metadata": json.dumps({
+                        "edit_mode": edit_mode,
+                        "original_url": original_url,
+                    }),
+                }
+            )
+        finally:
+            await prisma.disconnect()
+    except Exception as exc:
+        logger.warning("[EDIT] DB save failed (non-fatal): %s", exc)
+
+
 def _resolve_edit_mode(request: EditRequest) -> str:
     """Infer mode if caller didn't pass one explicitly."""
     if request.edit_mode:
@@ -182,13 +229,23 @@ async def edit_image(request: EditRequest):
                 status_code=503,
                 detail=f"Inpaint failed: {result.get('metadata', {}).get('error', 'unknown')}",
             )
+        elapsed = time.time() - start
+        await _save_edit_to_db(
+            instruction=request.instruction,
+            edit_mode=edit_mode,
+            image_url=result["image_url"],
+            original_url=request.image_url,
+            model_key="flux_fill",
+            quality=request.quality,
+            elapsed=elapsed,
+        )
         return EditResponse(
             success=True,
             image_url=result["image_url"],
             original_url=request.image_url,
             instruction=request.instruction,
             edit_mode=edit_mode,
-            total_time=time.time() - start,
+            total_time=elapsed,
         )
 
     # ── All other modes — route to the capable model via multi_client ─────
@@ -215,13 +272,23 @@ async def edit_image(request: EditRequest):
         err = result.get("metadata", {}).get("error", "unknown")
         raise HTTPException(status_code=503, detail=f"Edit failed: {err}")
 
+    elapsed = time.time() - start
+    await _save_edit_to_db(
+        instruction=request.instruction,
+        edit_mode=edit_mode,
+        image_url=result["image_url"],
+        original_url=request.image_url,
+        model_key=model_key,
+        quality=request.quality,
+        elapsed=elapsed,
+    )
     return EditResponse(
         success=True,
         image_url=result["image_url"],
         original_url=request.image_url,
         instruction=request.instruction,
         edit_mode=edit_mode,
-        total_time=time.time() - start,
+        total_time=elapsed,
     )
 
 
