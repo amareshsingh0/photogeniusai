@@ -23,6 +23,33 @@ from typing import List, Optional
 # Make the app package importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Load .env.local + .env so DATABASE_URL / S3_* / FAL_KEY are available.
+# Prisma + S3Service read from os.environ at connect time.
+try:
+    from dotenv import load_dotenv  # type: ignore
+    _here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for _name in (".env.local", ".env"):
+        _path = os.path.join(_here, _name)
+        if os.path.exists(_path):
+            load_dotenv(_path, override=False)
+except ImportError:
+    # Fallback: manual parse if python-dotenv isn't installed
+    _here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for _name in (".env.local", ".env"):
+        _path = os.path.join(_here, _name)
+        if not os.path.exists(_path):
+            continue
+        with open(_path, "r", encoding="utf-8") as _fh:
+            for _line in _fh:
+                _line = _line.strip()
+                if not _line or _line.startswith("#") or "=" not in _line:
+                    continue
+                _k, _v = _line.split("=", 1)
+                _k = _k.strip()
+                _v = _v.strip().strip('"').strip("'")
+                if _k and _k not in os.environ:
+                    os.environ[_k] = _v
+
 from prisma import Prisma  # noqa: E402
 
 logging.basicConfig(
