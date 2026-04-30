@@ -1336,6 +1336,10 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
         # to render placeholder text like [ARTIST'S NAME], invent fake names,
         # or use wrong date formats. Same enriched prompt → same input for all
         # models → comparison stays fair.
+        # Preserve the raw user prompt — it gets stored as originalPrompt in
+        # the DB (VarChar(1000)) and is what the admin UI displays. The long
+        # enriched version goes to the image models via req.prompt.
+        raw_user_prompt = req.prompt
         try:
             from app.services.smart.simple_prompt_engine import simple_engine
             enrich = await simple_engine.enrich(
@@ -1357,6 +1361,9 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
                 req.negative_prompt = enriched_neg
         except Exception as exc:
             logger.warning("[parallel][%s] simple_engine enrich failed, using raw prompt: %s", trace_id, exc)
+        # Stash raw prompt on req so _generate_with_model can use it for
+        # originalPrompt at DB save time (VarChar(1000) limit).
+        setattr(req, "_raw_user_prompt", raw_user_prompt)
 
         # Launch all (model, tier) pairs in parallel — wrap as Tasks so we can
         # interleave heartbeat events while waiting. Heartbeats (every ~15s)
@@ -1489,11 +1496,17 @@ async def _generate_with_model(
             from app.services.smart.config import detect_capability_bucket
             bucket = detect_capability_bucket(req.prompt)
 
+            # originalPrompt is VarChar(1000); enhancedPrompt is Text (unlimited).
+            # Use the raw user prompt for originalPrompt (what admin UI shows)
+            # and the long enriched prompt for enhancedPrompt.
+            raw_prompt = getattr(req, "_raw_user_prompt", req.prompt) or req.prompt
+            original_prompt = raw_prompt[:1000]
+
             generation = await prisma.generation.create(
                 data={
                     "userId": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c",  # DEV_USER UUID
                     "mode": "REALISM",  # Default mode
-                    "originalPrompt": req.prompt,
+                    "originalPrompt": original_prompt,
                     "enhancedPrompt": req.prompt,
                     "numInferenceSteps": _QUALITY_STEPS.get(effective_quality, 20),
                     "guidanceScale": _MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
