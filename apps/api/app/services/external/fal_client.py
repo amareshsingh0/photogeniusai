@@ -59,7 +59,7 @@ FAL_MODELS = {
     # ── Flux Kontext (editing + character consistency) ─────────────────────────
     "flux_kontext":     "fal-ai/flux-pro/kontext",     # $0.04 — instruction editing
     "flux_kontext_max": "fal-ai/flux-pro/kontext/max", # $0.08 — multi-ref consistency
-    "flux_fill":        "fal-ai/flux-pro/fill",        # $0.05 — mask inpainting
+    "flux_fill":        "fal-ai/flux-pro/v1/fill",     # $0.05 — mask inpainting (versioned endpoint)
     # ── Specialist models ──────────────────────────────────────────────────────
     "ideogram_v3":      "fal-ai/ideogram/v3",          # $0.03-0.09 — best typography
     "recraft_v4":       "fal-ai/recraft/v4/text-to-image",  # $0.04 — design/brand
