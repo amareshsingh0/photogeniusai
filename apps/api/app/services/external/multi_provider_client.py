@@ -488,10 +488,12 @@ _WAVESPEED_MODEL_PATHS = {
 
 # Provider → env var
 _PROVIDER_KEYS = {
-    "fal":       "FAL_KEY",              # fal.ai — Primary aggregator (Flux, Ideogram, Recraft, Seedream)
-    "google":    "GEMINI_API_KEY",       # Google AI Studio — Imagen models
-    "wavespeed": "WAVESPEED_API_KEY",    # WaveSpeed — Grok 2, Wan 2.7, Hunyuan
-    "openai":    "OPENAI_API_KEY",       # OpenAI — GPT Image 2 (gpt-image-1)
+    "fal":          "FAL_KEY",           # fal.ai — Primary aggregator (Flux, Ideogram, Recraft, Seedream)
+    "google":       "GEMINI_API_KEY",    # Google AI Studio — Imagen models
+    "google_edit":  "GEMINI_API_KEY",    # alias — Gemini 2.5 Flash Image edit
+    "wavespeed":    "WAVESPEED_API_KEY", # WaveSpeed — Grok 2, Wan 2.7, Hunyuan
+    "openai":       "OPENAI_API_KEY",    # OpenAI — GPT Image 2 generation
+    "openai_edit":  "OPENAI_API_KEY",    # alias — GPT Image 2 edit (/v1/images/edits)
 }
 
 # ── Model routing table — ordered by cheapest provider ────────────────────────
