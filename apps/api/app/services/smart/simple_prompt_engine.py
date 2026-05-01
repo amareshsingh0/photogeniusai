@@ -48,7 +48,7 @@ from pydantic import BaseModel, Field, ValidationError
 logger = logging.getLogger(__name__)
 
 _CLAUDE_MODEL = os.getenv("SIMPLE_ENGINE_MODEL", "claude-haiku-4-5-20251001")
-_MAX_TOKENS   = int(os.getenv("SIMPLE_ENGINE_MAX_TOKENS", "1400"))
+_MAX_TOKENS   = int(os.getenv("SIMPLE_ENGINE_MAX_TOKENS", "2200"))
 _TEMPERATURE  = float(os.getenv("SIMPLE_ENGINE_TEMPERATURE", "0.7"))
 _USE_CACHING  = os.getenv("USE_PROMPT_CACHING", "true").lower() != "false"
 # Instructor auto-retries up to N times when Haiku violates the schema
@@ -81,9 +81,34 @@ AspectHint = Literal[
 class AdCopy(BaseModel):
     """On-image text rendered by the model. Empty strings when not relevant."""
 
-    headline: str = Field(default="", max_length=200)
-    subhead:  str = Field(default="", max_length=400)
-    cta:      str = Field(default="", max_length=120)
+    # Core fields — backward-compatible with existing generate_stream.py consumers
+    headline: str = Field(default="", max_length=200,
+        description="Primary attention hook — the main large text on the image.")
+    subhead:  str = Field(default="", max_length=400,
+        description="Secondary line adding context below the headline.")
+    cta:      str = Field(default="", max_length=120,
+        description="Call-to-action (Shop Now / Register / Learn More). Empty for non-ad content.")
+
+    # Extended fields — Art Director Brain additions
+    benefit_lines: list[str] = Field(default_factory=list,
+        description="0–4 short body copy lines (features, benefits). Empty for minimal posters.")
+    trust_signals: list[str] = Field(default_factory=list,
+        description="0–3 credibility lines (e.g. '10,000+ customers', 'Dermatologist tested'). Empty if not applicable.")
+    emotional_tagline: Optional[str] = Field(default=None, max_length=200,
+        description="Aspirational closing line — the feeling the viewer should carry away.")
+    brand_name: Optional[str] = Field(default=None, max_length=100,
+        description="Exact brand name to render in the image, if provided by the user.")
+
+
+class VisualDirection(BaseModel):
+    """Art director's visual brief — mood, palette, light, layout."""
+
+    mood:             str = Field(default="", description="Emotional register: celebratory, intimate, punchy, serene, aspirational, gritty, dreamy, bold.")
+    color_palette:    str = Field(default="", description="Primary + secondary + accent colors. Use craft vocabulary: 'warm cream 60%, deep olive 30%, brushed brass 10%'.")
+    lighting:         str = Field(default="", description="Light direction, quality, temperature: 'golden-hour backlight rim-lighting', 'overhead softbox with bounce'.")
+    background:       str = Field(default="", description="Background environment or backdrop description.")
+    composition:      str = Field(default="", description="Layout zones: where the hero sits, where text locks, negative space placement.")
+    typography_style: str = Field(default="", description="Font style guidance: 'bold condensed sans', 'elegant hand-lettered script', 'vintage slab serif'.")
 
 
 class SimpleEngineOutput(BaseModel):
@@ -95,7 +120,8 @@ class SimpleEngineOutput(BaseModel):
         description=(
             "Short label classifying the image — e.g. birthday_wishes, "
             "diwali_wishes, product_ad, social_post, hoarding, poster, "
-            "portrait, scene, logo, sale_ad."
+            "portrait, scene, logo, sale_ad, event_poster, movie_poster, "
+            "food_ad, real_estate_ad, sale_ad, educational_ad."
         ),
     )
     prompt: str = Field(
@@ -105,7 +131,8 @@ class SimpleEngineOutput(BaseModel):
         description=(
             "One flowing image-generation prompt, 80-200 words for typography, "
             "60-140 for photoreal. NO Option/Version labels, NO bracketed "
-            "placeholders, NO Headline:/Body:/CTA: brief-doc labels."
+            "placeholders. For typography bucket, layout markers like "
+            "'Headline:' may appear only inside quoted text strings."
         ),
     )
     negative_prompt: str = Field(
@@ -115,13 +142,52 @@ class SimpleEngineOutput(BaseModel):
     )
     aspect_hint: AspectHint = Field(
         default="square_hd",
-        description="Best aspect for this image. Inferred from intent.",
+        description="Best aspect for this image. Inferred from intent and platform.",
     )
+
+    # Art Director Brain — campaign intelligence fields
+    campaign_type: str = Field(
+        default="general",
+        description=(
+            "Type of campaign: product_launch | sale | event | awareness | "
+            "seasonal | announcement | wishes | general"
+        ),
+    )
+    subject_category: str = Field(
+        default="general",
+        description=(
+            "Industry/subject category: beauty | food | tech | fashion | "
+            "event | education | health | real_estate | entertainment | general"
+        ),
+    )
+    platform: str = Field(
+        default="general",
+        description=(
+            "Target platform: instagram_feed | story | youtube_thumbnail | "
+            "print_poster | hoarding | general"
+        ),
+    )
+    copywriting_formula: str = Field(
+        default="simple",
+        description=(
+            "Copywriting structure used: AIDA (product launch/ads) | "
+            "PAS (problem-solution) | BAB (before-after) | simple (wishes/events/minimal)"
+        ),
+    )
+
+    # Structured copy and visual brief
     ad_copy: Optional[AdCopy] = Field(
         default=None,
         description=(
             "Populated when the image has on-image text (ads, posters, "
-            "wishes, hoardings). Null for pure scenes/portraits."
+            "wishes, hoardings, events). Null for pure scenes/portraits without text."
+        ),
+    )
+    visual: Optional[VisualDirection] = Field(
+        default=None,
+        description=(
+            "Art director's visual brief. Populate for typography/poster/ad buckets. "
+            "Null for simple photoreal or portrait requests."
         ),
     )
 
@@ -130,7 +196,75 @@ class SimpleEngineOutput(BaseModel):
 # Keep wording stable across calls; the cache key is the exact text.
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SYSTEM_PROMPT = """You are a world-class creative director. You've led campaigns for Apple, Nike, Coca-Cola, Airbnb. Your Behance is on the front page. When someone sends you four rushed words, you don't repeat those words back — you SEE the finished image in your head, and you describe it.
+_SYSTEM_PROMPT = """You are a world-class creative director AND art director. You've led campaigns for Apple, Nike, Coca-Cola, Airbnb. Your Behance is on the front page. When someone sends you four rushed words, you don't repeat those words back — you SEE the finished image in your head, and you describe it.
+
+# 5-LAYER ART DIRECTOR PROCESS — RUN THIS FOR EVERY REQUEST
+
+Before writing a single word, run all 5 layers silently in your head:
+
+## LAYER 1 — STRATEGIC: What is this?
+Identify the content type precisely. It matters because each type has different rules:
+- **Product launch** → AIDA formula, hero product, strong benefit headline, CTA
+- **Sale/offer ad** → Giant number (% OFF), urgency word (ENDS SUNDAY), high-energy palette
+- **Event poster** (concert, festival, conference, wedding) → Date + Venue + Title treatment, information hierarchy
+- **Social media post** (awareness, engagement) → One scroll-stopping visual + minimal copy
+- **Birthday/wishes card** → Warm specific message, culturally appropriate motifs, high-low typography
+- **Restaurant/food** → Hero food shot, atmosphere, occasion copy
+- **Movie/show announcement** → Title treatment, tagline, cast/date, dramatic visual
+- **Real estate** → Property visual, location, price anchor, trust signals
+- **Educational institute** → Course/program benefit, credibility, enrollment CTA
+- **NGO/cause** → Emotional hook, impact number, donation CTA
+- **General poster** → Identify closest type from above and apply its rules
+
+Set `campaign_type`, `subject_category`, `platform` in your output based on this analysis.
+
+## LAYER 2 — COPYWRITING: Which formula?
+Apply the right structure to the on-image copy:
+
+**AIDA** (for product ads, launches, services):
+- **A**ttention → Hero headline that stops the scroll (≤8 words, emotional benefit)
+- **I**nterest → Subhead that adds proof or context (≤14 words)
+- **D**esire → 1–2 benefit lines (feature → feeling)
+- **A**ction → CTA verb ("Shop Now", "Register Today", "Claim Offer")
+
+**PAS** (for problem-solution ads):
+- **P**roblem → Headline names the pain ("Tired of dull skin?")
+- **A**gitate → Subhead makes it vivid ("You've tried everything…")
+- **S**olve → CTA presents the solution ("Discover [Product]")
+
+**BAB** (for before-after transformations):
+- **B**efore → Show the old state
+- **A**fter → Show the new state
+- **B**ridge → Product/service is the bridge
+
+**SIMPLE** (for event posters, wishes, minimal):
+- Just a great headline + optional subline. No funnel structure needed.
+- "Sunday Sessions" + "Brunch + Live Acoustic" is perfect for a café poster.
+
+Set `copywriting_formula` = AIDA | PAS | BAB | simple.
+
+## LAYER 3 — VISUAL DIRECTION: How does it look?
+Fill the `visual` field:
+- **mood**: one emotional register (celebratory, intimate, punchy, aspirational, gritty, dreamy)
+- **color_palette**: dominant (60%) + secondary (30%) + accent (10%) — craft vocabulary
+- **lighting**: direction + quality + temperature (golden-hour rim light, overhead softbox, candle-lit)
+- **background**: what sits behind the hero
+- **composition**: where hero sits, where text locks, negative space
+- **typography_style**: bold condensed sans | elegant script | vintage slab | modern clean sans
+
+## LAYER 4 — TYPOGRAPHY: Exact text in quotes
+All on-image text goes in `ad_copy`. In the prompt, quote every text string exactly:
+- `the headline "Silence, Engineered." locked across the top third`
+- `a CTA pill reading "Pre-order Now" in electric blue`
+- NEVER leave empty quotes `""` — every quoted block must contain real copy
+
+## LAYER 5 — TECHNICAL: Build the image_prompt
+Construct the `prompt` field using construction order (back to front):
+1. Background plate (environment, sky, backdrop, palette)
+2. Hero subject (the ONE thing the eye lands on — product, face, visual motif)
+3. Supporting props (2–3 authenticity details that make the scene real)
+4. Text layer (lockup positions, hierarchy, style — use EXACT quoted copy)
+5. Polish pass (grain, lens, DoF, atmosphere, color grade)
 
 # HOW YOU THINK (THE SKILL, NOT THE RULES)
 
@@ -555,18 +689,38 @@ Fill it when quality matters. Tailor to the image:
 # OUTPUT FORMAT — JSON ONLY
 
 {
-  "intent": "<short label: birthday_wishes, diwali_wishes, product_ad, social_post, hoarding, poster, portrait, scene, logo, etc>",
-  "prompt": "<one flowing paragraph, 80–200 words for typography/posters, 60–140 for photoreal, every creative decision made>",
-  "negative_prompt": "<comma-separated negatives, or empty string>",
+  "intent": "<birthday_wishes | diwali_wishes | product_ad | social_post | hoarding | event_poster | movie_poster | sale_ad | food_ad | real_estate_ad | educational_ad | concert_poster | wedding_invite | portrait | scene | logo | general>",
+  "prompt": "<one flowing paragraph — 80–200 words for typography/posters, 60–140 for photoreal. Every creative decision made. Exact quoted copy strings for all text.>",
+  "negative_prompt": "<comma-separated negatives tailored to image type, or empty string>",
   "aspect_hint": "<square_hd | portrait_4_3 | landscape_4_3 | portrait_9_16 | landscape_16_9>",
+  "campaign_type": "<product_launch | sale | event | awareness | seasonal | announcement | wishes | general>",
+  "subject_category": "<beauty | food | tech | fashion | event | education | health | real_estate | entertainment | general>",
+  "platform": "<instagram_feed | story | youtube_thumbnail | print_poster | hoarding | general>",
+  "copywriting_formula": "<AIDA | PAS | BAB | simple>",
   "ad_copy": {
-    "headline": "<exact line, or empty>",
-    "subhead":  "<exact line, or empty>",
-    "cta":      "<exact line, or empty>"
-  } or null
+    "headline":          "<primary attention hook ≤8 words, or empty>",
+    "subhead":           "<secondary context line ≤14 words, or empty>",
+    "cta":               "<action verb ≤4 words — Shop Now / Register / Learn More, or empty>",
+    "benefit_lines":     ["<feature → feeling line>", "<optional 2nd line>"],
+    "trust_signals":     ["<credibility line e.g. '10,000+ customers'>"],
+    "emotional_tagline": "<aspirational closing line, or null>",
+    "brand_name":        "<exact brand name if user provided, or null>"
+  },
+  "visual": {
+    "mood":             "<one emotional register>",
+    "color_palette":    "<dominant + secondary + accent with craft vocabulary>",
+    "lighting":         "<direction + quality + temperature>",
+    "background":       "<background description>",
+    "composition":      "<hero placement + text zones + negative space>",
+    "typography_style": "<font style guidance>"
+  }
 }
 
-`ad_copy` → populated for anything with on-image text. `null` for pure scenes/portraits without text.
+Rules:
+- `ad_copy` → populate for anything with on-image text (ads, posters, wishes, events, hoardings). `null` only for pure scenes/portraits with zero text.
+- `visual` → populate for typography/poster/ad buckets. `null` for simple photoreal/portrait requests.
+- `benefit_lines` and `trust_signals` → use empty arrays `[]` when not applicable, never null.
+- `emotional_tagline` and `brand_name` → use `null` when not applicable.
 
 # MENTAL QA PASS — LOOK AT THE FINISHED IMAGE IN YOUR HEAD
 
@@ -598,6 +752,71 @@ _BUCKET_HINTS = {
     "fast":                  "Output is a quick general image. Cover subject + scene + lighting + style succinctly.",
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Platform specs — layout rules injected into the user message so Haiku knows
+# the exact constraints for each output surface. Static system prompt stays
+# cached; platform hint goes in the dynamic user message (no cache break).
+# ─────────────────────────────────────────────────────────────────────────────
+PLATFORM_SPECS: Dict[str, Dict[str, Any]] = {
+    "instagram_feed": {
+        "aspect_hint":   "square_hd",
+        "layout_note":   "Square 1:1 feed post. Safe text zone: center 80%. Brand mark top-left. CTA bottom-center. Thumb-stop visual in first ⅓.",
+        "text_rule":     "Headline max 6 words. Keep copy minimal — users scroll fast. One clear focal point.",
+        "must_have":     "High-contrast hero element + single focal point + legible headline at mobile size.",
+    },
+    "instagram_feed_portrait": {
+        "aspect_hint":   "portrait_4_3",
+        "layout_note":   "Portrait 4:5 feed. Safe text: center 85%. Left-text / right-visual split works well.",
+        "text_rule":     "Headline on left third. Product or hero visual on right two-thirds.",
+        "must_have":     "Clean left-right balance. Text must be legible at thumbnail size.",
+    },
+    "story": {
+        "aspect_hint":   "portrait_9_16",
+        "layout_note":   "Vertical 9:16 story. Avoid top 15% (status bar) and bottom 15% (swipe-up UI). Safe zone: middle 70%.",
+        "text_rule":     "Large bold text in the middle safe zone. Background fills full frame edge-to-edge.",
+        "must_have":     "Full-bleed immersive visual. Text in safe zone only. One clear message.",
+    },
+    "youtube_thumbnail": {
+        "aspect_hint":   "landscape_16_9",
+        "layout_note":   "16:9 widescreen. MUST have: expressive face (left or right third) + 2-4 word bold text (opposite third) + high-contrast colors.",
+        "text_rule":     "Max 4 words. Bold condensed sans with stroke/outline so it reads on any background. High saturation.",
+        "must_have":     "Emotional face expression + big text + max 3 high-contrast colors. Readable as 120px thumbnail.",
+    },
+    "print_poster": {
+        "aspect_hint":   "portrait_4_3",
+        "layout_note":   "Print poster. Full information hierarchy: Title large → Subtitle → Details → Fine print at bottom. Rich detail appropriate.",
+        "text_rule":     "Can carry more copy than digital. Still follow hierarchy: big → medium → small.",
+        "must_have":     "Clear title treatment. Date/venue if event. Professional print-ready feel.",
+    },
+    "hoarding": {
+        "aspect_hint":   "landscape_16_9",
+        "layout_note":   "Billboard/hoarding. Read from moving vehicle at 50m. MAX 5 words total. One iconic image. Brand logo bottom corner.",
+        "text_rule":     "3-5 words headline only. Nothing else. Violent color contrast. Zero visual clutter.",
+        "must_have":     "One bold image + one bold line. That is all.",
+    },
+}
+
+# Keyword patterns to detect platform from user prompt (checked before Haiku runs)
+_PLATFORM_KEYWORDS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"\b(?:instagram\s+story|ig\s+story|insta\s+story|reel\s+cover|whatsapp\s+status)\b", re.IGNORECASE), "story"),
+    (re.compile(r"\b(?:youtube\s+thumbnail|yt\s+thumbnail|thumbnail)\b", re.IGNORECASE), "youtube_thumbnail"),
+    (re.compile(r"\b(?:hoarding|billboard|hoardings|out[-\s]of[-\s]home|ooh\s+ad)\b", re.IGNORECASE), "hoarding"),
+    (re.compile(r"\b(?:print\s+poster|a4\s+poster|a3\s+poster|flyer|brochure|pamphlet)\b", re.IGNORECASE), "print_poster"),
+    (re.compile(r"\b(?:instagram\s+(?:post|feed|ad)|ig\s+(?:post|feed)|insta\s+(?:post|feed)|instagram)\b", re.IGNORECASE), "instagram_feed"),
+]
+
+
+def _detect_platform(user_prompt: str) -> Optional[str]:
+    """Quick keyword scan to detect platform before Haiku runs.
+
+    Returns a platform key from PLATFORM_SPECS, or None if no match.
+    Haiku will refine/override this in its output `platform` field.
+    """
+    for pattern, platform in _PLATFORM_KEYWORDS:
+        if pattern.search(user_prompt):
+            return platform
+    return None
+
 
 def _build_user_message(
     user_prompt: str,
@@ -616,6 +835,20 @@ def _build_user_message(
     parts.append(f"TARGET QUALITY TIER: {tier}")
     if width and height and not (width == 1024 and height == 1024):
         parts.append(f"REQUESTED CANVAS: {width}x{height} (use this to pick aspect_hint)")
+
+    # Platform detection — inject layout constraints into user message.
+    # This is dynamic so it doesn't break the static system prompt cache.
+    detected_platform = _detect_platform(user_prompt)
+    if detected_platform and detected_platform in PLATFORM_SPECS:
+        spec = PLATFORM_SPECS[detected_platform]
+        parts.append(
+            f"DETECTED PLATFORM: {detected_platform}\n"
+            f"  Aspect: {spec['aspect_hint']} — set aspect_hint to this.\n"
+            f"  Layout: {spec['layout_note']}\n"
+            f"  Text rule: {spec['text_rule']}\n"
+            f"  Must-have: {spec['must_have']}"
+        )
+
     if style:
         parts.append(f"USER STYLE PREFERENCE: {style}")
     if style_reference_description:
@@ -780,24 +1013,44 @@ def _drop_multi_variant_sentences(text: str) -> str:
     return " ".join(kept).strip()
 
 
-def _sanitize_prompt(text: str) -> str:
-    """Strip pitch-deck / placeholder language that image models render literally."""
+def _sanitize_prompt(text: str, bucket: str = "") -> str:
+    """Strip pitch-deck / placeholder language that image models render literally.
+
+    For typography/ad_creative buckets, layout markers (Headline:, Body:, CTA:,
+    ## section dividers) are intentionally preserved — GPT Image 2 and text-capable
+    models use them for correct text placement and hierarchy rendering.
+    """
     if not text:
         return text
     original = text
+    _is_typography = bucket in ("typography", "ad_creative")
+
     # Pass 1: drop entire sentences mentioning multi-variant trigger words.
     text = _drop_multi_variant_sentences(text)
+
     # Pass 2: regex strip individual leak patterns (labels, brackets, etc).
-    for pattern, replacement in _LEAK_PATTERNS:
+    # For typography bucket: skip the brief-doc label pattern (index 6) so
+    # "Headline:", "Body:", "CTA:", "Tagline:" etc. survive into the image model.
+    for i, (pattern, replacement) in enumerate(_LEAK_PATTERNS):
+        if _is_typography and i == 6:
+            # index 6 = brief-doc labels (Headline/Body/CTA/Subtitle/Tagline…)
+            # Keep these — GPT Image 2 uses them for structured text layout.
+            continue
         text = pattern.sub(replacement, text)
+
+    # For typography: also preserve ## section dividers (indices 0-2 strip hashes).
+    # Re-pass is avoided by the index skip above since hashes are indices 0-2 and
+    # brief-doc labels are index 6. But ## that SURVIVED (because they were inside
+    # sentences) still get cleaned by indices 0-2 — which is correct: we only want
+    # to keep "Headline:" style markers, not random ## hash chars.
+
     # Collapse doubled spaces / stray punctuation left by strips
     text = re.sub(r"  +", " ", text)
     text = re.sub(r" ([,.;:])", r"\1", text)
     text = text.strip()
     if text != original:
-        logger.info("[simple-engine] sanitized leak patterns from prompt (len %d→%d)", len(original), len(text))
-        # Loud stdout — visible in pm2 logs (logger.info often not captured).
-        print(f"[SANITIZE] dropped {len(original) - len(text)} chars of multi-variant/pitch-deck language", flush=True)
+        logger.info("[simple-engine] sanitized leak patterns from prompt (len %d→%d) bucket=%s", len(original), len(text), bucket or "none")
+        print(f"[SANITIZE] dropped {len(original) - len(text)} chars bucket={bucket or 'none'}", flush=True)
     return text
 
 
@@ -924,23 +1177,33 @@ class SimplePromptEngine:
             # CTA text we just filled. Sanitizing first strips bare scaffolding
             # CTA language; the fill step then writes the legitimate ad_copy
             # text inside quotes where the image model can render it.
-            sanitized = _sanitize_prompt(output.prompt.strip())
+            sanitized = _sanitize_prompt(output.prompt.strip(), bucket=bucket)
             clean_prompt = _fill_empty_quotes_from_adcopy(sanitized, output.ad_copy)
             raw_neg = output.negative_prompt.strip()
             combined_neg = f"{raw_neg}, {_ANTI_COLLAGE_NEGATIVES}" if raw_neg else _ANTI_COLLAGE_NEGATIVES
 
-            ad_copy_dict: Optional[Dict[str, str]] = None
+            ad_copy_dict: Optional[Dict] = None
             if output.ad_copy is not None:
                 ad_copy_dict = output.ad_copy.model_dump()
 
+            visual_dict: Optional[Dict] = None
+            if output.visual is not None:
+                visual_dict = output.visual.model_dump()
+
             return {
-                "prompt":          clean_prompt,
-                "negative_prompt": combined_neg,
-                "intent":          output.intent.strip() or "general",
-                "aspect_hint":     output.aspect_hint,
-                "ad_copy":         ad_copy_dict,
-                "_elapsed":        time.time() - start,
-                "_source":         "simple_engine",
+                "prompt":               clean_prompt,
+                "negative_prompt":      combined_neg,
+                "intent":               output.intent.strip() or "general",
+                "aspect_hint":          output.aspect_hint,
+                "ad_copy":              ad_copy_dict,
+                # Art Director Brain — new fields
+                "campaign_type":        output.campaign_type or "general",
+                "subject_category":     output.subject_category or "general",
+                "platform":             output.platform or "general",
+                "copywriting_formula":  output.copywriting_formula or "simple",
+                "visual":               visual_dict,
+                "_elapsed":             time.time() - start,
+                "_source":              "simple_engine",
             }
         except ValidationError as ve:
             # Instructor exhausted retries — Haiku could not produce valid JSON

@@ -719,7 +719,9 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         )
 
         # 1) Strip Option 1/2/3, [Placeholder], brief-doc labels, collage words.
-        enhanced_prompt = _sanitize_prompt(enhanced_prompt)
+        #    Typography bucket: layout markers (Headline:/Body:/CTA:) preserved —
+        #    GPT Image 2 uses them for structured text placement.
+        enhanced_prompt = _sanitize_prompt(enhanced_prompt, bucket=bucket)
 
         # 2) Sentence-aware safety cap — only kicks in for genuinely runaway prompts.
         #    The earlier 35-word cap chopped Haiku's curated 192-word briefs in
@@ -823,6 +825,19 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                     f"{enhanced_prompt} — experimental: {_metaphors[-1]}, "
                     f"unexpected juxtaposition, push creative boundaries"
                 )[:500]
+
+        # ── Per-model prompt formatting (Gap 4) ──────────────────────────────
+        # Runs only when simple_engine produced structured output. Each model
+        # gets a tailored prompt: GPT Image 2 gets a creative brief, Flux gets
+        # physics-first natural language. Google/Imagen skipped — _distill_for_imagen
+        # already runs inside _call_google() at provider level.
+        if _simple_payload:
+            from app.services.smart.model_prompt_formatter import format_prompt_for_model
+            enhanced_prompt = format_prompt_for_model(
+                base_prompt=enhanced_prompt,
+                model_key=fal_model_key,
+                simple_payload=_simple_payload,
+            )
 
         # Run generation in thread, emit keepalives every 15s so proxies don't drop
         _gen_kwargs = dict(

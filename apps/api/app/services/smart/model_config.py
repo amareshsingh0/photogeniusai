@@ -335,10 +335,12 @@ BUCKET_MODEL_MAP = {
     # Typography/Poster — fallback only. Real routing comes from DB ModelConfig
     # (admin /admin → Models tab). This map is hit only if DB has no active models
     # tagged with the typography bucket for the requested tier.
+    # Note: 1K normally goes through TYPOGRAPHY_1K_MODELS parallel selection; this
+    # is the static fallback when parallel path is skipped (no hero_headline).
     "typography": {
-        QualityTier.RES_1K: "ideogram_v3",
-        QualityTier.RES_2K: "gemini_3_1_imagen",
-        QualityTier.RES_4K: "imagen_4_ultra",
+        QualityTier.RES_1K: "imagen_4_base",
+        QualityTier.RES_2K: "imagen_4_base",
+        QualityTier.RES_4K: "imagen_4_base",
     },
 
     # Photorealism → Flux 2 Flex + Imagen 4
