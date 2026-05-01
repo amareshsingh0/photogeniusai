@@ -1,6 +1,6 @@
 {
-  "name": "PhotoGenius AI",
-  "short_name": "PhotoGenius",
+  "name": "Pixium AI",
+  "short_name": "Pixium",
   "description": "AI-powered portrait studio with Instant Magic Preview",
   "start_url": "/",
   "display": "standalone",

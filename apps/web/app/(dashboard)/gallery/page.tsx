@@ -123,7 +123,7 @@ export default function GalleryPage() {
       if (img.url.startsWith("data:")) {
         const link = document.createElement("a")
         link.href = img.url
-        link.download = `photogenius-${img.id}.png`
+        link.download = `pixium-${img.id}.png`
         link.click()
       } else {
         const response = await fetch(img.url)
@@ -131,7 +131,7 @@ export default function GalleryPage() {
         const url = URL.createObjectURL(blob)
         const link = document.createElement("a")
         link.href = url
-        link.download = `photogenius-${img.id}.png`
+        link.download = `pixium-${img.id}.png`
         link.click()
         URL.revokeObjectURL(url)
       }

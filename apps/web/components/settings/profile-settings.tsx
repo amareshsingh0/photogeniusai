@@ -28,7 +28,7 @@ export function ProfileSettings() {
     firstName: "",
     lastName: "",
     email: "dev@photogenius.local",
-    username: "photogenius_user",
+    username: "pixium_user",
     avatar: "",
   })
 

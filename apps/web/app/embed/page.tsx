@@ -4,8 +4,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "PhotoGenius AI Gallery",
-  description: "AI-generated portrait from PhotoGenius",
+  title: "Pixium AI Gallery",
+  description: "AI-generated portrait from Pixium",
   robots: "noindex, nofollow",
 };
 
@@ -61,7 +61,7 @@ export default async function EmbedPage({
       <div className="p-3">
         <p className="text-sm text-foreground line-clamp-2">{gen.originalPrompt}</p>
         <p className="text-xs text-muted-foreground mt-1">
-          {gen.galleryLikesCount ?? 0} likes · PhotoGenius AI
+          {gen.galleryLikesCount ?? 0} likes · Pixium AI
         </p>
         <Link
           href={`${process.env.NEXT_PUBLIC_APP_URL || ""}/explore?highlight=${gen.id}`}
@@ -69,7 +69,7 @@ export default async function EmbedPage({
           rel="noopener noreferrer"
           className="text-xs text-primary hover:underline mt-1 inline-block"
         >
-          View on PhotoGenius →
+          View on Pixium →
         </Link>
       </div>
     </div>

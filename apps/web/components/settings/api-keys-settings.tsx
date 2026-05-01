@@ -142,7 +142,7 @@ export function ApiKeysSettings() {
                 API Keys for Developers
               </h3>
               <p className="text-sm text-muted-foreground mb-3">
-                Use API keys to integrate PhotoGenius AI into your applications.
+                Use API keys to integrate Pixium AI into your applications.
                 Keep your keys secure and never share them publicly.
               </p>
               <div className="flex items-center space-x-2">

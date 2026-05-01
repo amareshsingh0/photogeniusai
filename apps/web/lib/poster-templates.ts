@@ -1,5 +1,5 @@
 /**
- * poster-templates.ts — 10 pre-built poster templates for PhotoGenius AI
+ * poster-templates.ts — 10 pre-built poster templates for Pixium AI
  *
  * Each template provides:
  * - prompt_prefix: pre-filled prompt that gets passed to generate

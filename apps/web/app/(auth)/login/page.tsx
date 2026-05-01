@@ -99,7 +99,7 @@ export default function LoginPage() {
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
             <Sparkles className="w-4.5 h-4.5 text-white w-[18px] h-[18px]" />
           </div>
-          <span className="text-base font-bold text-white tracking-tight">PhotoGenius</span>
+          <span className="text-base font-bold text-white tracking-tight">Pixium</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-400 font-bold tracking-widest border border-violet-500/20">AI</span>
         </Link>
 

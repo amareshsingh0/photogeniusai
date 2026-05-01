@@ -1,5 +1,5 @@
 """
-PhotoGenius AI – FastAPI application.
+Pixium AI – FastAPI application.
 """
 import os
 import sys
@@ -147,7 +147,7 @@ app = create_app()
 @app.get("/")
 async def root():
     """Root endpoint"""
-    return {"service": "PhotoGenius API", "status": "running", "docs": "/docs"}
+    return {"service": "Pixium API", "status": "running", "docs": "/docs"}
 
 
 @app.get("/health")

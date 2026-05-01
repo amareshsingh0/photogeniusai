@@ -4,7 +4,7 @@
  *      STRIPE_PRICE_PREMIUM=price_yyy, STRIPE_CREDITS_PREMIUM=500, etc.
  */
 
-import { UserTier } from "@photogenius/database";
+import { UserTier } from "@pixium/database";
 
 export interface PriceConfig {
   tier: UserTier;

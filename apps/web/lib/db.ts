@@ -1,7 +1,7 @@
 // Re-export prisma client from the database package
 // This ensures we use the same generated Prisma client across the monorepo
-export { prisma } from "@photogenius/database";
-export { prisma as default } from "@photogenius/database";
+export { prisma } from "@pixium/database";
+export { prisma as default } from "@pixium/database";
 
 /**
  * True when the Prisma/DB error is transient — safe to return [] / no-op instead of 500.

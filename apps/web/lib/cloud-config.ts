@@ -147,14 +147,14 @@ function buildGcpUrl(serviceName: string): string {
   }
 
   // Default Cloud Run pattern
-  return `https://photogenius-${serviceName}-${project}.${region}.run.app`;
+  return `https://pixium-${serviceName}-${project}.${region}.run.app`;
 }
 
 // Build Lightning.ai URL
 function buildLightningUrl(serviceName: string): string {
   const baseUrl = process.env.LIGHTNING_CLOUD_URL || "https://lightning.ai";
   const teamId = process.env.LIGHTNING_TEAM_ID || "";
-  const appId = process.env.LIGHTNING_APP_ID || "photogenius";
+  const appId = process.env.LIGHTNING_APP_ID || "pixium";
 
   // Check for explicit endpoint URL
   const explicitUrl = process.env[`LIGHTNING_${serviceName.toUpperCase()}_URL`];
@@ -199,13 +199,13 @@ function buildBackendUrl(serviceName: string): string {
 
 // Service name to Modal app/endpoint mapping
 const MODAL_SERVICE_MAP: Record<ServiceName, { app: string; endpoint: string }> = {
-  safety: { app: "photogenius-safety", endpoint: "check-prompt-safety-web" },
-  generation: { app: "photogenius-generation", endpoint: "generate-images-web" },
-  refinement: { app: "photogenius-refinement-engine", endpoint: "refine-web" },
-  training: { app: "photogenius-lora-trainer", endpoint: "train-lora-web" },
-  orchestrator: { app: "photogenius-orchestrator", endpoint: "orchestrate-web" },
+  safety: { app: "pixium-safety", endpoint: "check-prompt-safety-web" },
+  generation: { app: "pixium-generation", endpoint: "generate-images-web" },
+  refinement: { app: "pixium-refinement-engine", endpoint: "refine-web" },
+  training: { app: "pixium-lora-trainer", endpoint: "train-lora-web" },
+  orchestrator: { app: "pixium-orchestrator", endpoint: "orchestrate-web" },
   quality: { app: "quality-scorer", endpoint: "score-batch-web" },
-  identity: { app: "photogenius-identity-v2", endpoint: "generate-ultimate-web" },
+  identity: { app: "pixium-identity-v2", endpoint: "generate-ultimate-web" },
   realtime: { app: "realtime-engine", endpoint: "generate-realtime-batch-web" },
 };
 

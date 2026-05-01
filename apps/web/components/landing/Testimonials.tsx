@@ -11,7 +11,7 @@ const testimonials = [
     role: "Professional Photographer",
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
     rating: 5,
-    text: "PhotoGenius AI has revolutionized my workflow. The quality is incredible and the safety features give me peace of mind.",
+    text: "Pixium AI has revolutionized my workflow. The quality is incredible and the safety features give me peace of mind.",
   },
   {
     id: 2,
@@ -58,7 +58,7 @@ export default function Testimonials() {
             Loved by <span className="gradient-text">Creators</span>
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            See what our users are saying about PhotoGenius AI
+            See what our users are saying about Pixium AI
           </p>
         </motion.div>
 

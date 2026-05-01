@@ -105,7 +105,7 @@ export function ImageDetailModal({ image, isOpen, onClose, onDelete, onToggleFav
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "PhotoGenius AI Portrait",
+          title: "Pixium AI Portrait",
           text: image.prompt,
           url: image.url,
         })

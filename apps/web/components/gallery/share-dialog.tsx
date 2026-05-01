@@ -29,7 +29,7 @@ interface ShareDialogProps {
 export function ShareDialog({ image, onClose }: ShareDialogProps) {
   const [copied, setCopied] = useState(false)
 
-  const shareUrl = `https://photogenius.ai/gallery/${image.id}`
+  const shareUrl = `https://pixium.ai/gallery/${image.id}`
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(shareUrl)

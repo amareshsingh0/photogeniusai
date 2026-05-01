@@ -145,7 +145,7 @@ export default function DashboardLayoutClient({ children }: { children: React.Re
               <Sparkles className="h-3.5 w-3.5 text-white" />
             </div>
             <div className="leading-tight">
-              <p className="text-sm font-bold text-white tracking-tight">PhotoGenius</p>
+              <p className="text-sm font-bold text-white tracking-tight">Pixium</p>
               <p className="text-[9px] text-white/30 tracking-wider uppercase">AI Studio</p>
             </div>
           </Link>

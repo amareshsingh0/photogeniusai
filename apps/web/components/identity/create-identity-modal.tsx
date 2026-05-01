@@ -502,7 +502,7 @@ export function CreateIdentityModal({
                       I will use the generated images responsibly and ethically
                     </li>
                     <li>
-                      I understand that PhotoGenius AI will train a custom model
+                      I understand that Pixium AI will train a custom model
                       using these photos
                     </li>
                     <li>

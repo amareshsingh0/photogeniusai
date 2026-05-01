@@ -133,7 +133,7 @@ export function PosterPackModal({
   const downloadOne = (key: string, size: PackSize) => {
     const link = document.createElement("a")
     link.href = size.image_data_uri
-    link.download = `photogenius-${key.replace(":", "x")}-${Date.now()}.jpg`
+    link.download = `pixium-${key.replace(":", "x")}-${Date.now()}.jpg`
     link.click()
   }
 
@@ -172,7 +172,7 @@ export function PosterPackModal({
       const zip = new JSZip()
       for (const [key, size] of Object.entries(sizes)) {
         zip.file(
-          `photogenius-${key.replace(":", "x")}.jpg`,
+          `pixium-${key.replace(":", "x")}.jpg`,
           size.image_b64,
           { base64: true }
         )
@@ -181,7 +181,7 @@ export function PosterPackModal({
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `photogenius-pack-${Date.now()}.zip`
+      a.download = `pixium-pack-${Date.now()}.zip`
       a.click()
       URL.revokeObjectURL(url)
     } catch {

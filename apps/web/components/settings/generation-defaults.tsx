@@ -154,7 +154,7 @@ export function GenerationDefaults() {
             <div className="space-y-0.5">
               <Label className="text-foreground">Add Watermark</Label>
               <p className="text-sm text-muted-foreground">
-                Add PhotoGenius watermark to downloads (Pro only)
+                Add Pixium watermark to downloads (Pro only)
               </p>
             </div>
             <Switch

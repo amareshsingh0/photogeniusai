@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-auth";
 
 export const metadata = {
-  title: "Admin Panel - PhotoGenius API",
+  title: "Admin Panel - Pixium API",
   description: "System administration and control panel",
 };
 

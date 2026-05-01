@@ -47,7 +47,7 @@ export function GalleryGrid({
     e.stopPropagation()
     const link = document.createElement("a")
     link.href = imageUrl
-    link.download = `photogenius-${imageId}.png`
+    link.download = `pixium-${imageId}.png`
     link.click()
   }
 

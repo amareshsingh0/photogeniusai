@@ -258,7 +258,7 @@ export function useBulkActions() {
     for (const img of images) {
       const a = document.createElement("a")
       a.href = img.url
-      a.download = `photogenius-${img.id}.png`
+      a.download = `pixium-${img.id}.png`
       a.target = "_blank"
       a.rel = "noopener"
       a.click()
@@ -275,7 +275,7 @@ export function useDownloadImage() {
     download: (url: string, filename?: string) => {
       const a = document.createElement("a")
       a.href = url
-      a.download = filename || `photogenius-${Date.now()}.png`
+      a.download = filename || `pixium-${Date.now()}.png`
       a.target = "_blank"
       a.rel = "noopener"
       a.click()

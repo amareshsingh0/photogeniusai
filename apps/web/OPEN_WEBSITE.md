@@ -8,7 +8,7 @@ Browser mein **ye URL** kholo: **http://127.0.0.1:3004/ok.html**
 
 ## 1. Dev server chalao
 ```powershell
-cd "c:\desktop\PhotoGenius AI"
+cd "c:\desktop\Pixium AI"
 npx pnpm run dev
 ```
 

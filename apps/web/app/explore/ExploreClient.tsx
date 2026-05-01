@@ -255,7 +255,7 @@ export default function ExploreClient({
     const url = typeof window !== "undefined" ? `${window.location.origin}/explore?highlight=${item.id}` : "";
     if (navigator.share) {
       navigator.share({
-        title: "PhotoGenius AI",
+        title: "Pixium AI",
         text: item.prompt?.slice(0, 100) ?? "",
         url,
       }).catch(() => {});

@@ -4,8 +4,8 @@ import { FEATURED_SEED } from "@/app/explore/featured-seed";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Explore | PhotoGenius AI",
-  description: "Discover AI-generated images from the PhotoGenius community.",
+  title: "Explore | Pixium AI",
+  description: "Discover AI-generated images from the Pixium community.",
 };
 
 const LIMIT = 24;

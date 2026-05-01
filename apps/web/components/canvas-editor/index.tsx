@@ -474,7 +474,7 @@ export function CanvasEditor({
       format: 'png', multiplier: 1 / scale,
     })
     const link = document.createElement('a')
-    link.download = 'photogenius-poster.png'
+    link.download = 'pixium-poster.png'
     link.href = dataUrl
     link.click()
   }, [scale])

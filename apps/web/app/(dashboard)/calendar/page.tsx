@@ -178,7 +178,7 @@ export default function CalendarPage() {
           <div>
             <label className="text-[10px] text-white/30 mb-1 block uppercase tracking-wider">Brand Name</label>
             <input value={brandName} onChange={e => setBrandName(e.target.value)}
-              placeholder="e.g. PhotoGenius AI"
+              placeholder="e.g. Pixium AI"
               className="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-purple-500/40" />
           </div>
           <div>

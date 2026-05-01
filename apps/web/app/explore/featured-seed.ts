@@ -31,7 +31,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 124,
     commentsCount: 8,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-2",
@@ -43,7 +43,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 89,
     commentsCount: 3,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-3",
@@ -55,7 +55,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 256,
     commentsCount: 12,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-4",
@@ -67,7 +67,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 312,
     commentsCount: 19,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-5",
@@ -79,7 +79,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 167,
     commentsCount: 5,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-6",
@@ -91,7 +91,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 445,
     commentsCount: 22,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-7",
@@ -103,7 +103,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 98,
     commentsCount: 4,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-8",
@@ -115,7 +115,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 278,
     commentsCount: 14,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-9",
@@ -127,7 +127,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 134,
     commentsCount: 6,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-10",
@@ -139,7 +139,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 201,
     commentsCount: 9,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-11",
@@ -151,7 +151,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 189,
     commentsCount: 7,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-12",
@@ -163,7 +163,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 156,
     commentsCount: 11,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-13",
@@ -175,7 +175,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 523,
     commentsCount: 28,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-14",
@@ -187,7 +187,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 267,
     commentsCount: 15,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-15",
@@ -199,7 +199,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 392,
     commentsCount: 18,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-16",
@@ -211,7 +211,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 145,
     commentsCount: 2,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-17",
@@ -223,7 +223,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 221,
     commentsCount: 13,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-18",
@@ -235,7 +235,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 334,
     commentsCount: 20,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-19",
@@ -247,7 +247,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 178,
     commentsCount: 8,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-20",
@@ -259,7 +259,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 289,
     commentsCount: 16,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-21",
@@ -271,7 +271,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 412,
     commentsCount: 24,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-22",
@@ -283,7 +283,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 198,
     commentsCount: 5,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-23",
@@ -295,7 +295,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 67,
     commentsCount: 1,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-24",
@@ -307,7 +307,7 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 376,
     commentsCount: 21,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
   {
     id: "seed-25",
@@ -319,6 +319,6 @@ export const FEATURED_SEED: FeaturedSeedItem[] = [
     likesCount: 143,
     commentsCount: 6,
     publishedAt: null,
-    user: { id: "studio", name: "PhotoGenius Studio", profileImageUrl: null },
+    user: { id: "studio", name: "Pixium Studio", profileImageUrl: null },
   },
 ];

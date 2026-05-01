@@ -22,7 +22,7 @@ export interface TrainingDataConsentModalProps {
 }
 
 /**
- * Modal shown after first generation: "Help improve PhotoGenius?"
+ * Modal shown after first generation: "Help improve Pixium?"
  * Opt-in to let us learn from your generations; +100 free credits for opting in.
  * Granular: Allow training / Allow showcase / Neither.
  */
@@ -74,7 +74,7 @@ export function TrainingDataConsentModal({
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            <DialogTitle>Help improve PhotoGenius?</DialogTitle>
+            <DialogTitle>Help improve Pixium?</DialogTitle>
           </div>
           <DialogDescription>
             Opt-in to let us learn from your generations (anonymized) to improve our models.

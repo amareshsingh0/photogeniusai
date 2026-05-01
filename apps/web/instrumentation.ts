@@ -26,7 +26,7 @@ export async function register() {
           connectTimeout: 10_000,  // 10s  -- fail fast on connection refused
         })
       );
-      console.log("[PhotoGenius] undici headersTimeout/bodyTimeout -> 900s (PREMIUM AI support)");
+      console.log("[Pixium] undici headersTimeout/bodyTimeout -> 900s (PREMIUM AI support)");
     } catch {
       // Non-fatal: undici may not be available; AbortSignal.timeout(600_000) is the fallback
     }

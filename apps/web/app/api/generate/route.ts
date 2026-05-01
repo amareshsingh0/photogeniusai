@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import type { Prisma } from "@photogenius/database";
+import type { Prisma } from "@pixium/database";
 import { prisma } from "@/lib/db";
-import { UserRepository } from "@photogenius/database";
+import { UserRepository } from "@pixium/database";
 import { AIService } from "@/lib/ai-service";
 import { getCorrelationId, correlationIdResponseHeaders } from "@/lib/correlation-id";
 import { logger } from "@/lib/logger";

@@ -831,7 +831,7 @@ export default function GeneratePage() {
       if (url.startsWith("data:")) {
         const link = document.createElement("a")
         link.href = url
-        link.download = `photogenius-${Date.now()}.jpg`
+        link.download = `pixium-${Date.now()}.jpg`
         link.click()
         return
       }
@@ -840,7 +840,7 @@ export default function GeneratePage() {
       const blobUrl = URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = blobUrl
-      link.download = `photogenius-${Date.now()}.jpg`
+      link.download = `pixium-${Date.now()}.jpg`
       link.click()
       URL.revokeObjectURL(blobUrl)
     } catch {
@@ -963,7 +963,7 @@ export default function GeneratePage() {
                             if (url.startsWith("data:")) {
                               const link = document.createElement("a")
                               link.href = url
-                              link.download = `photogenius-${Date.now()}.jpg`
+                              link.download = `pixium-${Date.now()}.jpg`
                               link.click()
                               return
                             }
@@ -971,7 +971,7 @@ export default function GeneratePage() {
                             const blobUrl = URL.createObjectURL(blob)
                             const link = document.createElement("a")
                             link.href = blobUrl
-                            link.download = `photogenius-${Date.now()}.jpg`
+                            link.download = `pixium-${Date.now()}.jpg`
                             link.click()
                             URL.revokeObjectURL(blobUrl)
                           } catch {

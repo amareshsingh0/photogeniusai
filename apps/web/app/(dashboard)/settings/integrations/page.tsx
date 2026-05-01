@@ -93,7 +93,7 @@ export default function IntegrationsPage() {
       <div>
         <h1 className="text-lg font-semibold text-white">Social Integrations</h1>
         <p className="text-sm text-white/40 mt-1">
-          Connect your social accounts to publish scheduled content directly from PhotoGenius AI.
+          Connect your social accounts to publish scheduled content directly from Pixium AI.
         </p>
       </div>
 

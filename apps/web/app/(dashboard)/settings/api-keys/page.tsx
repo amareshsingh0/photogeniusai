@@ -9,7 +9,7 @@ export default function ApiKeysPage() {
     <SettingsPageLayout
       icon={Key}
       title="API Keys"
-      description="Create and manage API keys for programmatic access to PhotoGenius AI."
+      description="Create and manage API keys for programmatic access to Pixium AI."
     >
       <ApiKeysSettings />
     </SettingsPageLayout>

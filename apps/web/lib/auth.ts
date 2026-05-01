@@ -1,7 +1,7 @@
 /**
  * Custom JWT-based authentication utilities
  * Supports: Email/Password, Google OAuth, Apple OAuth
- * Replaces Clerk integration for PhotoGenius AI
+ * Replaces Clerk integration for Pixium AI
  */
 
 import { jwtVerify } from "jose";

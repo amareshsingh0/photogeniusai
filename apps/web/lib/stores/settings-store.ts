@@ -78,7 +78,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       }))
       // Persist to localStorage
       if (typeof window !== "undefined") {
-        localStorage.setItem("photogenius-settings", JSON.stringify({
+        localStorage.setItem("pixium-settings", JSON.stringify({
           ...defaultSettings,
           ...updates,
         }))
@@ -91,7 +91,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   resetSettings: () => {
     set({ settings: defaultSettings })
     if (typeof window !== "undefined") {
-      localStorage.removeItem("photogenius-settings")
+      localStorage.removeItem("pixium-settings")
     }
   },
 }))

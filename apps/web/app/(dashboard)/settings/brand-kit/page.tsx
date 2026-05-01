@@ -192,7 +192,7 @@ export default function BrandKitPage() {
               type="text"
               value={kit.brand_name}
               onChange={e => update('brand_name', e.target.value)}
-              placeholder="e.g. PhotoGenius AI"
+              placeholder="e.g. Pixium AI"
               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-purple-500/50 focus:bg-white/8"
             />
           </div>

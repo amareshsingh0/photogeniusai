@@ -113,7 +113,7 @@ export default function DataRequestPage() {
           </Button>
 
           <p className="text-xs text-muted-foreground">
-            For full account deletion or other requests, contact privacy@photogenius.ai.
+            For full account deletion or other requests, contact privacy@pixium.ai.
           </p>
         </CardContent>
       </Card>
