@@ -87,30 +87,79 @@ def format_prompt_for_model(
 # GPT Image 2 formatter
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
-    """Creative-brief paragraph format for GPT Image 2.
+def _guess_icon(benefit: str) -> str:
+    """Map a benefit label to a simple icon hint GPT Image 2 can render."""
+    b = benefit.lower()
+    if any(w in b for w in ("light", "weight", "feather", "airy")):
+        return "feather icon"
+    if any(w in b for w in ("blur", "smooth", "glow", "radiant", "spark", "finish", "flawless", "set")):
+        return "sparkle icon"
+    if any(w in b for w in ("lasting", "long", "hour", "day", "wear", "24")):
+        return "clock icon"
+    if any(w in b for w in ("natural", "organic", "vegan", "plant", "leaf", "gentle", "clean")):
+        return "leaf icon"
+    if any(w in b for w in ("oil", "control", "matte", "moisture", "hydrat", "droplet")):
+        return "droplet icon"
+    if any(w in b for w in ("protect", "shield", "derm", "safe", "test", "spf")):
+        return "shield icon"
+    if any(w in b for w in ("cover", "pore", "imperfect", "blemish", "conceal")):
+        return "circle-dot icon"
+    return "simple line-art icon"
 
-    GPT Image 2 is ChatGPT under the hood — it understands structured English
-    instructions as well as or better than raw image prompts. We send it a
-    short creative brief + the base visual prompt + explicit typography block.
-    This consistently improves text accuracy and layout quality.
+
+def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
+    """ChatGPT-level creative brief for GPT Image 2.
+
+    GPT Image 2 (gpt-image-2) is the same model powering ChatGPT Images.
+    ChatGPT internally expands user prompts into detailed structured briefs
+    before calling the model — that's why ChatGPT output quality is higher.
+    This function replicates that expansion: explicit layout zones, icon badge
+    specs, trust strip, composition guides, and mixed-typography instructions.
     """
-    ad_copy: Optional[Dict] = payload.get("ad_copy")
-    visual:  Optional[Dict] = payload.get("visual")
-    campaign_type:       str = payload.get("campaign_type", "general")
-    copywriting_formula: str = payload.get("copywriting_formula", "simple")
-    subject_category:    str = payload.get("subject_category", "general")
+    ad_copy: Optional[Dict] = payload.get("ad_copy") or {}
+    visual:  Optional[Dict] = payload.get("visual") or {}
+    campaign_type:    str = payload.get("campaign_type", "general")
+    subject_category: str = payload.get("subject_category", "general")
+
+    headline   = (ad_copy.get("headline") or "").strip()
+    subhead    = (ad_copy.get("subhead") or "").strip()
+    cta        = (ad_copy.get("cta") or "").strip()
+    benefits   = [b for b in (ad_copy.get("benefit_lines") or []) if b]
+    signals    = [s for s in (ad_copy.get("trust_signals") or []) if s]
+    tagline    = (ad_copy.get("emotional_tagline") or "").strip()
+    brand_name = (ad_copy.get("brand_name") or "").strip()
+
+    mood        = (visual.get("mood") or "").strip()
+    palette     = (visual.get("color_palette") or "").strip()
+    lighting    = (visual.get("lighting") or "").strip()
+    composition = (visual.get("composition") or "").strip()
+    background  = (visual.get("background") or "").strip()
+    typo        = (visual.get("typography_style") or "").strip()
 
     sections: list[str] = []
 
-    # --- Brief header ---
-    if campaign_type and campaign_type != "general":
-        sections.append(
-            f"Create a professional {campaign_type.replace('_', ' ')} image "
-            f"for the {subject_category.replace('_', ' ')} category."
-        )
+    # ── 1. Creative brief header ──────────────────────────────────────────────
+    camp_label = campaign_type.replace("_", " ")
+    cat_label  = subject_category.replace("_", " ")
+    quality_ref = {
+        "beauty":       "Estée Lauder / Charlotte Tilbury / Glossier",
+        "tech":         "Apple / Sony / Samsung",
+        "food":         "Ottolenghi editorial / Bon Appétit",
+        "fashion":      "Vogue editorial / Zara campaign",
+        "health":       "Headspace / Nike Training",
+        "real_estate":  "Sotheby's / premium real estate",
+        "education":    "Coursera / Harvard Extension",
+    }.get(subject_category, "Apple / Nike / premium brand")
 
-    # --- Base visual scene (strip the affirmative anchor — GPT doesn't need it) ---
+    header = (
+        f"Create a world-class, print-ready {camp_label} advertisement "
+        f"for the {cat_label} industry. "
+        f"Quality target: {quality_ref} campaign level. "
+        "Single unified composition — ONE image, no panels, no variants, no collage."
+    )
+    sections.append(header)
+
+    # ── 2. Visual scene (Haiku's prompt — anchor stripped) ───────────────────
     scene = re.sub(
         r"^\s*ONE single unified (?:image|photograph)[^.]*\.\s*",
         "",
@@ -118,65 +167,125 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
         flags=re.IGNORECASE,
     ).strip()
     if scene:
-        sections.append(scene)
+        sections.append(f"VISUAL SCENE:\n{scene}")
 
-    # --- Structured copy block ---
-    if ad_copy:
-        headline   = (ad_copy.get("headline") or "").strip()
-        subhead    = (ad_copy.get("subhead") or "").strip()
-        cta        = (ad_copy.get("cta") or "").strip()
-        benefits   = [b for b in (ad_copy.get("benefit_lines") or []) if b]
-        signals    = [s for s in (ad_copy.get("trust_signals") or []) if s]
-        tagline    = (ad_copy.get("emotional_tagline") or "").strip()
-        brand_name = (ad_copy.get("brand_name") or "").strip()
+    # ── 3. Text & layout elements ─────────────────────────────────────────────
+    layout_lines: list[str] = []
 
-        copy_lines: list[str] = []
-        if headline:
-            copy_lines.append(f'HEADLINE: "{headline}"')
-        if subhead:
-            copy_lines.append(f'SUBHEADLINE: "{subhead}"')
-        if benefits:
-            copy_lines.extend(f'BENEFIT: "{b}"' for b in benefits[:3])
-        if signals:
-            copy_lines.append(f'TRUST: "{signals[0]}"')
-        if tagline:
-            copy_lines.append(f'TAGLINE: "{tagline}"')
-        if cta:
-            copy_lines.append(f'CTA BUTTON: "{cta}"')
-        if brand_name:
-            copy_lines.append(f'BRAND NAME: "{brand_name}"')
+    if brand_name:
+        layout_lines.append(
+            f'Brand mark — top-left corner: render "{brand_name}" as an elegant '
+            f'brand wordmark/logo in the brand typography style.'
+        )
 
-        if copy_lines:
-            sections.append(
-                "TEXT TO RENDER ON IMAGE (copy exactly as written, correct spelling):\n"
-                + "\n".join(copy_lines)
-            )
+    is_launch = campaign_type in ("product_launch", "announcement")
+    if is_launch:
+        layout_lines.append(
+            '"NEW LAUNCH" label — small, elegant, with thin horizontal rules on each side, '
+            "positioned just above the main headline. Use small-caps or light tracking."
+        )
 
-    # --- Visual direction ---
-    if visual:
-        mood     = (visual.get("mood") or "").strip()
-        palette  = (visual.get("color_palette") or "").strip()
-        lighting = (visual.get("lighting") or "").strip()
-        typo     = (visual.get("typography_style") or "").strip()
+    if headline:
+        layout_lines.append(
+            f'Hero headline — large, bold, commanding: "{headline}" '
+            f"— uppercase bold condensed sans-serif, prominently sized, "
+            f"primary focal point for the text area."
+        )
 
-        visual_parts: list[str] = []
-        if mood:
-            visual_parts.append(f"Mood: {mood}")
-        if palette:
-            visual_parts.append(f"Color palette: {palette}")
-        if lighting:
-            visual_parts.append(f"Lighting: {lighting}")
-        if typo:
-            visual_parts.append(f"Typography style: {typo}")
+    if subhead:
+        layout_lines.append(
+            f'Subheadline — elegant italic or script style below the headline: "{subhead}" '
+            f"— use a contrasting script or italic font to pair with the bold headline."
+        )
 
-        if visual_parts:
-            sections.append("VISUAL DIRECTION: " + " | ".join(visual_parts))
+    # Product intro line (derived from brand + campaign type)
+    if brand_name and is_launch:
+        prod_type = cat_label.title() if cat_label != "general" else "Product"
+        layout_lines.append(
+            f'Product introduction — small regular weight text: '
+            f'"Introducing {brand_name}" followed by a styled product-category badge.'
+        )
 
-    # --- Typography quality instruction (always last for GPT) ---
+    if benefits and len(benefits) >= 2:
+        icon_items = " | ".join(
+            f'"{b}" ({_guess_icon(b)})' for b in benefits[:5]
+        )
+        layout_lines.append(
+            f"Feature icon badges row — render {len(benefits[:5])} items arranged "
+            f"horizontally in a row. Each item: a small circle with a minimal line-art "
+            f"icon inside + 2-line label text below. Items: {icon_items}."
+        )
+    elif benefits:
+        for b in benefits:
+            layout_lines.append(f'Benefit point: "{b}"')
+
+    if tagline:
+        layout_lines.append(
+            f'Emotional tagline — small, elegant, centered below the icons: "{tagline}"'
+        )
+
+    if cta:
+        layout_lines.append(
+            f'Call-to-action: "{cta}" — style as elegant script text, a pill button, '
+            f"or a prominently styled action label with a decorative element (heart ♡, arrow)."
+        )
+
+    if signals:
+        trust_bar_text = " | ".join(signals[:5])
+        layout_lines.append(
+            f"Bottom trust strip — a thin horizontal band running across the full bottom edge "
+            f"of the image, slightly lighter background than main, small-caps or tracking text: "
+            f'"{trust_bar_text}"'
+        )
+
+    # Top-right trust badge (if signals available and beauty/health category)
+    if signals and subject_category in ("beauty", "health", "food"):
+        badge_text = signals[0] if len(signals) == 1 else f"Trusted by thousands"
+        layout_lines.append(
+            f'Optional trust badge — small circular badge top-right corner with text: '
+            f'"{badge_text}" arranged around a central heart or checkmark icon.'
+        )
+
+    if layout_lines:
+        sections.append(
+            "TEXT & LAYOUT ELEMENTS "
+            "(render each exactly as described — correct spelling, professional execution):\n"
+            + "\n".join(f"• {line}" for line in layout_lines)
+        )
+
+    # ── 4. Visual direction ───────────────────────────────────────────────────
+    visual_parts: list[str] = []
+    if mood:
+        visual_parts.append(f"Mood: {mood}")
+    if palette:
+        visual_parts.append(f"Color palette: {palette}")
+    if lighting:
+        visual_parts.append(f"Lighting: {lighting}")
+    if background:
+        visual_parts.append(f"Background: {background}")
+    if composition:
+        visual_parts.append(f"Composition: {composition}")
+    if typo:
+        visual_parts.append(f"Typography style: {typo}")
+    if visual_parts:
+        sections.append("VISUAL DIRECTION: " + " | ".join(visual_parts))
+
+    # ── 5. Final quality & typography instruction ─────────────────────────────
+    comp_hint = (
+        "Composition: text hierarchy on left or center-left, hero product/subject on right "
+        "or center-right — classic beauty-ad split layout."
+        if subject_category in ("beauty", "fashion", "health")
+        else "Single unified composition with clear visual hierarchy."
+    )
     sections.append(
-        "Ensure all on-image text is perfectly legible, correctly spelled, "
-        "and rendered with professional typographic hierarchy. "
-        "Single unified composition — no multiple panels or variants."
+        "TYPOGRAPHY REQUIREMENTS: Use mixed typography — bold condensed uppercase sans-serif "
+        "for the hero headline (large, prominent, commanding). Pair with elegant italic or "
+        "script font for the subheadline and CTA (creates the premium high-low contrast). "
+        "Small clean sans-serif for body copy, benefits, and trust strip. "
+        "All text perfectly legible, correctly spelled, no garbled letters, no extra characters. "
+        f"{comp_hint} "
+        "Render as a finished, professional, print-ready advertisement. "
+        "Premium commercial photography / design quality."
     )
 
     result = "\n\n".join(s for s in sections if s)
