@@ -1,4 +1,4 @@
-# PhotoGenius AI — Claude Code Agent Memory
+# Pixium AI — Claude Code Agent Memory
 
 > Read this file completely before touching any code.
 > This is the single source of truth for all agents.
@@ -7,7 +7,7 @@
 
 ## IDENTITY
 
-**Product**: PhotoGenius AI — AI image generation platform for creatives
+**Product**: Pixium AI — AI image generation platform for creatives
 **API**: `api.creatives.bimoraai.com` (FastAPI, port 8003, PM2)
 **Web**: `creatives.bimoraai.com` (Next.js 14, port 3002, PM2)
 **Admin**: `api.creatives.bimoraai.com/admin`
