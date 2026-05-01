@@ -1042,10 +1042,14 @@ class MultiProviderClient:
             return await self._call_fal(model_id, **kwargs)
         elif provider == "google":
             return await self._call_google(model_id, **kwargs)
+        elif provider == "google_edit":
+            return await self._call_google_edit(model_id, **kwargs)
         elif provider == "wavespeed":
             return await self._call_wavespeed(model_id, **kwargs)
         elif provider == "openai":
             return await self._call_openai(model_id, **kwargs)
+        elif provider == "openai_edit":
+            return await self._call_openai_edit(model_id, **kwargs)
         return self._error(model_id, f"Unknown provider: {provider}", 0.0)
 
     async def _call_fal(self, model_id: str, prompt: str, negative_prompt: str,
@@ -1178,6 +1182,173 @@ class MultiProviderClient:
         except Exception as e:
             logger.error("[google] Imagen 3 API error: %s", e)
             return self._error(model_id, str(e), time.time() - start)
+
+    # ── Edit-mode callers (Gemini 2.5 Flash Image + GPT Image 2 edits) ─────────
+
+    async def _fetch_image_bytes(self, image_url: str) -> tuple[bytes, str]:
+        """Download a remote URL or decode a data URI → (bytes, mime). Used by
+        the edit endpoints which need to send the image as multipart/inline."""
+        if image_url.startswith("data:"):
+            comma = image_url.find(",")
+            if comma == -1:
+                raise ValueError("Malformed data URI")
+            header = image_url[:comma].lower()
+            if "png" in header:
+                mime = "image/png"
+            elif "jpeg" in header or "jpg" in header:
+                mime = "image/jpeg"
+            elif "webp" in header:
+                mime = "image/webp"
+            else:
+                mime = "image/png"
+            return base64.b64decode(image_url[comma + 1:]), mime
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=30.0)) as c:
+            resp = await c.get(image_url, follow_redirects=True)
+            resp.raise_for_status()
+            mime = resp.headers.get("content-type", "image/png").split(";")[0].strip()
+            if not mime.startswith("image/"):
+                mime = "image/png"
+            return resp.content, mime
+
+    async def _call_google_edit(self, model_id: str, prompt: str,
+                                reference_image_url: Optional[str] = None,
+                                extra_image_urls: Optional[List[str]] = None,
+                                **kwargs) -> Dict:
+        """Gemini 2.5 Flash Image (nano-banana) — native multimodal edit.
+        Accepts the reference image + instruction; returns the edited image."""
+        start = time.time()
+        api_key = self._keys.get("google", "")
+        if not api_key:
+            return self._error(model_id, "GEMINI_API_KEY not set", 0.0)
+        if not reference_image_url:
+            return self._error(model_id, "reference_image_url required for edit", 0.0)
+
+        try:
+            from app.services.smart.model_config import MODEL_REGISTRY
+            endpoint = MODEL_REGISTRY.get(model_id, {}).get("endpoint", "gemini-2.5-flash-image")
+        except Exception:
+            endpoint = "gemini-2.5-flash-image"
+
+        try:
+            primary_bytes, primary_mime = await self._fetch_image_bytes(reference_image_url)
+
+            parts: List[Dict] = [{"text": prompt}]
+            parts.append({"inlineData": {
+                "mimeType": primary_mime,
+                "data":     base64.b64encode(primary_bytes).decode("ascii"),
+            }})
+
+            for extra_url in (extra_image_urls or [])[:4]:  # cap at 4 extras
+                try:
+                    eb, em = await self._fetch_image_bytes(extra_url)
+                    parts.append({"inlineData": {
+                        "mimeType": em,
+                        "data":     base64.b64encode(eb).decode("ascii"),
+                    }})
+                except Exception as exc:
+                    logger.warning("[google_edit] failed to attach extra %s: %s", extra_url[:60], exc)
+
+            url = (f"https://generativelanguage.googleapis.com/v1beta/"
+                   f"models/{endpoint}:generateContent")
+            payload = {"contents": [{"role": "user", "parts": parts}]}
+            headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+
+            logger.info("[PAYLOAD][google_edit] model=%s extras=%d",
+                        endpoint, len(extra_image_urls or []))
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+
+            urls: List[str] = []
+            for cand in data.get("candidates") or []:
+                for part in (cand.get("content") or {}).get("parts") or []:
+                    inline = part.get("inlineData") or part.get("inline_data") or {}
+                    b64 = inline.get("data")
+                    mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
+                    if b64:
+                        urls.append(f"data:{mime};base64,{b64}")
+            if not urls:
+                raise ValueError(f"No images from Gemini edit: {list(data.keys())}")
+
+            urls = await self._persist_data_uris_to_s3(urls)
+            return self._ok(urls, model_id, "google.ai", time.time() - start)
+
+        except httpx.HTTPStatusError as exc:
+            logger.error("[google_edit] HTTP %d: %s", exc.response.status_code, exc.response.text[:300])
+            return self._error(model_id, f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
+                               time.time() - start)
+        except Exception as exc:
+            logger.error("[google_edit] error: %s", exc)
+            return self._error(model_id, str(exc), time.time() - start)
+
+    async def _call_openai_edit(self, model_id: str, prompt: str,
+                                reference_image_url: Optional[str] = None,
+                                mask_url: Optional[str] = None,
+                                image_size: str = "square_hd",
+                                **kwargs) -> Dict:
+        """gpt-image-2 /v1/images/edits — best for text replacement on images."""
+        start = time.time()
+        api_key = self._keys.get("openai", "")
+        if not api_key:
+            return self._error(model_id, "OPENAI_API_KEY not set", 0.0)
+        if not reference_image_url:
+            return self._error(model_id, "reference_image_url required for edit", 0.0)
+
+        _SIZE_MAP = {
+            "square_hd": "1024x1024",
+            "landscape_16_9": "1536x1024",
+            "portrait_9_16": "1024x1536",
+            "landscape_4_3": "1536x1024",
+            "portrait_4_3": "1024x1536",
+        }
+        size = _SIZE_MAP.get(image_size, "1024x1024")
+
+        try:
+            img_bytes, img_mime = await self._fetch_image_bytes(reference_image_url)
+            ext = "png" if "png" in img_mime else "jpg"
+
+            files = [("image", (f"image.{ext}", img_bytes, img_mime))]
+            if mask_url:
+                mb, mm = await self._fetch_image_bytes(mask_url)
+                files.append(("mask", ("mask.png", mb, mm or "image/png")))
+
+            data = {
+                "model":   "gpt-image-2",
+                "prompt":  prompt[:32000],
+                "size":    size,
+                "n":       "1",
+                "quality": "medium",
+            }
+            headers = {"Authorization": f"Bearer {api_key}"}
+
+            logger.info("[PAYLOAD][openai_edit] model=gpt-image-2 size=%s mask=%s",
+                        size, bool(mask_url))
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                resp = await client.post(
+                    "https://api.openai.com/v1/images/edits",
+                    data=data, files=files, headers=headers,
+                )
+                resp.raise_for_status()
+                resp_data = resp.json()
+
+            images = resp_data.get("data") or []
+            b64_list = [img["b64_json"] for img in images if img.get("b64_json")]
+            if not b64_list:
+                raise ValueError(f"No images from OpenAI edit: {list(resp_data.keys())}")
+
+            urls = [f"data:image/png;base64,{b64}" for b64 in b64_list]
+            urls = await self._persist_data_uris_to_s3(urls)
+            return self._ok(urls, model_id, "openai.com", time.time() - start)
+
+        except httpx.HTTPStatusError as exc:
+            logger.error("[openai_edit] HTTP %d: %s", exc.response.status_code, exc.response.text[:300])
+            return self._error(model_id, f"HTTP {exc.response.status_code}: {exc.response.text[:200]}",
+                               time.time() - start)
+        except Exception as exc:
+            logger.error("[openai_edit] error: %s", exc)
+            return self._error(model_id, str(exc), time.time() - start)
 
     async def _call_wavespeed(self, model_id: str, prompt: str, negative_prompt: str,
                               num_images: int, image_size: str, num_inference_steps: int,

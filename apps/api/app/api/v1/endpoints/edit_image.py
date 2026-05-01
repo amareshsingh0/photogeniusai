@@ -222,7 +222,10 @@ async def edit_image(request: EditRequest):
         bool(request.mask_data),
     )
 
-    # ── Inpaint (mask) — Flux Fill ────────────────────────────────────────
+    # ── Inpaint (mask) ─────────────────────────────────────────────────────
+    # Route via the same model picker as other modes. Default for inpaint is
+    # gemini_flash_edit (passes mask as a second multimodal image). Falls back
+    # to flux_fill on fal only if Gemini is unavailable.
     if edit_mode == "inpaint_mask":
         if not request.mask_data:
             raise HTTPException(status_code=400, detail="inpaint_mask requires mask_data")
@@ -233,19 +236,39 @@ async def edit_image(request: EditRequest):
                 raw_b64 = raw_b64.split(",", 1)[1]
             mask_bytes = base64.b64decode(raw_b64)
             mask_url = await fal_client.upload_bytes(mask_bytes, "image/png", "mask.png")
-            steps = (
-                50 if request.quality == QualityTier.RES_4K.value
-                else 28 if request.quality == QualityTier.RES_2K.value
-                else 12
-            )
-            result = await fal_client.inpaint(
-                image_url=request.image_url,
-                mask_url=mask_url,
-                prompt=instruction,
-                image_size="square_hd",
-                num_inference_steps=steps,
-                guidance_scale=7.0,
-            )
+        except Exception as e:
+            logger.exception("[EDIT/inpaint] mask upload failed: %s", e)
+            raise HTTPException(status_code=503, detail=f"Inpaint mask upload failed: {e}")
+
+        inpaint_model = get_default_model_for_edit_mode("inpaint_mask", request.quality)
+        logger.info("[EDIT/inpaint] using model=%s", inpaint_model)
+
+        try:
+            if inpaint_model == "flux_fill":
+                steps = (
+                    50 if request.quality == QualityTier.RES_4K.value
+                    else 28 if request.quality == QualityTier.RES_2K.value
+                    else 12
+                )
+                result = await fal_client.inpaint(
+                    image_url=request.image_url,
+                    mask_url=mask_url,
+                    prompt=instruction,
+                    image_size="square_hd",
+                    num_inference_steps=steps,
+                    guidance_scale=7.0,
+                )
+            else:
+                # Gemini nano-banana / GPT Image 2 — pass mask as a second image
+                from app.services.external.multi_provider_client import multi_client
+                result = await multi_client.generate(
+                    model_key=inpaint_model,
+                    prompt=instruction,
+                    reference_image_url=request.image_url,
+                    extra_image_urls=[mask_url],
+                    num_images=1,
+                    image_size="square_hd",
+                )
         except Exception as e:
             logger.exception("[EDIT/inpaint] failed: %s", e)
             raise HTTPException(status_code=503, detail=f"Inpaint failed: {e}")
@@ -261,7 +284,7 @@ async def edit_image(request: EditRequest):
             edit_mode=edit_mode,
             image_url=result["image_url"],
             original_url=request.image_url,
-            model_key="flux_fill",
+            model_key=inpaint_model,
             quality=request.quality,
             elapsed=elapsed,
         )

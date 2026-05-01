@@ -22,8 +22,10 @@ from enum import Enum
 class ModelProvider(str, Enum):
     FAL = "fal"
     GOOGLE = "google"
+    GOOGLE_EDIT = "google_edit"   # Gemini 2.5 Flash Image (nano-banana) — multimodal edit
     WAVESPEED = "wavespeed"
     OPENAI = "openai"
+    OPENAI_EDIT = "openai_edit"   # gpt-image-2 /v1/images/edits — text replacement
 
 class QualityTier(str, Enum):
     RES_1K = "1k"
@@ -293,6 +295,36 @@ MODEL_REGISTRY = {
         "tier": "Premium",
         "rating": 8.5,
     },
+    # ── EDIT-SPECIALIST MODELS (May 1, 2026) ─────────────────────────────────
+    # These are NOT used for fresh text-to-image — they exist purely for the
+    # /edit endpoint. Routing → _call_google_edit / _call_openai_edit which
+    # accept reference_image_url + prompt and return the edited image.
+    "gemini_flash_edit": {
+        "provider": ModelProvider.GOOGLE_EDIT,
+        "endpoint": "gemini-2.5-flash-image",
+        "display_name": "Gemini 2.5 Flash Image (Edit)",
+        "cost_per_image": 0.04,
+        "avg_latency": 6.0,
+        "max_resolution": 1024,
+        "supports_aspects": True,
+        "best_for": ["edit_general", "background_swap", "object_add", "object_remove", "compose", "style_remix"],
+        "strengths": ["natural_language_edit", "subject_preservation", "multimodal"],
+        "tier": "Premium",
+        "rating": 9.0,
+    },
+    "gpt_image_2_edit": {
+        "provider": ModelProvider.OPENAI_EDIT,
+        "endpoint": "gpt-image-2",
+        "display_name": "GPT Image 2 (Edit)",
+        "cost_per_image": 0.05,
+        "avg_latency": 12.0,
+        "max_resolution": 1536,
+        "supports_aspects": True,
+        "best_for": ["edit_text", "text_replace", "typography_edit"],
+        "strengths": ["text_rendering", "instruction_following", "typography"],
+        "tier": "Premium",
+        "rating": 9.0,
+    },
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -459,20 +491,34 @@ MODEL_EDIT_CAPABILITIES: Dict[str, List[str]] = {
     "ideogram_v3": [
         "style_remix", "text_replace", "instruction_edit",
     ],
+    # Gemini 2.5 Flash Image (nano-banana) — Google's native multimodal edit.
+    # Best general-purpose editor: preserves subject, follows natural language,
+    # handles add/remove/background/style/compose without a mask.
+    "gemini_flash_edit": [
+        "instruction_edit", "style_remix", "compose",
+        "object_add", "object_remove", "background_swap",
+        "inpaint_mask",  # works without a hard mask via natural-language localization
+    ],
+    # GPT Image 2 edit — strongest at on-image text replacement / typography.
+    "gpt_image_2_edit": [
+        "text_replace", "instruction_edit", "object_add",
+        "object_remove", "background_swap",
+    ],
 }
 
 # Per-operation default preference — first match in this list that also appears
-# in MODEL_EDIT_CAPABILITIES[mode] wins. Kontext is the overall workhorse, but
-# typography/compose should bias toward models that specialize.
+# in MODEL_EDIT_CAPABILITIES[mode] wins.
+# May 1, 2026: shifted off fal/Kontext per ops decision. Google nano-banana
+# handles general edits; GPT Image 2 owns text replacement.
 _EDIT_MODE_PREFERENCE: Dict[str, List[str]] = {
-    "instruction_edit": ["flux_kontext", "flux_kontext_max", "seedream_4_5"],
-    "inpaint_mask":     ["flux_fill"],
-    "style_remix":      ["ideogram_v3", "flux_kontext", "flux_kontext_max", "seedream_4_5"],
-    "compose":          ["seedream_4_5", "flux_kontext_max", "flux_2_max"],
-    "object_add":       ["flux_kontext", "flux_kontext_max", "seedream_4_5"],
-    "object_remove":    ["flux_kontext", "flux_kontext_max", "seedream_4_5"],
-    "background_swap":  ["flux_kontext", "flux_kontext_max", "seedream_4_5"],
-    "text_replace":     ["ideogram_v3", "flux_kontext_max", "flux_kontext", "seedream_4_5"],
+    "instruction_edit": ["gemini_flash_edit", "gpt_image_2_edit", "flux_kontext"],
+    "inpaint_mask":     ["gemini_flash_edit", "flux_fill"],
+    "style_remix":      ["gemini_flash_edit", "gpt_image_2_edit", "ideogram_v3"],
+    "compose":          ["gemini_flash_edit", "seedream_4_5"],
+    "object_add":       ["gemini_flash_edit", "gpt_image_2_edit", "flux_kontext"],
+    "object_remove":    ["gemini_flash_edit", "gpt_image_2_edit", "flux_kontext"],
+    "background_swap":  ["gemini_flash_edit", "gpt_image_2_edit", "flux_kontext"],
+    "text_replace":     ["gpt_image_2_edit", "ideogram_v3", "flux_kontext_max"],
 }
 
 
