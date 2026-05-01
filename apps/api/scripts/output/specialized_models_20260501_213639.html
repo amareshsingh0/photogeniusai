@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wan and Flux Prompt Harness</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #111; color: #eee; }
+    main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 24px; margin: 0 0 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+    .card { border: 1px solid #333; background: #181818; border-radius: 8px; padding: 14px; }
+    .card h2 { margin: 0 0 4px; font-size: 16px; }
+    .meta { color: #aaa; font-size: 12px; }
+    img, .placeholder { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: #242424; border-radius: 6px; }
+    .placeholder { display: grid; place-items: center; color: #888; }
+    pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: #0d0d0d; padding: 10px; border-radius: 6px; }
+    summary { cursor: pointer; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Wan 2.7 / Flux 2 Flex Prompt Harness</h1>
+    <p class="meta">Mode: dry run. One image per variant.</p>
+    <div class="grid">
+            <section class="card">
+              <h2>wan_2_7_current</h2>
+              <p class="meta">wan_2_7 | 0.0s</p>
+              <p>Current WaveSpeed formatter.</p>
+              <div class="placeholder">No image generated</div>
+              <details>
+                <summary>Prompt</summary>
+                <pre>A premium beauty advertisement for myPowder face powder. Warm cream studio background, rose-gold compact open on the right with soft powder dust, large bold text at the top, elegant beauty lighting, premium commercial photography. Bold text reading &quot;LIGHT AS AIR&quot; placed prominently. Color tones of warm cream, rose-gold, soft ivory, muted taupe.</pre>
+              </details>
+              <pre class="status">{
+  &quot;success&quot;: true,
+  &quot;error&quot;: null
+}</pre>
+            </section>
+            
+
+            <section class="card">
+              <h2>wan_2_7_imagine_prefix</h2>
+              <p class="meta">wan_2_7 | 0.0s</p>
+              <p>Research starting template with descriptive narrative.</p>
+              <div class="placeholder">No image generated</div>
+              <details>
+                <summary>Prompt</summary>
+                <pre>/imagine prompt: Highly detailed, commercial photography style. A minimalist product launch advertisement for myPowder face powder launch. The background is a warm cream studio surface with subtle rose-gold reflections. At the very , a small clean rectangle contains the text &quot;myPowder&quot;. Centered in the upper portion, a large bold headline reads &quot;LIGHT AS AIR&quot;. Just beneath it, in elegant italic script, a smaller line reads &quot;Flawless Everywhere&quot;. On the right side of the image is a high-resolution photograph of the face powder launch. Below the product image, 4 small circles arranged horizontally, each containing a simple line drawing and a label: &quot;Lightweight&quot;, &quot;Oil Control&quot;, &quot;Long Lasting&quot;, &quot;Blurs Skin&quot;. Beneath that, a small line of text reads &quot;Soft focus confidence for every day&quot;. At the very bottom, centered and prominent, a small solid-colored rectangle contains the text &quot;Available Now&quot;. Just above it, a thin horizontal banner contains 4 small icons each labeled with one of: &quot;Vegan&quot;, &quot;Dermatologically Tested&quot;, &quot;Suits All Skin Types&quot;, &quot;Made With Care&quot;. Warm cream, rose-gold, soft ivory, muted taupe palette, soft beauty lighting with gentle highlights, premium commercial photography style, single unified composition.</pre>
+              </details>
+              <pre class="status">{
+  &quot;success&quot;: true,
+  &quot;error&quot;: null
+}</pre>
+            </section>
+            
+
+            <section class="card">
+              <h2>wan_2_7_quoted_list</h2>
+              <p class="meta">wan_2_7 | 0.0s</p>
+              <p>Quoted-string-list text stress test.</p>
+              <div class="placeholder">No image generated</div>
+              <details>
+                <summary>Prompt</summary>
+                <pre>Highly detailed commercial beauty advertisement. A premium beauty advertisement for myPowder face powder. Warm cream studio background, rose-gold compact open on the right with soft powder dust, large bold text at the top, elegant beauty lighting, premium commercial photography. Render these exact visible text strings if the model supports text: &quot;myPowder&quot;, &quot;LIGHT AS AIR&quot;, &quot;Flawless Everywhere&quot;, &quot;Available Now&quot;, &quot;Lightweight&quot;, &quot;Oil Control&quot;, &quot;Long Lasting&quot;, &quot;Blurs Skin&quot;, &quot;Vegan&quot;, &quot;Dermatologically Tested&quot;, &quot;Suits All Skin Types&quot;, &quot;Made With Care&quot;. Keep a single polished advertising composition.</pre>
+              </details>
+              <pre class="status">{
+  &quot;success&quot;: true,
+  &quot;error&quot;: null
+}</pre>
+            </section>
+            
+
+            <section class="card">
+              <h2>flux_2_flex_current</h2>
+              <p class="meta">flux_2_flex | 0.0s</p>
+              <p>Current Flux formatter.</p>
+              <div class="placeholder">No image generated</div>
+              <details>
+                <summary>Prompt</summary>
+                <pre>ONE single unified image. A premium beauty advertisement for myPowder face powder. Warm cream studio background, rose-gold compact open on the right with soft powder dust, large bold text at the top, elegant beauty lighting, premium commercial photography. Text overlay: &quot;LIGHT AS AIR&quot; with &quot;Available Now&quot; button below.</pre>
+              </details>
+              <pre class="status">{
+  &quot;success&quot;: true,
+  &quot;error&quot;: null
+}</pre>
+            </section>
+            
+
+            <section class="card">
+              <h2>flux_2_flex_imagine_prefix</h2>
+              <p class="meta">flux_2_flex | 0.0s</p>
+              <p>Research starting template with descriptive narrative.</p>
+              <div class="placeholder">No image generated</div>
+              <details>
+                <summary>Prompt</summary>
+                <pre>/imagine prompt: Highly detailed, commercial photography style. A minimalist product launch advertisement for myPowder face powder launch. The background is a warm cream studio surface with subtle rose-gold reflections. At the very , a small clean rectangle contains the text &quot;myPowder&quot;. Centered in the upper portion, a large bold headline reads &quot;LIGHT AS AIR&quot;. Just beneath it, in elegant italic script, a smaller line reads &quot;Flawless Everywhere&quot;. On the right side of the image is a high-resolution photograph of the face powder launch. Below the product image, 4 small circles arranged horizontally, each containing a simple line drawing and a label: &quot;Lightweight&quot;, &quot;Oil Control&quot;, &quot;Long Lasting&quot;, &quot;Blurs Skin&quot;. Beneath that, a small line of text reads &quot;Soft focus confidence for every day&quot;. At the very bottom, centered and prominent, a small solid-colored rectangle contains the text &quot;Available Now&quot;. Just above it, a thin horizontal banner contains 4 small icons each labeled with one of: &quot;Vegan&quot;, &quot;Dermatologically Tested&quot;, &quot;Suits All Skin Types&quot;, &quot;Made With Care&quot;. Warm cream, rose-gold, soft ivory, muted taupe palette, soft beauty lighting with gentle highlights, premium commercial photography style, single unified composition.</pre>
+              </details>
+              <pre class="status">{
+  &quot;success&quot;: true,
+  &quot;error&quot;: null
+}</pre>
+            </section>
+            
+
+            <section class="card">
+              <h2>flux_2_flex_quoted_list</h2>
+              <p class="meta">flux_2_flex | 0.0s</p>
+              <p>Quoted-string-list text stress test.</p>
+              <div class="placeholder">No image generated</div>
+              <details>
+                <summary>Prompt</summary>
+                <pre>Premium commercial photography style. A premium beauty advertisement for myPowder face powder. Warm cream studio background, rose-gold compact open on the right with soft powder dust, large bold text at the top, elegant beauty lighting, premium commercial photography. Render these exact visible text strings if the model supports text: &quot;myPowder&quot;, &quot;LIGHT AS AIR&quot;, &quot;Flawless Everywhere&quot;, &quot;Available Now&quot;, &quot;Lightweight&quot;, &quot;Oil Control&quot;, &quot;Long Lasting&quot;, &quot;Blurs Skin&quot;, &quot;Vegan&quot;, &quot;Dermatologically Tested&quot;, &quot;Suits All Skin Types&quot;, &quot;Made With Care&quot;. Keep a single polished advertising composition.</pre>
+              </details>
+              <pre class="status">{
+  &quot;success&quot;: true,
+  &quot;error&quot;: null
+}</pre>
+            </section>
+            
+
+            <section class="card">
+              <h2>gpt_image_2_control</h2>
+              <p class="meta">gpt_image_2 | 0.0s</p>
+              <p>GPT Image 2 control using sectioned imperative formatter.</p>
+              <div class="placeholder">No image generated</div>
+              <details>
+                <summary>Prompt</summary>
+                <pre>Act as a world-class advertising art director specializing in luxury beauty and cosmetics campaigns.
+
+PRIMARY COMMAND:
+Generate a single, cohesive image of a polished face powder launch for the brand myPowder in the beauty category. Single unified composition - no panels, no variants, no collage. Render as a finished print-ready advertisement.
+
+TEXT ELEMENTS TO RENDER (USE EXACTLY THESE STRINGS, CORRECT SPELLING):
+- BRAND_NAME: &quot;myPowder&quot;
+- HERO_HEADLINE: &quot;LIGHT AS AIR&quot;
+- SUBHEADLINE: &quot;Flawless Everywhere&quot;
+- ICON_LABELS: [&quot;Lightweight&quot;, &quot;Oil Control&quot;, &quot;Long Lasting&quot;, &quot;Blurs Skin&quot;]
+- EMOTIONAL_TAGLINE: &quot;Soft focus confidence for every day.&quot;
+- CALL_TO_ACTION: &quot;Available Now&quot;
+- TRUST_STRIP_ITEMS: [&quot;Vegan&quot;, &quot;Dermatologically Tested&quot;, &quot;Suits All Skin Types&quot;, &quot;Made With Care&quot;]
+
+VISUAL AND LAYOUT INSTRUCTIONS:
+- COMPOSITION: product on the right, text hierarchy on the left, clear bottom action area
+- PRODUCT: A high-resolution product photograph. a warm cream studio surface with subtle rose-gold reflections
+- LOGO PLACEMENT: Place the brand wordmark &quot;myPowder&quot; in the top-left corner in a small, refined, brand-appropriate typeface.
+- LAUNCH BADGE: Above the headline, a small &quot;NEW LAUNCH&quot; label with thin horizontal rules on either side, in small-caps or light tracking.
+- HEADLINE PLACEMENT: Center the HERO_HEADLINE in the upper-middle text region, in large bold uppercase condensed sans-serif. Dominant text element.
+- SUBHEADLINE PLACEMENT: Place the SUBHEADLINE directly below the HERO_HEADLINE in an elegant italic or script font for premium high-low contrast.
+- ICON ROW PLACEMENT: Below the subheadline (or below the product photo), arrange 4 small circular icon badges horizontally. Each circle contains a minimal line-art icon and a 1-2 line label below it. Suggested pairings: &quot;Lightweight&quot; with a feather icon, &quot;Oil Control&quot; with a droplet icon, &quot;Long Lasting&quot; with a clock icon, &quot;Blurs Skin&quot; with a sparkle icon.
+- TAGLINE PLACEMENT: A small, elegant line of text below the icons (or above the CTA), centered, in clean sans-serif.
+- CTA PLACEMENT: At the bottom-center, render the CALL_TO_ACTION as either an elegant script-style line of text or a prominent pill-shaped button in the brand accent color.
+- TRUST STRIP PLACEMENT: A thin full-width horizontal band at the very bottom of the image, containing the TRUST_STRIP_ITEMS separated by vertical pipes or thin dividers, in small-caps or tracked sans-serif.
+- STYLE AND TONE: minimalist, elegant, premium, palette of warm cream, rose-gold, soft ivory, muted taupe, soft beauty lighting with gentle highlights, typography: bold condensed uppercase headline with elegant italic accent text, premium commercial photography quality.
+
+QUALITY REQUIREMENTS: All text must be perfectly legible and correctly spelled - no garbled letters, no extra characters, no fragmented words. Render every element listed above. Single unified image, no multiple panels.</pre>
+              </details>
+              <pre class="status">{
+  &quot;success&quot;: true,
+  &quot;error&quot;: null
+}</pre>
+            </section>
+            </div>
+  </main>
+</body>
+</html>

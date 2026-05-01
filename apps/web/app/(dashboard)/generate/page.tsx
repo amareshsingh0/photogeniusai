@@ -107,6 +107,14 @@ interface CreativeOSData {
   ctr?: { engagement_score: number; confidence: number; suggestions: string[] }
 }
 
+interface TextValidationResult {
+  checked?: boolean
+  all_rendered?: boolean | null
+  expected?: string[]
+  items?: { expected?: string; rendered?: boolean; confidence?: number; observed_text?: string }[]
+  error?: string | null
+}
+
 interface GenerationResult {
   success: boolean
   image_url?: string
@@ -120,6 +128,7 @@ interface GenerationResult {
   quality_score?: number
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   quality_gate?: any         // CREA quality gate result { total, grade, critique, auto_rerun }
+  text_validation?: TextValidationResult
   total_time?: number
   model_used?: string
   creative_os?: CreativeOSData
@@ -634,6 +643,7 @@ export default function GeneratePage() {
               model_used: data.modelId,
               total_time: data.latency,
               generationId: data.generationId,
+              text_validation: data.textValidation,
             }
             setMultiResults(prev => [...prev, newResult])
 
@@ -666,6 +676,7 @@ export default function GeneratePage() {
                 model_used: mr.model_name,
                 total_time: mr.generation_time,
                 quality_score: data.quality_score,
+                text_validation: mr.textValidation ?? mr.text_validation,
                 generationId: mr.generationId,
                 creative_os: data.creative_os,
                 capability_bucket: data.capability_bucket,
@@ -689,6 +700,7 @@ export default function GeneratePage() {
                 total_time: data.total_time,
                 quality_score: data.quality_score,
                 quality_gate: data.quality_gate,
+                text_validation: data.text_validation,
                 generationId: data.generationId,
                 creative_os: data.creative_os,
                 // Poster fields
@@ -1019,6 +1031,23 @@ export default function GeneratePage() {
                         Logo
                       </Button>
                     </div>
+
+                    {res.text_validation && (
+                      <div
+                        className={`rounded-lg border px-2 py-1 text-[11px] ${
+                          res.text_validation.all_rendered
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                            : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                        }`}
+                      >
+                        {(() => {
+                          const items = Array.isArray(res.text_validation.items) ? res.text_validation.items : []
+                          const total = items.length || res.text_validation.expected?.length || 0
+                          const rendered = items.filter((item) => item?.rendered).length
+                          return `Text ${rendered}/${total}`
+                        })()}
+                      </div>
+                    )}
 
                     {/* Rating */}
                     {res.generationId && (

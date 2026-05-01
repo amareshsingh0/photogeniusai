@@ -177,6 +177,9 @@ export async function POST(req: Request) {
                       select: { id: true },
                     });
                     if (!dbUser) throw new Error("User not found");
+                    const metadata = data.text_validation
+                      ? { text_validation: data.text_validation }
+                      : undefined;
                     const gen = await prisma.generation.create({
                       data: {
                         userId: dbUser.id,
@@ -189,6 +192,7 @@ export async function POST(req: Request) {
                         creditsUsed,
                         qualityTierUsed: normalizedQuality,
                         aestheticScore: null,
+                        metadata,
                       },
                     });
                     generationId = gen.id;

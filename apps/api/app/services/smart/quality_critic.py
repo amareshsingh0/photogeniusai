@@ -14,7 +14,7 @@ import asyncio
 import json
 import logging
 import os
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from app.config.loader import config as beast_config
 
@@ -452,6 +452,114 @@ class QualityCritic:
                 "critique_summary": "Error during quality critique",
                 "error": str(e),
             }
+
+    async def validate_rendered_text(
+        self,
+        image_url: str,
+        expected_texts: List[str],
+        model_key: str = "",
+        trace_id: str = "",
+    ) -> Dict[str, Any]:
+        """Log-only Gemini Vision check for expected ad text.
+
+        This method never retries generation and never changes the returned
+        image. It exists only to produce telemetry for typography/ad prompts.
+        """
+        expected: List[str] = []
+        for item in expected_texts or []:
+            text = str(item or "").strip()
+            if text and text not in expected:
+                expected.append(text[:120])
+
+        result: Dict[str, Any] = {
+            "checked": False,
+            "model_key": model_key,
+            "expected": expected,
+            "items": [],
+            "all_rendered": None,
+            "error": None,
+        }
+        if not image_url or not expected:
+            return result
+
+        try:
+            image_b64 = await self._fetch_image_base64(image_url)
+            system_prompt = (
+                "You are a strict OCR and advertising QA inspector. "
+                "Check only whether the requested text strings are visibly "
+                "rendered in the image. Return JSON only."
+            )
+            user_prompt = (
+                "For each expected string, decide if it appears as readable "
+                "text in the image. Minor case differences are acceptable, but "
+                "misspellings, missing words, or garbled letters are failures. "
+                "Return exactly this JSON shape: "
+                "{\"items\":[{\"expected\":\"...\",\"rendered\":true,"
+                "\"confidence\":0.0,\"observed_text\":\"...\"}],"
+                "\"all_rendered\":true}.\n\n"
+                f"Expected strings: {json.dumps(expected, ensure_ascii=True)}"
+            )
+            raw_text = await self._call_vision_model(
+                system_prompt,
+                user_prompt,
+                image_b64,
+                max_tokens=1200,
+            )
+            parsed = self._extract_json(raw_text)
+            raw_items = parsed.get("items") if isinstance(parsed, dict) else []
+            if not isinstance(raw_items, list):
+                raw_items = []
+
+            by_expected = {
+                str(item.get("expected", "")).strip().lower(): item
+                for item in raw_items
+                if isinstance(item, dict)
+            }
+
+            items: List[Dict[str, Any]] = []
+            for expected_text in expected:
+                item = by_expected.get(expected_text.lower(), {})
+                rendered = bool(item.get("rendered", False))
+                try:
+                    confidence = float(item.get("confidence", 0.0) or 0.0)
+                except (TypeError, ValueError):
+                    confidence = 0.0
+                confidence = max(0.0, min(1.0, confidence))
+                observed = str(item.get("observed_text", "") or "")[:160]
+                row = {
+                    "expected": expected_text,
+                    "rendered": rendered,
+                    "confidence": round(confidence, 3),
+                    "observed_text": observed,
+                }
+                items.append(row)
+                logger.info(
+                    '[text-validation] trace=%s model=%s expected="%s" rendered=%s confidence=%.2f observed="%s"',
+                    trace_id,
+                    model_key,
+                    expected_text,
+                    rendered,
+                    confidence,
+                    observed,
+                )
+                print(
+                    f'[text-validation] expected="{expected_text}" rendered={rendered} confidence={confidence:.2f}',
+                    flush=True,
+                )
+
+            result["checked"] = True
+            result["items"] = items
+            result["all_rendered"] = all(item["rendered"] for item in items)
+            return result
+        except Exception as e:
+            logger.warning(
+                "[text-validation] trace=%s model=%s failed: %s",
+                trace_id,
+                model_key,
+                e,
+            )
+            result["error"] = str(e)
+            return result
 
     async def _call_vision_model(self, system_prompt: str, user_prompt: str, image_b64: str, max_tokens: int = 4000) -> str:
         """Call vision model (Gemini default, Groq optional) for image analysis with automatic fallback."""

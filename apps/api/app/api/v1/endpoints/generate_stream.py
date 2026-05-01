@@ -335,6 +335,86 @@ def _canonical_model_key(model_key: Optional[str], default: str = "flux_2_pro") 
     return _MODEL_ALIASES.get(normalized, normalized)
 
 
+def _extract_text_validation_expected(ad_copy: Any) -> list[str]:
+    """Return priority text strings for log-only OCR validation."""
+    if not isinstance(ad_copy, dict):
+        return []
+
+    expected: list[str] = []
+    for key in ("headline", "subhead", "cta"):
+        text = str(ad_copy.get(key) or "").strip()
+        if text and text not in expected:
+            expected.append(text[:120])
+    return expected
+
+
+async def _validate_rendered_text_log_only(
+    *,
+    image_url: str,
+    ad_copy: Any,
+    bucket: str,
+    model_key: str,
+    trace_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Run text-render validation telemetry without retrying generation."""
+    if os.getenv("ENABLE_TEXT_VALIDATION", "true").strip().lower() == "false":
+        return None
+    if bucket not in ("typography", "ad_creative"):
+        return None
+
+    expected = _extract_text_validation_expected(ad_copy)
+    if not expected:
+        return None
+
+    timeout = float(os.getenv("TEXT_VALIDATION_TIMEOUT_SEC", "20.0"))
+    try:
+        from app.services.smart.quality_critic import QualityCritic
+
+        critic = QualityCritic(tier="standard")
+        # This check is specifically Gemini Vision telemetry, independent of
+        # the normal quality critic provider setting.
+        critic.provider = "gemini"
+        return await asyncio.wait_for(
+            critic.validate_rendered_text(
+                image_url=image_url,
+                expected_texts=expected,
+                model_key=model_key,
+                trace_id=trace_id,
+            ),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "[text-validation] trace=%s model=%s timeout after %.1fs",
+            trace_id,
+            model_key,
+            timeout,
+        )
+        return {
+            "checked": False,
+            "model_key": model_key,
+            "expected": expected,
+            "items": [],
+            "all_rendered": None,
+            "error": f"timeout after {timeout:.1f}s",
+        }
+    except Exception as exc:
+        logger.warning(
+            "[text-validation] trace=%s model=%s failed: %s",
+            trace_id,
+            model_key,
+            exc,
+        )
+        return {
+            "checked": False,
+            "model_key": model_key,
+            "expected": expected,
+            "items": [],
+            "all_rendered": None,
+            "error": str(exc),
+        }
+
+
 def _build_design_brief(
     brief: dict,
     ad_copy: dict,
@@ -463,6 +543,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         norm_tier = normalize_quality_tier(quality)
         db_bucket = bucket.split("_")[0] if "_" in bucket else bucket
         model_cfg = None
+        _active_candidate_keys: set[str] = set()
 
         # ── model_key override — bypasses bucket routing entirely ──────────
         if req.model_key:
@@ -496,6 +577,10 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                     and norm_tier in get_model_supported_tiers(m.modelId)
                     and _canonical_model_key(m.modelId, default="") in MODEL_REGISTRY
                 ]
+                _active_candidate_keys = {
+                    _canonical_model_key(m.modelId, default="")
+                    for m in _candidates
+                }
                 if _candidates:
                     _candidates.sort(key=lambda m: m.costPerImage or 0)
                     _chosen_key = _canonical_model_key(_candidates[0].modelId, default="")
@@ -664,6 +749,58 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         effective_height = req.height
         # Simple engine: use aspect_hint to pick canvas when caller left default 1024².
         _simple_payload = brief.get("_simple_payload")
+
+        # Item 6 (Round 2): complexity-score routing override.
+        # Research recommendation: prioritize gpt_image_2 for complex structured
+        # ads (>=3 text element types). Skip when:
+        #  - admin sent explicit req.model_key (parallel testing)
+        #  - bucket isn't typography/ad_creative
+        #  - simple_engine didn't run
+        #  - already routed to gpt_image_2
+        #  - gpt_image_2 is not active for this DB bucket/tier
+        # Env kill-switch: ENABLE_COMPLEXITY_ROUTING=false to disable.
+        if (
+            os.getenv("ENABLE_COMPLEXITY_ROUTING", "true").strip().lower() != "false"
+            and not req.model_key
+            and bucket in ("typography", "ad_creative")
+            and _simple_payload
+            and fal_model_key != "gpt_image_2"
+            and "gpt_image_2" in _active_candidate_keys
+        ):
+            _ad_copy = _simple_payload.get("ad_copy") or {}
+            # Count distinct text element types present.
+            _types = 0
+            if (_ad_copy.get("headline") or "").strip():        _types += 1
+            if (_ad_copy.get("subhead") or "").strip():         _types += 1
+            if (_ad_copy.get("cta") or "").strip():             _types += 1
+            if _ad_copy.get("benefit_lines"):                   _types += 1
+            if _ad_copy.get("trust_signals"):                   _types += 1
+            if (_ad_copy.get("emotional_tagline") or "").strip(): _types += 1
+            if (_ad_copy.get("brand_name") or "").strip():      _types += 1
+            if _types >= 3:
+                _prev_model = fal_model_key
+                fal_model_key = "gpt_image_2"
+                _gpt_spec = MODEL_REGISTRY["gpt_image_2"]
+                model_cfg = {
+                    "model_key":     "gpt_image_2",
+                    "model":         _gpt_spec["endpoint"],
+                    "provider":      _gpt_spec["provider"].value,
+                    "display_name":  _gpt_spec["display_name"],
+                    "tier_used":     norm_tier,
+                    "cost_per_image": _gpt_spec["cost_per_image"],
+                    "num_images":    1,
+                }
+                model_label = _MODEL_LABELS.get(fal_model_key, fal_model_key)
+                logger.info(
+                    "[stream][%s] complexity-routing: %d text-element types -> "
+                    "upgraded %s -> gpt_image_2",
+                    trace_id, _types, _prev_model,
+                )
+                print(
+                    f"[COMPLEXITY-ROUTE] types={_types} {_prev_model} -> gpt_image_2",
+                    flush=True,
+                )
+
         if _simple_payload and req.width == 1024 and req.height == 1024:
             _ASPECT_DIMS = {
                 "square_hd":      (1024, 1024),
@@ -924,8 +1061,9 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             and bool(creative_bible.get("emotional_territory"))
         )
 
-        # Simple rule: Max 2 images total
-        max_images_total = 2
+        # Hard constraint: one generated image per request. Quality checks are
+        # telemetry only and must not trigger a second generation.
+        max_images_total = 1
         images_generated = 1  # We already have Gen 1 (raw_hero_url)
 
         if _run_quality_gate:
@@ -990,6 +1128,14 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                     # Fundamental issues - use Image 1 with warning
                     logger.warning("[stream][%s] Image 1 ESCALATED (fundamental issues)", trace_id)
                     quality_gate_result["escalated"] = True
+
+                elif verdict_1 == "REVISE":
+                    logger.info(
+                        "[stream][%s] Image 1 REVISE logged only - no retry by policy",
+                        trace_id,
+                    )
+                    quality_gate_result["auto_retry_skipped"] = True
+                    quality_gate_result["images_generated"] = images_generated
 
                 elif verdict_1 == "REVISE" and images_generated < max_images_total:
                     # Generate Image 2 with targeted improvements
@@ -1110,6 +1256,14 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                 logger.warning("[stream][%s] Quality Critic failed (non-fatal): %s", trace_id, _qg_err)
                 quality_gate_result = None
 
+        text_validation_result = await _validate_rendered_text_log_only(
+            image_url=final_image_url,
+            ad_copy=ad_copy,
+            bucket=bucket,
+            model_key=fal_model_key,
+            trace_id=trace_id,
+        )
+
         total_time = time.time() - start
 
         # Safe extraction of gen fields
@@ -1153,6 +1307,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             "total_time":        total_time,
             "quality_score":          quality_gate_result.get("total") if quality_gate_result else None,
             "quality_gate":           quality_gate_result,
+            "text_validation":        text_validation_result,
             "image_url_experimental": gen_experimental.get("image_url") if gen_experimental and gen_experimental.get("success") else None,
             "poster_composite_status": composite_status,
             # Poster / inline editor fields
@@ -1297,6 +1452,7 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
                         "tier":         result.get("tier"),
                         "latency":      result.get("latency"),
                         "cost":         result.get("cost"),
+                        "textValidation": result.get("text_validation"),
                         "completed":    1,
                         "total":        1,
                         "trace_id":     trace_id,
@@ -1372,6 +1528,7 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
                 trace_id, len(req.prompt), len(enriched_prompt),
             )
             req.prompt = enriched_prompt
+            setattr(req, "_simple_payload", enrich)
             if not req.negative_prompt:
                 req.negative_prompt = enriched_neg
         except Exception as exc:
@@ -1432,6 +1589,7 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
                         "tier":         result.get("tier"),
                         "latency":      result.get("latency"),
                         "cost":         result.get("cost"),
+                        "textValidation": result.get("text_validation"),
                         "completed":    completed,
                         "total":        len(tasks),
                         "trace_id":     trace_id,
@@ -1479,10 +1637,23 @@ async def _generate_with_model(
     try:
         from app.services.external.multi_provider_client import multi_client
         from prisma import Prisma
+        from app.services.smart.config import detect_capability_bucket
+
+        bucket = detect_capability_bucket(req.prompt)
+        prompt_for_model = req.prompt
+        simple_payload = getattr(req, "_simple_payload", None)
+        if isinstance(simple_payload, dict):
+            from app.services.smart.model_prompt_formatter import format_prompt_for_model
+
+            prompt_for_model = format_prompt_for_model(
+                base_prompt=req.prompt,
+                model_key=model_id,
+                simple_payload=simple_payload,
+            )
 
         # Generate image
         result = await multi_client.generate(
-            prompt=req.prompt,
+            prompt=prompt_for_model,
             model_key=model_id,
             image_size=_pick_image_size(req.width, req.height),
             num_images=1,
@@ -1501,15 +1672,20 @@ async def _generate_with_model(
             )
             return None
 
+        text_validation = await _validate_rendered_text_log_only(
+            image_url=result.get("image_url"),
+            ad_copy=simple_payload.get("ad_copy") if isinstance(simple_payload, dict) else None,
+            bucket=bucket,
+            model_key=model_id,
+            trace_id=trace_id,
+        )
+
         # Save to database (Generation model)
         generation = None
         model_config = None
         try:
             prisma = Prisma()
             await prisma.connect()
-
-            from app.services.smart.config import detect_capability_bucket
-            bucket = detect_capability_bucket(req.prompt)
 
             # originalPrompt is VarChar(1000); enhancedPrompt is Text (unlimited).
             # Use the raw user prompt for originalPrompt (what admin UI shows)
@@ -1522,7 +1698,7 @@ async def _generate_with_model(
                     "userId": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c",  # DEV_USER UUID
                     "mode": "REALISM",  # Default mode
                     "originalPrompt": original_prompt,
-                    "enhancedPrompt": req.prompt,
+                    "enhancedPrompt": prompt_for_model,
                     "numInferenceSteps": _QUALITY_STEPS.get(effective_quality, 20),
                     "guidanceScale": _MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
                     "width": req.width,
@@ -1534,6 +1710,7 @@ async def _generate_with_model(
                     "modelUsed": model_id,
                     "bucket": bucket,
                     "generationTimeSeconds": latency,
+                    "metadata": json.dumps({"text_validation": text_validation}) if text_validation else None,
                 }
             )
 
@@ -1559,6 +1736,7 @@ async def _generate_with_model(
             "tier": effective_quality,
             "latency": latency,
             "cost": model_config.costPerImage if model_config and hasattr(model_config, "costPerImage") else 0.0,
+            "text_validation": text_validation,
         }
 
     except Exception as e:

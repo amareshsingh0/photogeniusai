@@ -275,6 +275,25 @@ For PRODUCT LAUNCH ads, the prompt must describe ALL of these layout elements:
 - CTA text in script style, emotional tagline in small elegant type
 - Bottom trust strip (full-width, cream band, 4 pipe-separated items)
 
+**CRITICAL RULE - VISUAL DESCRIPTIONS ONLY IN `prompt`:**
+Half the image models that read your `prompt` field (Imagen, Wan, Flux) have NO concept of "CTA button" or "trust strip" - they are functional labels, not visual instructions. They render exactly what they read. So in the `prompt` field, translate EVERY functional element into its visual form:
+
+WRONG (functional jargon - these get either rendered literally or ignored):
+- "CTA pill button reading 'Shop Now'"
+- "trust strip with Vegan, Dermatologist Tested..."
+- "hero headline locked across the top third"
+- "icon badges row"
+- "logo lockup"
+
+RIGHT (visual descriptions - what the image actually contains):
+- "a prominent rectangular pill-shaped element at the bottom containing the words 'Shop Now'"
+- "a thin horizontal banner at the bottom containing four small line-drawn icons each labeled with one of: 'Vegan', 'Dermatologist Tested'..."
+- "a large bold uppercase headline at the top reading 'X'"
+- "small circles arranged horizontally each containing a simple line drawing and a label"
+- "a small clean rectangle in the top-left containing the brand name"
+
+Functional labels (CTA, headline, subhead, benefit_lines, trust_signals) belong ONLY in `ad_copy` keys. The `prompt` field describes the FINISHED IMAGE as a photograph would, not as a creative brief would.
+
 ## LAYER 5 — TECHNICAL: Build the image_prompt
 Construct the `prompt` field using construction order (back to front):
 1. Background plate (environment, sky, backdrop, palette)
@@ -1072,17 +1091,89 @@ def _drop_multi_variant_sentences(text: str) -> str:
     return " ".join(kept).strip()
 
 
+# Item 4 (Round 2 quality upgrade) - content filter trigger blacklist.
+# Research PDF page 10 flagged this as a Medium-risk failure mode: words like
+# "busty" trigger silent refusals or sterilization even in benign advertising
+# contexts. We replace with neutral synonyms BEFORE the prompt reaches any
+# provider. List grows over time from real telemetry of refused generations.
+_CONTENT_FILTER_BLACKLIST = {
+    "busty":      (r"\bbusty\b", "full-figure"),
+    "sexy":       (r"\bsexy\b", "elegant"),
+    "hot girl":   (r"\bhot\s+girl\b", "stylish woman"),
+    "skimpy":     (r"\bskimpy\b", "minimal"),
+    "nude":       (r"\bnude\b", "bare-skin tone"),
+    # extend from telemetry of refused generations
+}
+_CONTENT_FILTER_PATTERNS = [
+    (trigger, re.compile(pattern, re.IGNORECASE), repl)
+    for trigger, (pattern, repl) in _CONTENT_FILTER_BLACKLIST.items()
+]
+
+
+# Item 4 (Round 2) - literal metadata leak defense.
+# Research PDF page 9-10 flagged this as a CRITICAL risk: API config key/value
+# pairs (model_version, temperature, seed, etc) accidentally end up in the
+# prompt-text field and get rendered verbatim on the image. Defensive strip.
+_METADATA_LEAK_PATTERN = re.compile(
+    r"\b(?:model(?:_version)?|temperature|top_k|top_p|seed|api_key|"
+    r"max_tokens|response_format|tool_choice|frequency_penalty|presence_penalty)"
+    r"\s*[:=]\s*[\"']?[\w\-\.\d]+[\"']?",
+    re.IGNORECASE,
+)
+_CODE_FENCE_REMNANT_PATTERN = re.compile(r"```(?:json|python|text)?|```", re.IGNORECASE)
+
+
+def _scrub_content_filter_triggers(text: str) -> str:
+    """Replace known content-filter trigger words with neutral synonyms.
+    Logs every replacement so we can grow the blacklist from real refusals.
+    """
+    if not text:
+        return text
+    out = text
+    for trigger, pattern, repl in _CONTENT_FILTER_PATTERNS:
+        if pattern.search(out):
+            logger.info("[content-filter] scrubbed: %s -> %s", trigger, repl)
+            print(f"[content-filter] scrubbed: {trigger} -> {repl}", flush=True)
+            out = pattern.sub(repl, out)
+    return out
+
+
+def _scrub_metadata_leaks(text: str) -> str:
+    """Strip API config key/value pairs that leaked into the prompt text."""
+    if not text:
+        return text
+    if _METADATA_LEAK_PATTERN.search(text) or _CODE_FENCE_REMNANT_PATTERN.search(text):
+        cleaned = _CODE_FENCE_REMNANT_PATTERN.sub("", text)
+        cleaned = _METADATA_LEAK_PATTERN.sub("", cleaned)
+        cleaned = re.sub(r"\{\s*,?\s*\}", "", cleaned)
+        cleaned = re.sub(r",\s*,+", ", ", cleaned)
+        cleaned = re.sub(r"\s+([,.;:])", r"\1", cleaned)
+        logger.warning("[metadata-leak] scrubbed config keys from prompt")
+        print("[metadata-leak] scrubbed config keys from prompt", flush=True)
+        return cleaned.strip()
+    return text
+
+
 def _sanitize_prompt(text: str, bucket: str = "") -> str:
     """Strip pitch-deck / placeholder language that image models render literally.
 
     For typography/ad_creative buckets, layout markers (Headline:, Body:, CTA:,
-    ## section dividers) are intentionally preserved — GPT Image 2 and text-capable
+    ## section dividers) are intentionally preserved - GPT Image 2 and text-capable
     models use them for correct text placement and hierarchy rendering.
+
+    Round 2 additions: content-filter trigger scrub + literal-metadata leak
+    defense (research PDF pages 9-10).
     """
     if not text:
         return text
     original = text
     _is_typography = bucket in ("typography", "ad_creative")
+
+    # Pass 0a: scrub content-filter trigger words so the prompt isn't refused.
+    text = _scrub_content_filter_triggers(text)
+
+    # Pass 0b: strip any leaked API config key/value pairs.
+    text = _scrub_metadata_leaks(text)
 
     # Pass 1: drop entire sentences mentioning multi-variant trigger words.
     text = _drop_multi_variant_sentences(text)
@@ -1092,8 +1183,8 @@ def _sanitize_prompt(text: str, bucket: str = "") -> str:
     # "Headline:", "Body:", "CTA:", "Tagline:" etc. survive into the image model.
     for i, (pattern, replacement) in enumerate(_LEAK_PATTERNS):
         if _is_typography and i == 6:
-            # index 6 = brief-doc labels (Headline/Body/CTA/Subtitle/Tagline…)
-            # Keep these — GPT Image 2 uses them for structured text layout.
+            # index 6 = brief-doc labels (Headline/Body/CTA/Subtitle/Tagline...)
+            # Keep these - GPT Image 2 uses them for structured text layout.
             continue
         text = pattern.sub(replacement, text)
 
