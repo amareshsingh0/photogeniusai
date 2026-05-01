@@ -533,6 +533,13 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
     "gpt_image_2": [
         ("openai",   "gpt-image-2",                                  0.053),  # medium; 4K high = $0.211
     ],
+    # ── Edit-specific models (google_edit / openai_edit providers) ────────────
+    "gemini_flash_edit": [
+        ("google_edit", "gemini_flash_edit",                         0.040),
+    ],
+    "gpt_image_2_edit": [
+        ("openai_edit", "gpt_image_2_edit",                          0.050),
+    ],
     "recraft_v4_pro": [
         ("fal",      "fal-ai/recraft/v4/pro/text-to-image",         0.030),
     ],
