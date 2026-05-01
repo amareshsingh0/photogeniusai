@@ -445,7 +445,18 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
         edit_mode: mode,
       }
       if (mode === "inpaint_mask") {
-        body.mask_data = maskCanvasRef.current!.toDataURL("image/png")
+        const maskCanvas = maskCanvasRef.current!
+        const img = imgRef.current!
+        const nw = img.naturalWidth || maskCanvas.width
+        const nh = img.naturalHeight || maskCanvas.height
+        if (nw !== maskCanvas.width || nh !== maskCanvas.height) {
+          const scaled = document.createElement("canvas")
+          scaled.width = nw; scaled.height = nh
+          scaled.getContext("2d")!.drawImage(maskCanvas, 0, 0, nw, nh)
+          body.mask_data = scaled.toDataURL("image/png")
+        } else {
+          body.mask_data = maskCanvas.toDataURL("image/png")
+        }
       }
       if ((mode === "compose" || mode === "object_add") && extras.length) {
         body.extra_image_urls = extras
