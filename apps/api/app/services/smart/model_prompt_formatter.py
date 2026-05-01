@@ -72,12 +72,16 @@ def format_prompt_for_model(
         return _format_for_flux(base_prompt, simple_payload)
 
     if model_key in _GOOGLE_MODELS:
-        # _distill_for_imagen runs inside _call_google() — pass through untouched.
-        return base_prompt
+        # Build a pre-distilled scene prompt from structured data so it
+        # SURVIVES _distill_for_imagen() in _call_google() without losing
+        # the headline/subhead/CTA quoted strings.
+        return _format_for_imagen(base_prompt, simple_payload)
 
     if model_key in _WAVESPEED_PASS:
-        # WaveSpeed (wan_2_7, grok_2_imagine) handles artistic prompts well as-is.
-        return base_prompt
+        # WaveSpeed models (wan_2_7, grok_2_imagine, hunyuan_image) cannot
+        # reliably render multi-element text. Strip text-rendering expectations
+        # and send a pure scene description.
+        return _format_for_wavespeed(base_prompt, simple_payload)
 
     # Unknown / future models — pass through.
     return base_prompt
@@ -326,3 +330,170 @@ def _format_for_flux(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     logger.info("[formatter][flux] %d→%d chars", len(base_prompt), len(cleaned))
     return cleaned
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Google Imagen formatter
+# ─────────────────────────────────────────────────────────────────────────────
+# Imagen models (Imagen 3 / 4 / Gemini Imagen) have a sentence-level distiller
+# (_distill_for_imagen in multi_provider_client.py) that runs INSIDE _call_google.
+# That distiller drops any sentence with 2+ designer-brief vocab matches and
+# extracts max 3 quoted strings as text-to-render.
+#
+# Strategy: build a PRE-DISTILLED prompt from structured data so it survives
+# distillation cleanly. We feed Imagen exactly what it can handle:
+#   - One natural-language scene sentence (no designer vocab)
+#   - Up to 3 quoted text strings (headline, subhead, CTA — in that priority)
+# Icon badges, trust strips, layout zones — Imagen cannot render them; do not
+# include them in the prompt or they become visual clutter / garbled text.
+#
+# This is universal: works for beauty / food / events / sales / wishes — any
+# subject. Fields come from Haiku's structured output, not from category templates.
+
+# Designer-brief vocabulary to scrub from Haiku's prompt before sending to Imagen.
+# Matches the patterns in _distill_for_imagen but applied PRE-distillation so the
+# scene sentence we send is clean from the start.
+_IMAGEN_DESIGNER_VOCAB = re.compile(
+    r"\b(?:locked\s+across|lockup|anchored\s+to|"
+    r"upper\s+third|lower\s+third|top\s+third|bottom\s+third|middle\s+third|"
+    r"top[\s-]left|top[\s-]right|bottom[\s-]left|bottom[\s-]right|"
+    r"center[\s-]left|center[\s-]right|"
+    r"safe[\s-]zone|bleed\s+margin|gutter|safe\s+margin|"
+    r"color\s+block|gradient\s+overlay|cream\s+ribbon|ribbon\s+band|"
+    r"pill\s+button|cta\s+pill|chip|badge\s+(?:in|at)|"
+    r"\d{1,3}\s*%\s+of\s+(?:poster|frame|height|width|image)|"
+    r"sans-?serif|serif\b|condensed\s+sans|elegant\s+serif|display\s+\w+|"
+    r"font\s+(?:size|weight|family|hierarchy)|"
+    r"tracking|leading|kerning|"
+    r"3-plane|three[\s-]plane|foreground[\s-]midground[\s-]background|"
+    r"85mm|100mm|f/\d+(?:\.\d+)?|focal\s+length|aperture|depth\s+of\s+field|bokeh|"
+    r"key\s+light|fill\s+light|rim[\s-]?light|backlight|backlit|"
+    r"three[\s-]?point\s+lighting|softbox|"
+    r"icon\s+badge(?:s)?|circular\s+icon|line[\s-]art\s+icon|"
+    r"trust\s+strip|trust\s+bar|trust\s+band|trust\s+badge"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
+    """Pre-distilled prompt for Google Imagen models.
+
+    Imagen renders text via quoted strings (max 3) plus a clean scene
+    description. Layout / icon / trust-strip instructions are stripped by
+    Imagen's internal distiller and waste tokens. Build the right prompt
+    upstream so the distiller has nothing to fight.
+    """
+    ad_copy: Dict[str, Any] = payload.get("ad_copy") or {}
+    visual:  Dict[str, Any] = payload.get("visual") or {}
+
+    # Strip the affirmative anchor — _call_google handles its own framing.
+    scene = re.sub(
+        r"^\s*ONE single unified (?:image|photograph)[^.]*\.\s*",
+        "",
+        base_prompt,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    # Scrub designer-brief vocab from the scene so the distiller doesn't
+    # nuke whole sentences. We do this PRE-distillation so the scene survives.
+    scene = _IMAGEN_DESIGNER_VOCAB.sub("", scene)
+    scene = re.sub(r"  +", " ", scene)
+    scene = re.sub(r"\s+([,.;:])", r"\1", scene)
+    scene = re.sub(r"([,.;])\s*\1+", r"\1", scene).strip()
+
+    # Pick max 3 priority quoted strings. Order matters — Imagen's distiller
+    # renders the FIRST quoted string biggest, second smaller, third smallest.
+    headline = (ad_copy.get("headline") or "").strip()
+    subhead  = (ad_copy.get("subhead") or "").strip()
+    cta      = (ad_copy.get("cta") or "").strip()
+    brand    = (ad_copy.get("brand_name") or "").strip()
+
+    priority_texts: list[str] = []
+    if headline:
+        priority_texts.append(headline)
+    if subhead:
+        priority_texts.append(subhead)
+    if cta:
+        priority_texts.append(cta)
+    elif brand and len(priority_texts) < 3:
+        priority_texts.append(brand)
+    priority_texts = priority_texts[:3]
+
+    # Append a tight "the image shows the text..." block so the distiller's
+    # quoted-string extractor finds them in priority order.
+    parts: list[str] = []
+    if scene:
+        parts.append(scene)
+
+    # Light visual cue from structured data — palette + lighting only. These
+    # SURVIVE distillation when phrased as natural sentences (no "palette:").
+    palette  = (visual.get("color_palette") or "").strip()
+    lighting = (visual.get("lighting") or "").strip()
+    mood     = (visual.get("mood") or "").strip()
+    if palette and "palette" not in palette.lower():
+        parts.append(f"Color tones of {palette}.")
+    if lighting and not _IMAGEN_DESIGNER_VOCAB.search(lighting):
+        parts.append(f"Lit with {lighting}.")
+    if mood:
+        parts.append(f"Overall {mood} mood.")
+
+    # Quoted strings — natural phrasing, not labels. Distiller picks these up.
+    if priority_texts:
+        text_phrases = []
+        for i, t in enumerate(priority_texts):
+            if i == 0:
+                text_phrases.append(f'the words "{t}" rendered prominently')
+            elif i == 1:
+                text_phrases.append(f'with "{t}" beneath')
+            else:
+                text_phrases.append(f'and a small "{t}"')
+        parts.append("The image shows " + ", ".join(text_phrases) + ".")
+
+    result = " ".join(parts).strip()
+    logger.info(
+        "[formatter][imagen] %d→%d chars (texts=%d)",
+        len(base_prompt), len(result), len(priority_texts),
+    )
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WaveSpeed formatter (wan_2_7, grok_2_imagine, hunyuan_image)
+# ─────────────────────────────────────────────────────────────────────────────
+# These models render visual scenes beautifully but cannot reliably produce
+# multi-element on-image text. Layout / icon / trust-strip instructions just
+# add noise. Send a pure photographic scene and skip text-rendering hints.
+
+def _format_for_wavespeed(base_prompt: str, payload: Dict[str, Any]) -> str:
+    """Scene-only prompt for WaveSpeed models (wan_2_7 etc.)."""
+    visual: Dict[str, Any] = payload.get("visual") or {}
+    ad_copy: Dict[str, Any] = payload.get("ad_copy") or {}
+
+    # Strip the affirmative anchor and designer vocab; keep scene intact.
+    scene = re.sub(
+        r"^\s*ONE single unified (?:image|photograph)[^.]*\.\s*",
+        "",
+        base_prompt,
+        flags=re.IGNORECASE,
+    ).strip()
+    scene = _IMAGEN_DESIGNER_VOCAB.sub("", scene)
+    scene = re.sub(r"  +", " ", scene).strip()
+
+    parts: list[str] = []
+    if scene:
+        parts.append(scene)
+
+    # Add only the headline as a single text hint — wan_2_7 sometimes
+    # renders short text. No subhead, no benefits, no trust strip.
+    headline = (ad_copy.get("headline") or "").strip()
+    if headline and f'"{headline}"' not in scene:
+        parts.append(f'Bold text reading "{headline}" placed prominently.')
+
+    palette = (visual.get("color_palette") or "").strip()
+    if palette and "palette" not in palette.lower():
+        parts.append(f"Color tones of {palette}.")
+
+    result = " ".join(parts).strip()
+    logger.info("[formatter][wavespeed] %d→%d chars", len(base_prompt), len(result))
+    return result
