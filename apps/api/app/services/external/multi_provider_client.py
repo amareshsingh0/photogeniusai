@@ -1212,7 +1212,7 @@ class MultiProviderClient:
                 mime = "image/png"
             return base64.b64decode(image_url[comma + 1:]), mime
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=30.0)) as c:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as c:
             resp = await c.get(image_url, follow_redirects=True)
             resp.raise_for_status()
             mime = resp.headers.get("content-type", "image/png").split(";")[0].strip()
