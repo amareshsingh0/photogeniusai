@@ -235,6 +235,27 @@ async def edit_image(request: EditRequest):
             if "," in raw_b64:
                 raw_b64 = raw_b64.split(",", 1)[1]
             mask_bytes = base64.b64decode(raw_b64)
+
+            # Resize mask to match source image dimensions (canvas is display-size,
+            # fal flux_fill requires exact pixel match).
+            try:
+                import io
+                import httpx
+                from PIL import Image as PILImage
+                mask_img = PILImage.open(io.BytesIO(mask_bytes)).convert("L")
+                async with httpx.AsyncClient(timeout=15.0) as hc:
+                    img_resp = await hc.get(request.image_url, follow_redirects=True)
+                    img_resp.raise_for_status()
+                src_img = PILImage.open(io.BytesIO(img_resp.content))
+                if mask_img.size != src_img.size:
+                    logger.info("[EDIT/inpaint] resizing mask %s → %s", mask_img.size, src_img.size)
+                    mask_img = mask_img.resize(src_img.size, PILImage.NEAREST)
+                    buf = io.BytesIO()
+                    mask_img.save(buf, format="PNG")
+                    mask_bytes = buf.getvalue()
+            except Exception as resize_err:
+                logger.warning("[EDIT/inpaint] mask resize skipped: %s", resize_err)
+
             mask_url = await fal_client.upload_bytes(mask_bytes, "image/png", "mask.png")
         except Exception as e:
             logger.exception("[EDIT/inpaint] mask upload failed: %s", e)
