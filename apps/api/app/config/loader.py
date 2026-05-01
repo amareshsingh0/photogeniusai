@@ -47,12 +47,12 @@ class BeastConfig:
                 with open(config_dir / filename, encoding='utf-8') as f:
                     key = filename.replace(".json", "")
                     self._configs[key] = json.load(f)
-                    logger.info(f"✅ Loaded {filename}")
+                    logger.debug(f"✅ Loaded {filename}")
             except Exception as e:
                 logger.error(f"❌ Failed to load {filename}: {e}")
                 self._configs[key] = {}
 
-        logger.info(f"🎯 Beast Config loaded: {len(self._configs)} files")
+        logger.debug(f"🎯 Beast Config loaded: {len(self._configs)} files")
 
     def get(self, config_name: str) -> Dict[str, Any]:
         """Get a loaded config by name"""
