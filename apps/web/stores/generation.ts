@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { GenerationMode } from "@pixium/types";
+import type { GenerationMode } from "@photogenius/types";
 
 export type Phase =
   | "idle"

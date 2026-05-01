@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@pixium/database";
+import { Prisma } from "@photogenius/database";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 

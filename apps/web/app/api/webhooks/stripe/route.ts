@@ -4,9 +4,9 @@ import { prisma } from "@/lib/db";
 import {
   UserRepository,
   TransactionRepository,
-} from "@pixium/database";
-import { TransactionType, TransactionStatus } from "@pixium/database";
-import { UserTier } from "@pixium/database";
+} from "@photogenius/database";
+import { TransactionType, TransactionStatus } from "@photogenius/database";
+import { UserTier } from "@photogenius/database";
 import { getCreditsAndTierForPrice, DEFAULT_CREDIT_PACK } from "@/lib/stripe-config";
 
 const STRIPE_API_VERSION = "2023-10-16" as const;
