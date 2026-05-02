@@ -624,6 +624,27 @@ Pick 3–5 from: "Lightweight Feel" · "Oil Control" · "Long Lasting Wear" · "
 - **Muted gold / rose-gold / sage accents**
 - Aspect: `portrait_4_3`
 
+# SCENE ARCHETYPES — IMPLICIT VISUAL CUES (for non-ad photoreal/portrait/scene prompts)
+
+When the user types a SHORT non-ad prompt (e.g. "cyberpunk city", "noir detective", "wedding photo", "car on mars"), they expect you to AUTO-INJECT the archetype's iconic visual vocabulary. Real designers know what these labels mean — you should too. Apply the matching archetype's vocabulary into the `prompt`, `visual.color_palette`, `visual.lighting`, and `visual.mood` fields.
+
+| Archetype | Lighting | Palette | Atmosphere | Iconic details |
+|-----------|----------|---------|------------|----------------|
+| **cyberpunk** | neon practical lights, electric rim-light, harsh under-lighting | electric blue + magenta + acid yellow against deep blacks | rain-slicked streets reflecting neon, atmospheric haze, dense | holographic billboards, wet asphalt, vending machines, steam vents, anti-gravity vehicles |
+| **noir / detective** | single hard key light, harsh chiaroscuro, venetian-blind shadows | deep blacks, charcoal greys, single warm amber accent | smoky, brooding, monochrome with one accent color | cigarette smoke curling, fedora silhouette, rain on a window, sepia-toned glass |
+| **wedding / romantic** | soft window light, golden-hour rim, warm bounce | cream + ivory + dusty rose + sage + gold accents | intimate, tender, gentle | hand-tied bouquet, lace detail, soft fabric drape, candlelight, ring detail |
+| **sci-fi / futuristic** | dramatic rim-light, atmospheric haze, cool blue key | brushed steel, glacial blue, deep space black, white-blue accent | vast scale, atmospheric perspective, technological surfaces | holograms, sleek surfaces, glowing edges, depth of field, lens flare |
+| **fantasy / magical** | magical practical lights, god-rays through canopy, warm internal glow | emerald + deep violet + gold + bone cream | painterly, lush, mythical | floating embers, ancient stones, mossy textures, glowing runes, woven tapestries |
+| **horror / thriller** | low-key single source, deep shadows, cool bias | desaturated greens + blacks + single warm pulse | oppressive, claustrophobic, uneasy | flickering bulb, creeping shadow, condensation, rusted metal, broken glass |
+| **vintage / retro** | warm tungsten, slight haze, soft contrast | sepia, muted ochre, warm beige, faded pastels | nostalgic, slightly soft, period-authentic | film grain, light leaks, period props, slight color cast, scratched edges |
+| **dreamy / ethereal** | soft diffused omni-light, pastel haze, no hard shadows | pastel blush + cream + soft lavender + pale mint | floating, surreal, weightless | bokeh particles, soft fabric drift, mist, gentle gradient sky, pastel glow |
+| **brutalist / industrial** | overhead hard light, raw shadow lines, no fill | concrete grey + raw steel + black + single pop accent | stark, monumental, geometric | exposed rebar, concrete texture, steel beams, geometric shadows, scale figure |
+| **anime / studio Ghibli** | soft cel-shaded light, painted clouds, golden-hour | painterly pastels, sky blues, lush greens, warm earth tones | hopeful, hand-painted, warm | hand-drawn linework, painted skies, food textures, expressive characters, lush foliage |
+| **noir-cyberpunk / blade runner** | single intense practical, omni neon spill, thick haze | smoke grey + electric blue + warm orange neon | rain, fog, towering scale, oppressive but beautiful | umbrella silhouettes, steaming food cart, flickering kanji signs, reflections in puddles |
+| **martian / sci-fi exterior** | low warm sunlight, long shadows, dust haze | rust orange + deep red + dusty pink + charcoal | vast, alien, atmospheric | dust storm in distance, regolith texture, rover tracks, distant ridge, thin atmosphere glow |
+
+When you detect an archetype keyword in the user prompt (or it's implied by context), pull from the matching row to enrich `visual.color_palette`, `visual.lighting`, `visual.mood`, and inject 2-3 iconic details into the `prompt`. The user should NEVER need to type "rain-slicked streets reflecting neon" themselves — you add it.
+
 # AUTHENTICITY PROPS — WHAT MAKES A SCENE FEEL LIVED-IN
 
 A generic scene feels like stock. A scene with **three small plausible details** feels real. Pick from the right bank for the category:

@@ -88,6 +88,37 @@ def format_prompt_for_model(
 
 
 # ----------------------------------------------------------------------
+# Ad-intent detector (shared by GPT + Imagen formatters)
+# ----------------------------------------------------------------------
+# Round 3: not every prompt is an ad. "car on mars", "portrait of a woman",
+# "anime cat in a forest" are pure scenes - they have NO ad copy, NO brand,
+# NO CTA. For these, the ad-template formatters were forcing "advertisement"
+# language and breaking the output. Detect ad-intent and branch accordingly.
+
+def _is_ad_intent(payload: Dict[str, Any]) -> bool:
+    """True when the request is an ad/poster (vs a pure scene/portrait).
+
+    Heuristic: any meaningful ad_copy field, or campaign_type other than
+    "general", or copywriting_formula other than "simple" indicates the
+    user wants an ad. Otherwise treat as a scene.
+    """
+    ad_copy = payload.get("ad_copy") or {}
+    has_text = any(
+        (ad_copy.get(k) or "").strip()
+        for k in ("headline", "subhead", "cta", "brand_name", "emotional_tagline")
+    )
+    has_lists = bool(ad_copy.get("benefit_lines") or ad_copy.get("trust_signals"))
+    campaign = (payload.get("campaign_type") or "general").strip().lower()
+    formula  = (payload.get("copywriting_formula") or "simple").strip().lower()
+    return (
+        has_text
+        or has_lists
+        or campaign not in ("", "general")
+        or formula in ("aida", "pas", "bab")
+    )
+
+
+# ----------------------------------------------------------------------
 # GPT Image 2 formatter
 # ----------------------------------------------------------------------
 
@@ -111,10 +142,78 @@ def _guess_icon(benefit: str) -> str:
     return "simple line-art icon"
 
 
+def _format_for_gpt_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
+    """Photographer/cinematographer brief for non-ad GPT Image 2 prompts.
+
+    For pure scenes (car on mars, portrait, landscape, anime, fantasy, etc.) -
+    no ad copy, no brand. Uses photographer persona instead of art-director,
+    sends Haiku's enriched scene description directly with photographic
+    quality directives.
+    """
+    visual: Dict[str, Any] = payload.get("visual") or {}
+    intent: str = (payload.get("intent") or "").strip()
+    subject_category: str = payload.get("subject_category", "general")
+
+    # Strip the affirmative anchor - GPT does not need it.
+    scene = re.sub(
+        r"^\s*ONE single unified (?:image|photograph)[^.]*\.\s*",
+        "",
+        base_prompt,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    # Category-specific photographer persona.
+    persona = {
+        "portrait":             "world-class portrait photographer in the style of Annie Leibovitz",
+        "photorealism_portrait":"world-class portrait photographer in the style of Annie Leibovitz",
+        "anime":                "world-class anime art director in the studio Ghibli tradition",
+        "vector":               "world-class vector illustrator and graphic designer",
+        "artistic":             "world-class fine-art digital painter",
+        "photorealism":         "world-class commercial photographer and cinematographer",
+    }.get(subject_category, "world-class commercial photographer and cinematographer")
+
+    sections: list[str] = [f"Act as a {persona}."]
+
+    # Primary command - photograph X (no "advertisement" framing).
+    command_subject = intent.replace("_", " ") if intent and intent not in ("general", "scene") else "scene"
+    sections.append(
+        "PRIMARY COMMAND:\n"
+        f"Generate a single, polished, high-fidelity image of the following {command_subject}. "
+        "Single unified composition - no panels, no variants, no collage."
+    )
+
+    # Scene description - directly from Haiku.
+    if scene:
+        sections.append(f"SCENE DESCRIPTION:\n{scene}")
+
+    # Visual direction (light/palette/mood/composition) as bullets.
+    visual_lines: list[str] = []
+    if visual.get("lighting"):    visual_lines.append(f"- LIGHTING: {visual['lighting']}")
+    if visual.get("color_palette"): visual_lines.append(f"- PALETTE: {visual['color_palette']}")
+    if visual.get("mood"):        visual_lines.append(f"- MOOD: {visual['mood']}")
+    if visual.get("composition"): visual_lines.append(f"- COMPOSITION: {visual['composition']}")
+    if visual.get("background"):  visual_lines.append(f"- BACKGROUND: {visual['background']}")
+    if visual_lines:
+        sections.append("VISUAL DIRECTION:\n" + "\n".join(visual_lines))
+
+    # Photographic quality anchor - replaces the ad-specific "TEXT must be
+    # legible" requirement with photographic technicals.
+    sections.append(
+        "QUALITY REQUIREMENTS: Photorealistic detail, cinematic lighting, "
+        "high dynamic range, sharp focus on the subject with natural depth-of-field "
+        "fall-off, accurate shadows and reflections, no garbled artifacts, "
+        "no distorted anatomy, single unified scene."
+    )
+
+    result = "\n\n".join(s for s in sections if s)
+    logger.info("[formatter][gpt_image_2][scene] %d->%d chars", len(base_prompt), len(result))
+    return result
+
+
 def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     """Sectioned imperative template for GPT Image 2.
 
-    Research (PDF page 13) prescribes this exact format:
+    Research (PDF page 13) prescribes this exact format for ADS:
       1. Persona prefix ("Act as a world-class advertising art director...")
       2. PRIMARY COMMAND: <one sentence describing the deliverable>
       3. TEXT ELEMENTS TO RENDER (USE EXACTLY THESE STRINGS): key/value list
@@ -122,7 +221,13 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     GPT Image 2 is built to parse imperative sectioned commands, not narrative
     prose. ASCII output only - no unicode symbols (provider/log encoding safety).
+
+    Round 3: branches into SCENE MODE (photographer persona) when the request
+    is a pure scene/portrait with no ad copy.
     """
+    if not _is_ad_intent(payload):
+        return _format_for_gpt_scene(base_prompt, payload)
+
     ad_copy: Optional[Dict] = payload.get("ad_copy") or {}
     visual:  Optional[Dict] = payload.get("visual") or {}
     campaign_type:    str = payload.get("campaign_type", "general")
@@ -381,6 +486,59 @@ _IMAGEN_DESIGNER_VOCAB = re.compile(
 )
 
 
+def _format_for_imagen_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
+    """Pure scene descriptor for Google Imagen on non-ad prompts.
+
+    Imagen's strength is rich photographic description. For pure scenes
+    (no ad copy, no brand) we should use Haiku's enriched scene prompt
+    directly with light scrubbing of designer-brief vocabulary, NOT the
+    ad-template top-down walk-through (which bakes in "advertisement"
+    framing that breaks scene generation).
+    """
+    visual: Dict[str, Any] = payload.get("visual") or {}
+
+    # Strip the affirmative anchor and scrub designer-brief vocab.
+    scene = re.sub(
+        r"^\s*ONE single unified (?:image|photograph)[^.]*\.\s*",
+        "",
+        base_prompt,
+        flags=re.IGNORECASE,
+    ).strip()
+    scene = _IMAGEN_DESIGNER_VOCAB.sub("", scene)
+    scene = re.sub(r"  +", " ", scene)
+    scene = re.sub(r"\s+([,.;:])", r"\1", scene)
+    scene = re.sub(r"([,.;])\s*\1+", r"\1", scene).strip()
+
+    parts: list[str] = []
+    if scene:
+        parts.append(scene)
+
+    # Light visual reinforcement from structured fields - palette + lighting
+    # only. These survive distillation when phrased naturally (no "palette:" colon).
+    palette  = (visual.get("color_palette") or "").strip()
+    lighting = (visual.get("lighting") or "").strip()
+    mood     = (visual.get("mood") or "").strip()
+    if palette and "palette" not in palette.lower():
+        clean = _IMAGEN_DESIGNER_VOCAB.sub("", palette).strip().rstrip(",.;:")
+        if clean:
+            parts.append(f"Color tones of {clean}.")
+    if lighting and not _IMAGEN_DESIGNER_VOCAB.search(lighting):
+        clean = lighting.strip().rstrip(",.;:")
+        if clean:
+            parts.append(f"Lit with {clean}.")
+    if mood:
+        parts.append(f"Overall {mood} mood.")
+
+    parts.append(
+        "Photorealistic, high-fidelity, single unified composition, "
+        "premium photography quality."
+    )
+
+    result = " ".join(p for p in parts if p).strip()
+    logger.info("[formatter][imagen][scene] %d->%d chars", len(base_prompt), len(result))
+    return result
+
+
 def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
     """Top-down descriptive narrative for Google Imagen models.
 
@@ -392,14 +550,20 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
       `Good`  "a prominent solid-colored rectangle at the bottom containing the text 'Shop Now'"
       `Bad`  "a CTA button at the bottom reading 'Shop Now'"
 
-    Strategy: build the prompt entirely from structured `simple_payload` data  - 
+    Strategy: build the prompt entirely from structured `simple_payload` data  -
     do NOT reuse Haiku's `prompt` field (which still contains functional vocab).
     Walk the layout top-down using only spatial prepositions Imagen understands
     ("at the top", "below it", "on the right", "at the very bottom").
 
     Layout complexity intentionally stays simple  -  research page 12: Imagen's
     "Max Reliably Produced Complexity = Low  -  simple linear or 2x2 block".
+
+    Round 3: branches into SCENE MODE (preserves Haiku's rich photoreal prompt)
+    when the request is a pure scene/portrait with no ad copy.
     """
+    if not _is_ad_intent(payload):
+        return _format_for_imagen_scene(base_prompt, payload)
+
     ad_copy: Dict[str, Any] = payload.get("ad_copy") or {}
     visual:  Dict[str, Any] = payload.get("visual") or {}
 
