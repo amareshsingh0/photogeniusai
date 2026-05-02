@@ -624,6 +624,43 @@ Pick 3–5 from: "Lightweight Feel" · "Oil Control" · "Long Lasting Wear" · "
 - **Muted gold / rose-gold / sage accents**
 - Aspect: `portrait_4_3`
 
+## Typographic scene (TEXT IS A PHYSICAL OBJECT IN THE SCENE — NOT AN AD)
+Use this for prompts where the TEXT itself is the subject but it's NOT a structured ad:
+- "neon sign 'OPEN 24H'", "graffiti on wall says 'REVOLUTION'"
+- "book cover titled 'The Last Dawn'", "movie poster for 'Inception 2'"
+- "billboard reading 'COME HOME'", "engraved plaque 'EST. 1924'"
+- "T-shirt slogan 'WORK HARD'", "carved wooden sign 'BAKERY'"
+- "tattoo lettering 'MOTHER'", "embroidered patch 'EAGLE SCOUT'"
+- "menu board chalk-written 'TODAY'S SPECIAL'"
+
+These are NOT ads. There is no brand, no CTA, no benefits, no trust signals. Set:
+- `ad_copy.headline` = the literal text string (e.g. "OPEN 24H")
+- `ad_copy.subhead` = secondary/smaller text only if explicitly present (e.g. "24H" subordinate to "OPEN")
+- `ad_copy.cta`, `ad_copy.brand_name`, `benefit_lines`, `trust_signals`, `emotional_tagline` = empty/null
+- `campaign_type` = "general"
+- `copywriting_formula` = "simple"
+
+In the `prompt` field describe the text as a PHYSICAL OBJECT with:
+- **Material**: glowing neon tubes, painted brushstrokes, embossed metal, chiseled stone, embroidered thread, foil-stamped gold, chalk on slate, vinyl decal, carved wood, etched glass, sand-blasted, holographic film, etc.
+- **Font character**: Futuristic Block, Retro Script, Electric Tube, Hand-painted Sign-painter, Old English Blackletter, Grotesque Sans, Stencil Spray, Brush Calligraphy
+- **Hierarchy** if multiple words: bigger/bolder for the primary word, smaller for support
+- **Wear/age**: pristine vs weathered, fresh paint vs faded, polished vs corroded
+- **Mounting/context**: bolted to brick wall, hanging on chain, propped on easel, woven into fabric, projected on glass
+- **Ornaments where appropriate**: stars/arrows around a neon sign, decorative borders around a plaque, splash marks around graffiti
+- **Set `visual.typography_style`** to a one-line material+font label, e.g. `"glowing electric-blue and pink neon tube lettering"` or `"hand-painted serif on weathered wood"` or `"foil-stamped gold blackletter on cream linen book cover"`
+
+The `prompt` should describe the TEXT first (as the hero), then the surrounding scene/context that gives it placement and atmosphere. This is the difference between a sign FLOATING in space vs a sign LIVING in a scene.
+
+Example "neon sign 'OPEN 24H'":
+- intent: `scene`
+- subject_category: `general`
+- campaign_type: `general`
+- copywriting_formula: `simple`
+- aspect_hint: `square_hd`
+- prompt: `A vintage diner neon sign reading "OPEN 24H" mounted on a weathered red brick wall above a wet sidewalk reflecting the glow. The lettering is bent glass tubing pulsing in saturated electric blue for "OPEN" (large, bold, primary focus) and warm pink-orange for "24H" (smaller, supporting). Visible black wire connections snake into a dented metal housing on the left edge. A small five-point star ornament glows above the "O". Atmospheric haze, light rain, late-night ambient amber spilling from off-frame, distant traffic light reflections in the puddles. Cinematic 50mm shallow depth of field, premium documentary photography aesthetic.`
+- ad_copy: `{"headline": "OPEN 24H", "subhead": "", "cta": "", ...}`
+- visual: `{"mood": "gritty, nocturnal", "color_palette": "electric blue, hot pink, warm amber, deep red brick, wet asphalt black", "lighting": "neon glow with ambient night, light rain, atmospheric haze", "background": "weathered red brick wall, wet sidewalk", "composition": "neon sign centered, slightly low-angle", "typography_style": "bent-glass neon tube lettering, electric blue primary with pink-orange support, vintage diner sign character"}`
+
 # SCENE ARCHETYPES — IMPLICIT VISUAL CUES (for non-ad photoreal/portrait/scene prompts)
 
 When the user types a SHORT non-ad prompt (e.g. "cyberpunk city", "noir detective", "wedding photo", "car on mars"), they expect you to AUTO-INJECT the archetype's iconic visual vocabulary. Real designers know what these labels mean — you should too. Apply the matching archetype's vocabulary into the `prompt`, `visual.color_palette`, `visual.lighting`, and `visual.mood` fields.

@@ -96,26 +96,42 @@ def format_prompt_for_model(
 # language and breaking the output. Detect ad-intent and branch accordingly.
 
 def _is_ad_intent(payload: Dict[str, Any]) -> bool:
-    """True when the request is an ad/poster (vs a pure scene/portrait).
+    """True only when the request is a STRUCTURED AD (vs scene/portrait/typographic-scene).
 
-    Heuristic: any meaningful ad_copy field, or campaign_type other than
-    "general", or copywriting_formula other than "simple" indicates the
-    user wants an ad. Otherwise treat as a scene.
+    A "neon sign with text", "graffiti on wall", "book cover", "billboard with one
+    word", "coffee cup with slogan" all have a `headline` quoted text but they are
+    NOT structured ads - they are scenes whose subject happens to include text.
+    Real ads have multiple ad signals: brand + CTA, benefits/trust lists, an
+    explicit campaign, or a formal copywriting formula.
+
+    Strong ad signals (any one triggers AD MODE):
+      - benefit_lines or trust_signals populated
+      - explicit campaign_type (product_launch / sale / event / etc.)
+      - formal copywriting formula (AIDA / PAS / BAB)
+      - brand_name AND (cta OR emotional_tagline)
+      - >=2 text element types beyond just `headline`
+
+    Otherwise => SCENE MODE (which now handles in-scene text via the
+    typographic-scene recipe).
     """
     ad_copy = payload.get("ad_copy") or {}
-    has_text = any(
-        (ad_copy.get(k) or "").strip()
-        for k in ("headline", "subhead", "cta", "brand_name", "emotional_tagline")
-    )
     has_lists = bool(ad_copy.get("benefit_lines") or ad_copy.get("trust_signals"))
+    has_brand = bool((ad_copy.get("brand_name") or "").strip())
+    has_cta   = bool((ad_copy.get("cta") or "").strip())
+    has_tagln = bool((ad_copy.get("emotional_tagline") or "").strip())
+    has_subh  = bool((ad_copy.get("subhead") or "").strip())
+
+    extra_text_types = sum([has_subh, has_brand, has_cta, has_tagln])
+
     campaign = (payload.get("campaign_type") or "general").strip().lower()
     formula  = (payload.get("copywriting_formula") or "simple").strip().lower()
-    return (
-        has_text
-        or has_lists
-        or campaign not in ("", "general")
-        or formula in ("aida", "pas", "bab")
-    )
+
+    if has_lists:                                  return True
+    if has_brand and (has_cta or has_tagln):       return True
+    if extra_text_types >= 2:                      return True
+    if campaign not in ("", "general"):            return True
+    if formula in ("aida", "pas", "bab"):          return True
+    return False
 
 
 # ----------------------------------------------------------------------
@@ -145,12 +161,17 @@ def _guess_icon(benefit: str) -> str:
 def _format_for_gpt_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
     """Photographer/cinematographer brief for non-ad GPT Image 2 prompts.
 
-    For pure scenes (car on mars, portrait, landscape, anime, fantasy, etc.) -
-    no ad copy, no brand. Uses photographer persona instead of art-director,
-    sends Haiku's enriched scene description directly with photographic
-    quality directives.
+    Covers two sub-cases:
+      a) PURE SCENE - no text (car on mars, portrait, landscape, anime, fantasy)
+      b) TYPOGRAPHIC SCENE - text IS the subject (neon sign, graffiti, book
+         cover, billboard, T-shirt slogan, carved sign, embroidered patch)
+
+    For (b) we inject a TEXT IN SCENE section that names the text material/font
+    style so models know to render the text as a physical object integrated
+    into the scene, not as overlaid graphics.
     """
     visual: Dict[str, Any] = payload.get("visual") or {}
+    ad_copy: Dict[str, Any] = payload.get("ad_copy") or {}
     intent: str = (payload.get("intent") or "").strip()
     subject_category: str = payload.get("subject_category", "general")
 
@@ -162,19 +183,30 @@ def _format_for_gpt_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
         flags=re.IGNORECASE,
     ).strip()
 
+    headline = (ad_copy.get("headline") or "").strip()
+    typo_style = (visual.get("typography_style") or "").strip()
+    is_typographic_scene = bool(headline)
+
     # Category-specific photographer persona.
-    persona = {
-        "portrait":             "world-class portrait photographer in the style of Annie Leibovitz",
-        "photorealism_portrait":"world-class portrait photographer in the style of Annie Leibovitz",
-        "anime":                "world-class anime art director in the studio Ghibli tradition",
-        "vector":               "world-class vector illustrator and graphic designer",
-        "artistic":             "world-class fine-art digital painter",
-        "photorealism":         "world-class commercial photographer and cinematographer",
-    }.get(subject_category, "world-class commercial photographer and cinematographer")
+    if is_typographic_scene:
+        # Typographic scene specialist - typographer + photographer hybrid.
+        persona = (
+            "world-class typographic designer and photographer who specializes "
+            "in physical signage, sculptural lettering, and integrated environmental type"
+        )
+    else:
+        persona = {
+            "portrait":             "world-class portrait photographer in the style of Annie Leibovitz",
+            "photorealism_portrait":"world-class portrait photographer in the style of Annie Leibovitz",
+            "anime":                "world-class anime art director in the studio Ghibli tradition",
+            "vector":               "world-class vector illustrator and graphic designer",
+            "artistic":             "world-class fine-art digital painter",
+            "photorealism":         "world-class commercial photographer and cinematographer",
+        }.get(subject_category, "world-class commercial photographer and cinematographer")
 
     sections: list[str] = [f"Act as a {persona}."]
 
-    # Primary command - photograph X (no "advertisement" framing).
+    # Primary command.
     command_subject = intent.replace("_", " ") if intent and intent not in ("general", "scene") else "scene"
     sections.append(
         "PRIMARY COMMAND:\n"
@@ -186,27 +218,54 @@ def _format_for_gpt_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
     if scene:
         sections.append(f"SCENE DESCRIPTION:\n{scene}")
 
+    # TEXT IN SCENE - only for typographic scenes. Explicitly tells the model
+    # the text is a PHYSICAL object in the scene with material + font style.
+    if is_typographic_scene:
+        text_lines = [f'- PRIMARY TEXT: "{headline}"']
+        if typo_style:
+            text_lines.append(f"- TYPOGRAPHY MATERIAL/STYLE: {typo_style}")
+        else:
+            text_lines.append(
+                "- TYPOGRAPHY MATERIAL/STYLE: Match the material implied by the scene "
+                "(e.g. glowing neon tubes for a neon sign, painted brushstrokes for graffiti, "
+                "embossed metal for a plaque, foil-stamped for a book cover). Render text as a "
+                "physical object integrated into the scene, not as overlaid 2D graphics."
+            )
+        # Optional secondary text from subhead if present (rare in scene mode).
+        subhead = (ad_copy.get("subhead") or "").strip()
+        if subhead:
+            text_lines.append(f'- SECONDARY TEXT: "{subhead}" (smaller, supporting hierarchy)')
+        sections.append("TEXT IN SCENE (render as a physical object, correct spelling):\n" + "\n".join(text_lines))
+
     # Visual direction (light/palette/mood/composition) as bullets.
     visual_lines: list[str] = []
-    if visual.get("lighting"):    visual_lines.append(f"- LIGHTING: {visual['lighting']}")
+    if visual.get("lighting"):      visual_lines.append(f"- LIGHTING: {visual['lighting']}")
     if visual.get("color_palette"): visual_lines.append(f"- PALETTE: {visual['color_palette']}")
-    if visual.get("mood"):        visual_lines.append(f"- MOOD: {visual['mood']}")
-    if visual.get("composition"): visual_lines.append(f"- COMPOSITION: {visual['composition']}")
-    if visual.get("background"):  visual_lines.append(f"- BACKGROUND: {visual['background']}")
+    if visual.get("mood"):          visual_lines.append(f"- MOOD: {visual['mood']}")
+    if visual.get("composition"):   visual_lines.append(f"- COMPOSITION: {visual['composition']}")
+    if visual.get("background"):    visual_lines.append(f"- BACKGROUND: {visual['background']}")
     if visual_lines:
         sections.append("VISUAL DIRECTION:\n" + "\n".join(visual_lines))
 
-    # Photographic quality anchor - replaces the ad-specific "TEXT must be
-    # legible" requirement with photographic technicals.
-    sections.append(
-        "QUALITY REQUIREMENTS: Photorealistic detail, cinematic lighting, "
-        "high dynamic range, sharp focus on the subject with natural depth-of-field "
-        "fall-off, accurate shadows and reflections, no garbled artifacts, "
-        "no distorted anatomy, single unified scene."
-    )
+    # Quality block - swap text-legibility emphasis when it's a typographic scene.
+    if is_typographic_scene:
+        sections.append(
+            "QUALITY REQUIREMENTS: Photorealistic material rendering of the text "
+            "(real glass/metal/paint/wood/fabric/light), correct spelling, accurate "
+            "lighting and shadows on the lettering, the text fully integrated into the "
+            "scene's lighting and perspective. No garbled letters, no extra characters."
+        )
+    else:
+        sections.append(
+            "QUALITY REQUIREMENTS: Photorealistic detail, cinematic lighting, "
+            "high dynamic range, sharp focus on the subject with natural depth-of-field "
+            "fall-off, accurate shadows and reflections, no garbled artifacts, "
+            "no distorted anatomy, single unified scene."
+        )
 
     result = "\n\n".join(s for s in sections if s)
-    logger.info("[formatter][gpt_image_2][scene] %d->%d chars", len(base_prompt), len(result))
+    mode = "typographic-scene" if is_typographic_scene else "scene"
+    logger.info("[formatter][gpt_image_2][%s] %d->%d chars", mode, len(base_prompt), len(result))
     return result
 
 
@@ -487,15 +546,17 @@ _IMAGEN_DESIGNER_VOCAB = re.compile(
 
 
 def _format_for_imagen_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
-    """Pure scene descriptor for Google Imagen on non-ad prompts.
+    """Scene descriptor for Google Imagen on non-ad prompts.
 
-    Imagen's strength is rich photographic description. For pure scenes
-    (no ad copy, no brand) we should use Haiku's enriched scene prompt
-    directly with light scrubbing of designer-brief vocabulary, NOT the
-    ad-template top-down walk-through (which bakes in "advertisement"
-    framing that breaks scene generation).
+    Two sub-cases handled:
+      a) PURE SCENE - no on-image text. Sends Haiku's enriched scene with light
+         designer-vocab scrub.
+      b) TYPOGRAPHIC SCENE - text is a physical subject (neon sign, graffiti).
+         Ensures the text string is quoted in the prompt so Imagen's distiller
+         picks it up as text-to-render, with material context.
     """
     visual: Dict[str, Any] = payload.get("visual") or {}
+    ad_copy: Dict[str, Any] = payload.get("ad_copy") or {}
 
     # Strip the affirmative anchor and scrub designer-brief vocab.
     scene = re.sub(
@@ -513,8 +574,27 @@ def _format_for_imagen_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
     if scene:
         parts.append(scene)
 
-    # Light visual reinforcement from structured fields - palette + lighting
-    # only. These survive distillation when phrased naturally (no "palette:" colon).
+    # Typographic scene - ensure the text is quoted (distiller extracts up to
+    # 3 quoted strings) AND inject typography material context so the rendering
+    # is a physical object, not floating overlay graphics.
+    headline = (ad_copy.get("headline") or "").strip()
+    typo_style = (visual.get("typography_style") or "").strip()
+    if headline:
+        text_already_quoted = f'"{headline}"' in scene or f"'{headline}'" in scene
+        if not text_already_quoted:
+            parts.append(f'The image shows the text "{headline}" rendered prominently.')
+        if typo_style:
+            parts.append(
+                f'The lettering is {typo_style}, physically integrated into the scene with '
+                "matching lighting, shadows, and perspective."
+            )
+        else:
+            parts.append(
+                "The lettering is a physical object in the scene "
+                "with material consistent with the setting."
+            )
+
+    # Light visual reinforcement from structured fields.
     palette  = (visual.get("color_palette") or "").strip()
     lighting = (visual.get("lighting") or "").strip()
     mood     = (visual.get("mood") or "").strip()
@@ -535,7 +615,8 @@ def _format_for_imagen_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
     )
 
     result = " ".join(p for p in parts if p).strip()
-    logger.info("[formatter][imagen][scene] %d->%d chars", len(base_prompt), len(result))
+    mode = "typographic-scene" if headline else "scene"
+    logger.info("[formatter][imagen][%s] %d->%d chars", mode, len(base_prompt), len(result))
     return result
 
 
