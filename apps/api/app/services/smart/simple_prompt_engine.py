@@ -609,6 +609,151 @@ Pick 3–5 from: "Lightweight Feel" · "Oil Control" · "Long Lasting Wear" · "
 
 **Composition:** Product image right side · text hierarchy left side · brand logo top-left · trust badge top-right · trust strip bottom full-width. Aspect: `square_hd` for Instagram feed, `portrait_4_3` for portrait.
 
+## UNIVERSAL FIELD-DETECTION RULE (apply BEFORE any product recipe below)
+Beauty was the first product recipe, but the SAME structural principles apply to every product field. When a user requests a product/launch ad, identify the field from the user's words OR from `subject_category`, then apply that field's recipe. The HEADLINE / SUBHEAD / BENEFIT-ICONS / TRUST-STRIP / PHOTOGRAPHY structure stays the same — only the visual vocabulary, palette, lighting, icon types, and trust signals change per field. Never default to "generic product ad" when a specific field recipe exists.
+
+## Footwear / sneakers / athletic shoes (running shoes, sports shoes, cleats, basketball)
+**Hero headline (2-4 words):** "RUN BEYOND" · "STEP UP" · "ENGINEERED FOR SPEED" · "PROPEL FORWARD"
+**Subhead (script/italic):** "Every stride matters." · "Built for the chase."
+**Benefit icon labels:** "Speed Boost" · "Carbon Plate" · "All-Terrain Grip" · "Energy Return" · "Lightweight Mesh" · "Heel Lock"
+**Trust signals:** "Lab-Tested" · "Pro-Athlete Approved" · "Recycled Materials" · "1-Year Warranty"
+**CTA:** "Shop the Drop" · "Get the Pair" · "Pre-Order Now"
+**Product photography:** Hero shoe at slight angle, mid-air with motion blur (laces flying), or on a wet track surface with rim-light catching the midsole tech callout. Show the SOLE TECH (carbon plate, foam stack, lugs) — that's the hero feature.
+**Color palette:** Brand accent (electric blue / volt yellow / red) at max saturation 30% · deep charcoal/black 50% · concrete grey 15% · single warm rim 5%
+**Lighting:** Hard rim-light on the silhouette, dramatic side-key, slight fog/haze, slight motion blur on background
+**Composition:** Hero shoe center or bottom-third, big motion vector behind, exploded callouts to spec elements, brand mark top-left, athletic action silhouette in background
+
+## Tech / consumer electronics (phone, laptop, headphones, smartwatch, speaker, earbuds, tablet)
+**Hero headline (2-4 words):** "SILENCE, ENGINEERED" · "BUILT TO LAST" · "POWER, REDEFINED" · "PURE SOUND"
+**Subhead:** "Studio sound, untethered." · "All day. Every day."
+**Benefit icon labels:** "40H Battery" · "Active Noise Cancel" · "Studio Sound" · "Zero Lag" · "Wireless Charge" · "IPX4 Rated"
+**Trust signals:** "2-Year Warranty" · "Hi-Res Certified" · "Carbon Neutral" · "Made With Precision"
+**CTA:** "Pre-order Now" · "Shop the Series" · "Learn More"
+**Product photography:** Floating product against dark gradient, dramatic cyan/blue rim-light, slight tilt revealing depth, surface specular highlights. NO hands. Macro focus on a hero detail (port, button, screen on).
+**Color palette:** Obsidian black 50% · matte graphite 25% · brand accent (cyan / electric blue / red / orange) 15% · crisp white text 10%
+**Lighting:** Studio softbox key from upper-left + cool cyan rim from behind + subtle fill, cinematic spotlight pool
+**Composition:** Product hero center or right, spec callouts on left in clean sans, brand wordmark top-left, single accent color rim defines the silhouette
+
+## Camera / photography / video gear (DSLRs, mirrorless, lenses, drones, gimbals)
+**Hero headline (2-4 words):** "CAPTURE MORE" · "FRAME EVERYTHING" · "SEE BEYOND"
+**Subhead:** "60 megapixels of detail." · "Cinematic, in your hand."
+**Benefit icon labels:** "60MP Sensor" · "8K Video" · "5-Axis Stabilization" · "Weather Sealed" · "Dual Card Slots"
+**Trust signals:** "Award-Winning Optics" · "Pro-Used" · "Lifetime Service" · "Made in Japan"
+**Product photography:** 3/4 hero angle showing lens mount + grip + top dial, single light source revealing material (magnesium body, leatherette grip), slight DoF on logo. Lens detached and floating beside body in some shots.
+**Color palette:** Deep matte black 60% · brushed silver/aluminium 20% · brand red/orange accent 10% · warm white text 10%
+**Lighting:** Single hard key from upper-left creating strong specular on the lens glass, dark gradient back, no fill (drama)
+**Composition:** Camera 3/4 angle slightly above eye-line, spec callouts arrow-lined to specific parts, sample image grid bottom-third (optional)
+
+## Automotive / cars / EVs / motorcycles
+**Hero headline (2-4 words):** "DRIVE THE FUTURE" · "PURE INSTINCT" · "ELECTRIC, REDEFINED"
+**Subhead:** "0-60 in 2.8 seconds." · "Range that matches ambition."
+**Benefit icon labels:** "Range 500km" · "0-60 in 2.8s" · "Auto-Pilot" · "Fast Charge 15min"
+**Trust signals:** "5-Star Safety" · "10-Year Battery Warranty" · "Carbon Neutral Build"
+**Product photography:** Low-angle hero shot, slight wet-tarmac reflection underneath, golden-hour or studio cyc, motion-blur of background scenery, rim-light defining silhouette curves, hero badge / wheel detail in macro.
+**Color palette:** Vehicle colour 40% · road/environment desaturated 30% · brand accent 10% · sky/atmosphere gradient 20%
+**Lighting:** Cinematic golden-hour or moody overcast, hard rim along the body line, sky reflection on hood, single internal practical light (interior glow at dusk shots)
+**Composition:** Low 3/4 angle, vehicle filling lower 2/3, environment/sky upper third, spec callouts on left, brand badge bottom-right
+
+## Food / restaurant / packaged food (snacks, beverages, ready meals, sauces)
+**Hero headline (2-4 words):** "TASTE THE TRUTH" · "REAL, NOT PROCESSED" · "FRESH FROM SOURCE"
+**Subhead (warm/cursive):** "Crafted with care." · "Every bite, a story."
+**Benefit icon labels:** "100% Natural" · "No Preservatives" · "High Protein" · "Gluten Free" · "Locally Sourced"
+**Trust signals:** "FSSAI Certified" · "Vegan" · "Non-GMO" · "Family Recipe Since 1948"
+**Product photography:** Overhead 45-degree flat-lay or tight macro of hero food with steam rising, water droplets on fresh produce, hand pouring/serving in frame. Wooden surface, linen napkin, scattered ingredients (herbs, chilies, salt).
+**Color palette:** Warm earth tones (terracotta / cream / sage / mustard) for traditional, or saturated pop colours (yellow / red / lime) for snacks/beverages
+**Lighting:** Warm window-side light with soft bounce, golden practical, slight backlight catching steam/condensation
+**Composition:** Hero dish/product center or 2/3, supporting ingredients framing edges, brand wordmark top-left, trust strip bottom
+
+## Fashion / apparel / accessories (clothing, bags, shoes-fashion, hats, scarves)
+**Hero headline (2-4 words):** "WEAR YOUR STORY" · "THE NEW SILHOUETTE" · "EFFORTLESSLY YOU"
+**Subhead (elegant italic):** "Crafted in linen and silk." · "Tailored to move with you."
+**Benefit icon labels:** "Organic Cotton" · "Tailored Fit" · "Hand-Stitched" · "Versatile Wear"
+**Trust signals:** "Ethically Made" · "Slow Fashion" · "Made in Italy" · "Limited Edition"
+**Product photography:** Editorial model in styled environment, fabric texture macro inserts, runway-style key light, slight motion in fabric (wind machine), high-key for minimalist or low-key for editorial
+**Color palette:** Earth tones for natural fabrics (sand / olive / clay / cream) OR monochrome bold for streetwear (black / white / single accent)
+**Lighting:** Editorial — single hard key with slight fill, runway-clean white seamless or environmental editorial setting
+**Composition:** Model 3/4 or full body on left, fabric/material macro on right, brand mark top, trust strip bottom
+
+## Fitness / gym / sports equipment / supplements (protein, equipment, gym memberships)
+**Hero headline (2-4 words):** "FUEL YOUR LIMITS" · "STRONGER EVERY REP" · "OWN YOUR HUSTLE"
+**Subhead:** "30g whey per serving." · "Built for the grind."
+**Benefit icon labels:** "30g Protein" · "0 Sugar" · "BCAA Boost" · "Lab Tested" · "Vegan Whey"
+**Trust signals:** "FSSAI Approved" · "Lab Verified" · "Athlete Approved" · "Made in India"
+**Product photography:** High-contrast hero of athlete mid-rep with sweat detail, OR product (tub/bottle) with powder spill on dark surface, dramatic side-key, motion blur on background
+**Color palette:** Black 60% · brand accent (volt / red / orange) 25% · steel grey 10% · white text 5%
+**Lighting:** Hard side key with strong specular, smoky/foggy background, single warm rim, low fill for drama
+**Composition:** Product or athlete bottom-2/3, brand mark top-left, callouts and benefits as bold sans on right column
+
+## Jewelry / watches / luxury accessories (rings, necklaces, watches, sunglasses)
+**Hero headline (2-4 words):** "TIMELESS BY DESIGN" · "MOMENTS, FOREVER" · "CRAFTED IN GOLD"
+**Subhead (elegant serif):** "18k yellow gold, hand-engraved." · "Heirloom in the making."
+**Benefit icon labels:** "18k Gold" · "Lab-Grown Diamond" · "Hand-Engraved" · "Lifetime Warranty"
+**Trust signals:** "Hallmarked" · "GIA Certified" · "Conflict-Free" · "Heirloom Quality"
+**Product photography:** Macro of jewelry on dark velvet OR draped on neutral skin, single soft key revealing facets/engraving, sparkle/specular highlights, very shallow DoF
+**Color palette:** Deep velvet black or charcoal 70% · gold/silver/platinum metallic 20% · single accent (ruby red / sapphire blue / emerald green) 10%
+**Lighting:** Single soft key from upper-front-left to catch facets, deep falloff for drama, no fill, polarized control
+**Composition:** Jewelry centered with negative space around it, brand wordmark top-left in elegant serif, fine details bottom
+
+## Furniture / home decor / interiors (sofas, lamps, kitchenware, rugs)
+**Hero headline (2-4 words):** "LIVE IN COMFORT" · "DESIGNED FOR LIVING" · "TIMELESS, UNDERSTATED"
+**Subhead:** "Solid teak, hand-finished." · "Made to last generations."
+**Benefit icon labels:** "Solid Wood" · "FSC Certified" · "10-Year Warranty" · "Handcrafted"
+**Trust signals:** "Sustainable Sourcing" · "Made in India" · "Free Delivery" · "Easy Returns"
+**Product photography:** Lifestyle shot of furniture in styled room with golden window light, or clean studio cyc with single hero piece, fabric/wood texture macro insert
+**Color palette:** Warm wood tones / cream / sage / muted olive 70% · brand accent 15% · soft shadow 15%
+**Lighting:** Soft window-light with golden bias, ambient room glow, gentle bounce
+**Composition:** Lifestyle hero on left/center, product detail macro inserts right, brand mark top-left
+
+## Travel / hospitality / hotels / airlines (resort packages, bookings, destinations)
+**Hero headline (2-4 words):** "ESCAPE BEGINS HERE" · "WANDER FURTHER" · "FLY HIGHER"
+**Subhead:** "Maldives villas from $499/night." · "Direct flights, daily."
+**Benefit icon labels:** "All-Inclusive" · "Beachfront" · "Private Pool" · "Spa Access" · "Airport Pickup"
+**Trust signals:** "Tripadvisor 5-Star" · "Travelers' Choice 2026" · "Free Cancellation" · "ATOL Protected"
+**Product photography:** Wide environmental shot of destination — beach + villa, mountain peak + ridge, city aerial — golden-hour bias, lifestyle figure(s) small in frame for scale
+**Color palette:** Tropical (turquoise / coral / sand / palm green) OR alpine (slate / snow white / pine green) OR urban (warm gold / city blue / neon)
+**Lighting:** Cinematic golden-hour, vast atmospheric perspective, sun-kissed haze
+**Composition:** Wide hero shot fills upper 2/3, copy column on lower-left or right, brand mark top-left, price/CTA bottom
+
+## Health / pharma / medical / wellness (supplements, devices, telehealth, gyms)
+**Hero headline (2-4 words):** "YOUR HEALTH, REIMAGINED" · "FEEL THE DIFFERENCE" · "BACKED BY SCIENCE"
+**Subhead:** "Clinically proven, naturally derived." · "Doctor-recommended formula."
+**Benefit icon labels:** "Clinically Tested" · "Doctor Approved" · "Natural Formula" · "Fast Acting" · "GMP Certified"
+**Trust signals:** "FDA Approved" · "ISO Certified" · "Lab Verified" · "Doctor Recommended"
+**Product photography:** Clean clinical product shot with soft white background OR lifestyle shot of person feeling the result (energetic, rested, smiling), soft medical-clean lighting
+**Color palette:** Clinical white 50% · soft trust-blue 20% · sage green 15% · single accent 15%
+**Lighting:** Soft, even, medically clean — high-key with minimal shadow, gentle fill from all sides
+**Composition:** Product or lifestyle hero with calm composition, copy in clean sans, certifications strip bottom prominently
+
+## Real estate / property (residential, commercial, land, rentals)
+**Hero headline (2-4 words):** "HOME, REIMAGINED" · "LIVE THE VIEW" · "ADDRESS THAT INSPIRES"
+**Subhead:** "3-BHK from ₹85L · Possession Dec 2027." · "Sea-facing apartments, Bandra West."
+**Benefit icon labels:** "3-BHK / 1500 sqft" · "Sea View" · "Pool & Gym" · "RERA Approved" · "5km to Airport"
+**Trust signals:** "RERA Reg." · "5-Year Build Warranty" · "100+ Happy Families" · "Bank Loans Available"
+**Product photography:** Drone hero of building exterior at golden hour, OR lifestyle interior of styled living room with floor-to-ceiling windows revealing the view, single warm practical light
+**Color palette:** Warm sky tones (golden / amber / cream / soft blue) for exteriors, neutral interior tones with one bold accent
+**Lighting:** Cinematic golden-hour exterior or warm-amber interior with sky bounce
+**Composition:** Aerial/wide property shot fills 70%, copy column with floor plan thumbnail bottom-left, contact strip + RERA bottom
+
+## Education / online courses / institutes (universities, coaching, edtech, MOOCs)
+**Hero headline (2-4 words):** "LEARN. UNLOCK. RISE." · "FUTURE-READY" · "MASTER YOUR CRAFT"
+**Subhead:** "12-week intensive · Live mentor support." · "100% placement assistance."
+**Benefit icon labels:** "Live Classes" · "Industry Mentor" · "Capstone Project" · "Placement Support" · "Lifetime Access"
+**Trust signals:** "10K+ Alumni" · "AICTE Approved" · "ISO 9001" · "5-Star Reviews"
+**Product photography:** Lifestyle of focused student at laptop, OR clean campus exterior at golden hour, OR diverse class photo. Always inspirational and aspirational.
+**Color palette:** Academic blues + warm gold accent + cream + soft white
+**Lighting:** Bright optimistic — sky-blue bias with warm fill, hopeful and clean
+**Composition:** Hero student/campus on right, copy column left with course details + CTA, alumni testimonials strip bottom
+
+## SaaS / fintech / app launch (mobile apps, web platforms, B2B tools)
+**Hero headline (2-4 words):** "WORK SMARTER" · "BANKING, SIMPLIFIED" · "FROM IDEA TO LAUNCH"
+**Subhead:** "Set up in 60 seconds · No card required." · "Trusted by 10,000+ teams."
+**Benefit icon labels:** "Real-Time Sync" · "End-to-End Encrypted" · "AI-Assisted" · "1-Click Setup" · "API Access"
+**Trust signals:** "SOC 2 Compliant" · "GDPR Ready" · "99.9% Uptime" · "10K+ Teams"
+**Product photography:** Floating mock-up of app screens on dark gradient with subtle 3D tilt, multiple device mockups (phone + laptop + tablet) showing the same interface
+**Color palette:** Dark gradient (deep blue / purple / black) 60% · brand accent (electric blue / mint / coral) 20% · clean white UI 20%
+**Lighting:** Studio gradient backdrop, subtle product rim, soft ambient
+**Composition:** Device mockup hero center, spec callouts arrow-lined to UI features, brand mark top-left, CTA bottom-center
+
 ## Sale / offer ad
 - **Giant % OFF or price** as the hero number (not a word)
 - **Small product inset** — one or two hero items
