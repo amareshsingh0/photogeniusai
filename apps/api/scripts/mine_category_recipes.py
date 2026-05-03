@@ -99,30 +99,36 @@ _GENERIC_VERBS = {"buy","try","use","get","shop","visit","go","see","watch","eat
 def _read_list_file(path: Path) -> dict[int, str]:
     """Parse Pitt's Topics_List.txt / Sentiments_List.txt / Strategies_List.txt.
 
-    Format examples (note the encoding noise in the original files):
-        1   "Restaurants, cafe, fast food" (ABBREVIATION: "restaurant")
-        1. "Active (energetic, ...)" (ABBREVIATION: "active")
-        1, Process
-    Returns {id: abbreviation_or_label}.
+    Real-file formats observed (note encoding noise -> BOM / replacement chars):
+        Topics_List.txt:      "<BOM>1\t\"Restaurants...\" (ABBREVIATION: \"restaurant\")"
+        Sentiments_List.txt:  "1. \"Active...\" (ABBREVIATION: \"active\")"
+        Strategies_List.txt:  "1, Process"
+
+    Topics file: ALL lines on one logical record may share BOMs / non-ASCII
+    quote chars (smart quotes from Word). We strip non-ASCII first and use
+    a tolerant id+abbreviation extraction that doesn't anchor at start.
     """
     out: dict[int, str] = {}
-    with path.open("r", encoding="utf-8", errors="replace") as fh:
-        for raw in fh:
-            line = ASCII_RE.sub(" ", raw).strip()
-            if not line:
-                continue
-            m_abbr = re.search(r'ABBREVIATION:\s*"([^"]+)"', line)
-            m_id = re.match(r"\s*(\d+)\b", line)
-            if not m_id:
-                continue
-            id_ = int(m_id.group(1))
-            if m_abbr:
-                out[id_] = m_abbr.group(1).strip()
-            else:
-                # Strategies_List.txt: "1, Process"
-                m_lbl = re.match(r"\s*\d+\s*[,.\s]\s*(\S.+)$", line)
-                if m_lbl:
-                    out[id_] = m_lbl.group(1).strip().split(" ")[0].lower()
+    raw_text = path.read_bytes().decode("utf-8", errors="replace")
+    # Drop any non-ASCII chars (BOM, replacement chars, smart quotes).
+    text = ASCII_RE.sub(" ", raw_text)
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Pull the first integer anywhere in the line (handles "<spaces>1<tab>...").
+        m_id = re.search(r"\b(\d+)\b", line)
+        if not m_id:
+            continue
+        id_ = int(m_id.group(1))
+        m_abbr = re.search(r'ABBREVIATION:\s*"?([A-Za-z_][A-Za-z0-9_]*)"?', line, re.IGNORECASE)
+        if m_abbr:
+            out[id_] = m_abbr.group(1).strip().lower()
+        else:
+            # Strategies file: "1, Process" -> take the word after the separator.
+            m_lbl = re.match(r"^\s*\d+\s*[,.\-:\s]\s*(\S+)", line)
+            if m_lbl:
+                out[id_] = m_lbl.group(1).strip().lower()
     return out
 
 
