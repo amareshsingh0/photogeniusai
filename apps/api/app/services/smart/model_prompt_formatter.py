@@ -525,8 +525,9 @@ def _format_for_flux(base_prompt: str, payload: Dict[str, Any]) -> str:
 _IMAGEN_DESIGNER_VOCAB = re.compile(
     r"\b(?:locked\s+across|lockup|anchored\s+to|"
     r"upper\s+third|lower\s+third|top\s+third|bottom\s+third|middle\s+third|"
-    r"top[\s-]left|top[\s-]right|bottom[\s-]left|bottom[\s-]right|"
-    r"center[\s-]left|center[\s-]right|"
+    # Note: top-left/top-right/etc REMOVED - Imagen needs spatial words.
+    # The formatter constructs "At the very top-left, ..." sentences and the
+    # strip was nuking the position word, leaving "At the very , ..." garbage.
     r"safe[\s-]zone|bleed\s+margin|gutter|safe\s+margin|"
     r"color\s+block|gradient\s+overlay|cream\s+ribbon|ribbon\s+band|"
     r"pill\s+button|cta\s+pill|chip|badge\s+(?:in|at)|"
@@ -665,11 +666,17 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
     campaign_type        = (payload.get("campaign_type") or "general").strip()
     subject_category     = (payload.get("subject_category") or "general").strip()
 
-    # Subject  -  what the image is OF. Pull from intent/category, fallback generic.
-    if intent and intent not in ("general", ""):
+    # Subject  -  what the image is OF. Pull from category first (more concrete),
+    # then a clean intent if it's not a generic word like "ad"/"poster"/"general".
+    # Reject filler intents that produce garbage like "photograph of the ad".
+    _GENERIC_INTENTS = {"ad", "advertisement", "poster", "banner", "creative",
+                        "image", "graphic", "design", "general", "story", "post"}
+    if subject_category and subject_category not in ("", "general"):
+        cat_clean = subject_category.replace("_", " ")
+        # Avoid "beauty product" duplication when category already concrete
+        subject_phrase = cat_clean if cat_clean.endswith(("product", "good", "item", "service")) else f"{cat_clean} product"
+    elif intent and intent not in _GENERIC_INTENTS:
         subject_phrase = intent.replace("_", " ")
-    elif subject_category and subject_category != "general":
-        subject_phrase = f"{subject_category.replace('_', ' ')} product"
     else:
         subject_phrase = "product"
 
@@ -677,16 +684,22 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     # -- 1. Opening framing (mood + category + subject) ----------------------------------------------------------------------
     mood_word = mood.split(",")[0].strip() if mood else "polished"
+    # Pick correct article (a/an) based on first vowel of mood_word.
+    article = "an" if mood_word and mood_word[0].lower() in "aeiou" else "a"
     if campaign_type and campaign_type not in ("general", ""):
         camp = campaign_type.replace("_", " ")
-        opener = f"A {mood_word} {camp} advertisement"
+        opener = f"{article.capitalize()} {mood_word} {camp} advertisement"
     else:
-        opener = f"A {mood_word} commercial advertisement"
+        opener = f"{article.capitalize()} {mood_word} commercial advertisement"
+    # Append brand and subject only when meaningful and non-duplicative.
+    sp_lower = subject_phrase.lower().strip()
+    brand_lower = brand.lower().strip()
     if brand:
         opener += f" for {brand}"
-        if subject_phrase and subject_phrase.lower() not in brand.lower():
+        # Add subject only if it adds info (not "product", not the brand name).
+        if sp_lower and sp_lower != "product" and sp_lower not in brand_lower and brand_lower not in sp_lower:
             opener += f" {subject_phrase}"
-    elif subject_phrase:
+    elif subject_phrase and sp_lower != "product":
         opener += f" for {subject_phrase}"
     sentences.append(opener + ".")
 
@@ -715,10 +728,14 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
             f"Just beneath it, in elegant italic script, a smaller line reads \"{subhead}\"."
         )
 
-    # Hero product on the right (only describe if we have category context)
-    if subject_category in ("beauty", "food", "fashion", "tech", "health"):
+    # Hero product on the right (only describe if we have a CONCRETE category;
+    # generic "product" / "ad" produces meaningless "photograph of the ad" text).
+    if subject_category in ("beauty", "food", "fashion", "tech", "health") and \
+       subject_phrase and subject_phrase.lower() not in ("product", "ad", "advertisement", "general"):
+        # Use brand-aware phrasing when brand exists, else just category subject.
+        hero_subject = f"{brand} {subject_phrase}".strip() if brand else subject_phrase
         sentences.append(
-            f"On the right side of the image is a high-resolution photograph of the {subject_phrase}."
+            f"On the right side of the image is a high-resolution photograph of the {hero_subject}."
         )
 
     # Below product / mid-band: benefit row (max 4  -  Imagen complexity ceiling)

@@ -611,6 +611,12 @@ BUCKET_KEYWORDS: Dict[str, List[str]] = {
         "ad creative", "advertisement", "social media post", "instagram post",
         "facebook ad", "google ad", "marketing creative", "promotional",
         "infographic", "thumbnail design",
+        # Single-word platform + ad signals (catch "post for instagram",
+        # "instagram ad", "for instagram", "linkedin post" etc).
+        "instagram", "linkedin", "facebook", "tiktok", "pinterest", "youtube",
+        # Launch / campaign signals (substring matches "launching", "launched")
+        "launch", "campaign", "promo", "promotion", "marketing",
+        "new arrival", "new product", "brand name", "for the brand",
         # SaaS / Tech / Business design
         "saas", "software ad", "app ad", "tech poster", "product launch",
         "landing page banner", "cta", "call to action",
@@ -794,22 +800,30 @@ def detect_capability_bucket(prompt: str) -> str:
             if kw in prompt_lower:
                 return bucket
 
-    # Photorealism — detect sub-bucket
-    for kw in _PORTRAIT_KEYWORDS:
-        if kw in prompt_lower:
-            return "photorealism_portrait"
-    for kw in _PRODUCT_KEYWORDS:
-        if kw in prompt_lower:
-            return "photorealism_product"
-    for kw in _FOOD_KEYWORDS:
-        if kw in prompt_lower:
-            return "photorealism_food"
-    for kw in _FASHION_KEYWORDS:
-        if kw in prompt_lower:
-            return "photorealism_fashion"
-    for kw in _LANDSCAPE_KEYWORDS:
-        if kw in prompt_lower:
-            return "photorealism_landscape"
+    # Photorealism — detect sub-bucket. Use word-boundary regex so short
+    # keywords like "face" don't match inside compounds like "facepowder".
+    def _kw_match(keywords: list) -> bool:
+        for kw in keywords:
+            if " " in kw or "-" in kw:
+                # Multi-word keywords: substring match is fine.
+                if kw in prompt_lower:
+                    return True
+            else:
+                # Single-word keywords: must be a whole word.
+                if re.search(rf"\b{re.escape(kw)}\b", prompt_lower):
+                    return True
+        return False
+
+    if _kw_match(_PORTRAIT_KEYWORDS):
+        return "photorealism_portrait"
+    if _kw_match(_PRODUCT_KEYWORDS):
+        return "photorealism_product"
+    if _kw_match(_FOOD_KEYWORDS):
+        return "photorealism_food"
+    if _kw_match(_FASHION_KEYWORDS):
+        return "photorealism_fashion"
+    if _kw_match(_LANDSCAPE_KEYWORDS):
+        return "photorealism_landscape"
 
     return "photorealism"
 

@@ -204,17 +204,39 @@ tier = normalize_quality_tier(user_input_tier)  # Always normalizes to 1k/2k/4k
 
 ---
 
-## CATEGORY RECIPES (Data-Driven, May 3 2026)
+## TWO-STAGE INTENT ROUTING (May 3 2026)
 
-Per-category ad heuristics (headlines, CTAs, trust signals, tone, vocabulary, palette) are loaded from JSON at runtime and injected into the Haiku USER message based on keyword match against the user prompt. Cached system prompt stays warm.
+Replaces the old keyword-based `detect_capability_bucket` + alias-based `_match_recipe`. Pure AI-driven now:
+
+```
+USER PROMPT
+   v
+[Stage 1] Gemini 2.5 Flash classifier  ->  {bucket, category_key, has_text, is_ad, platform}
+   v
+[Recipe lookup] direct key match in category_recipes JSON (no alias substring scan)
+   v
+[Stage 2] Haiku 4.5 enrichment with recipe pre-injected into user message
+   v
+Per-model formatter (GPT/Imagen/Wan/Flux dialects)
+   v
+IMAGE MODEL
+```
+
+**Files / functions** (in `simple_prompt_engine.py`):
+- `classify_intent(user_prompt)` -> async, per-process cached. Used by both `generate_stream.py` (for bucket routing) and `enrich()` (for recipe lookup) - one Gemini call total per generation.
+- `_classify_intent_gemini` -> the actual Gemini call, JSON-validated output, safe fallback on error.
+- `_recipe_by_key(category_key)` -> direct dict lookup in `category_recipes_mined.json` + `category_recipes.json`.
+- `_match_recipe` -> REMOVED (alias substring matching deleted).
 
 **Files** (`apps/api/app/services/smart/data/`):
-- `category_recipes.json` — manual entries for verticals Pitt taxonomy misses (ayurveda, packaging, wedding, dental, salon, etc.)
-- `category_recipes_mined.json` — auto-generated from Pitt Image Ads (CVPR 2017, 64K real ads, 38 industry topics) + PeterBrendan AdCopy programmatic dataset
+- `category_recipes.json` - manual entries for verticals Pitt taxonomy misses (ayurveda, packaging, wedding, dental, salon, etc.)
+- `category_recipes_mined.json` - auto-generated from Pitt Image Ads (CVPR 2017, 64K real ads, 38 industry topics) + PeterBrendan AdCopy programmatic dataset.
 
-**Loader**: `_load_category_recipes()` in `simple_prompt_engine.py` — lazy union, mined wins on key collision.
+**Caching**: `_CLASSIFICATION_CACHE` (256-entry LRU-ish) keys on the user prompt string. Re-using `classify_intent` within a single request costs nothing.
 
-**Matcher**: `_match_recipe(user_prompt)` — scores each recipe by alias-keyword hits in the prompt; highest score wins. Returns None when nothing matches (Haiku falls back to its 14 hardcoded system-prompt recipes).
+**Cost / latency**: ~$0.0001 per generation, ~300ms (Gemini 2.5 Flash, 150 input + 60 output tokens).
+
+**Bucket detection in `generate_stream.py`**: All 4 call sites of `detect_capability_bucket` are now wrapped in `await classify_intent(prompt)` first - keyword detection is the fallback only.
 
 **Regenerate mined data** (run on server where datasets live):
 ```bash

@@ -538,8 +538,24 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             get_model_for_request, get_model_supported_tiers,
             normalize_quality_tier, MODEL_REGISTRY,
         )
+        from app.services.smart.simple_prompt_engine import classify_intent
 
-        bucket = detect_capability_bucket(req.prompt)
+        # STAGE-1 Gemini intent classifier - replaces keyword-based bucket
+        # detection. Result is cached per-prompt so simple_engine.enrich()
+        # later in this same request reuses the classification for free.
+        try:
+            _classification = await classify_intent(req.prompt)
+            bucket = _classification.get("bucket") or detect_capability_bucket(req.prompt)
+            logger.info(
+                "[router][%s] gemini-classified bucket=%s category=%s has_text=%s is_ad=%s",
+                trace_id, bucket,
+                _classification.get("category_key"),
+                _classification.get("has_text"),
+                _classification.get("is_ad"),
+            )
+        except Exception as _ce:  # noqa: BLE001
+            logger.warning("[router][%s] classifier failed (%s) - falling back to keyword detection", trace_id, _ce)
+            bucket = detect_capability_bucket(req.prompt)
         norm_tier = normalize_quality_tier(quality)
         db_bucket = bucket.split("_")[0] if "_" in bucket else bucket
         model_cfg = None
@@ -1385,9 +1401,14 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
         from prisma import Prisma
         from app.services.smart.config import detect_capability_bucket
         from app.services.smart.model_config import get_model_supported_tiers
+        from app.services.smart.simple_prompt_engine import classify_intent
 
-        # Detect bucket from prompt
-        bucket = detect_capability_bucket(req.prompt)
+        # Stage-1 Gemini classifier (cached per-prompt). Falls back to keyword
+        # detection on any error so this dispatcher never breaks.
+        try:
+            bucket = (await classify_intent(req.prompt)).get("bucket") or detect_capability_bucket(req.prompt)
+        except Exception:
+            bucket = detect_capability_bucket(req.prompt)
         # Normalize sub-bucket for DB lookup (photorealism_landscape → photorealism)
         db_bucket = bucket.split("_")[0] if "_" in bucket else bucket
 
@@ -1638,8 +1659,12 @@ async def _generate_with_model(
         from app.services.external.multi_provider_client import multi_client
         from prisma import Prisma
         from app.services.smart.config import detect_capability_bucket
+        from app.services.smart.simple_prompt_engine import classify_intent
 
-        bucket = detect_capability_bucket(req.prompt)
+        try:
+            bucket = (await classify_intent(req.prompt)).get("bucket") or detect_capability_bucket(req.prompt)
+        except Exception:
+            bucket = detect_capability_bucket(req.prompt)
         prompt_for_model = req.prompt
         simple_payload = getattr(req, "_simple_payload", None)
         if isinstance(simple_payload, dict):
@@ -1766,7 +1791,11 @@ async def stream_generate(req: StreamRequest, request: Request):
     use_parallel = testing_enabled
     if testing_enabled and req.reference_image_url:
         from app.services.smart.config import detect_capability_bucket
-        _bucket_for_dispatch = detect_capability_bucket(req.prompt)
+        from app.services.smart.simple_prompt_engine import classify_intent
+        try:
+            _bucket_for_dispatch = (await classify_intent(req.prompt)).get("bucket") or detect_capability_bucket(req.prompt)
+        except Exception:
+            _bucket_for_dispatch = detect_capability_bucket(req.prompt)
         if _bucket_for_dispatch != "typography":
             use_parallel = False
             logger.info(

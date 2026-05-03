@@ -96,28 +96,190 @@ def _load_category_recipes() -> Dict[str, Dict[str, Any]]:
     return merged
 
 
-def _match_recipe(user_prompt: str) -> Optional[Dict[str, Any]]:
-    """Return the best matching recipe by aliases keyword scan, or None.
+def _recipe_by_key(category_key: str) -> Optional[Dict[str, Any]]:
+    """Direct lookup of a recipe by its canonical key (no alias scan).
 
-    Scoring: count of distinct alias hits (case-insensitive substring on the
-    user prompt). Ties resolved by recipe with more aliases (more specific).
-    Only returns a match when at least one alias hits.
+    Called by the two-stage enrich() flow AFTER the Gemini classifier has
+    already decided the category. If the key isn't in either recipes file,
+    returns None (Haiku falls back to its 14 hardcoded system-prompt recipes).
     """
+    if not category_key:
+        return None
     recipes = _load_category_recipes()
-    if not recipes:
+    rec = recipes.get(category_key)
+    if not rec:
         return None
-    needle = user_prompt.lower()
-    best_key, best_score = None, 0
-    for key, rec in recipes.items():
-        aliases = rec.get("aliases") or []
-        if not aliases:
-            continue
-        score = sum(1 for a in aliases if a and a.lower() in needle)
-        if score > best_score:
-            best_key, best_score = key, score
-    if best_score == 0 or best_key is None:
-        return None
-    return {"key": best_key, **recipes[best_key]}
+    return {"key": category_key, **rec}
+
+
+# ---------------------------------------------------------------------------
+# Stage-1 Gemini classifier
+# ---------------------------------------------------------------------------
+# Replaces the keyword-based bucket detection + alias-based recipe matching
+# with a single fast LLM call. Gemini reads the user prompt and returns:
+#   - bucket: which generation pipeline (typography / photorealism_* / etc)
+#   - category_key: which recipe to load from category_recipes JSON
+#   - has_text:    whether the image needs on-canvas text rendering
+#   - is_ad:       is this a commercial ad (vs scene / portrait / fan art)
+#   - platform:    detected social platform (instagram / linkedin / etc)
+#
+# Cost: ~$0.0001 per call (gemini-2.5-flash, ~150 input + 60 output tokens,
+# ~300ms latency). Output is JSON-validated, falls back to safe defaults on
+# any error so the pipeline never breaks.
+
+_CLASSIFIER_MODEL = os.getenv("INTENT_CLASSIFIER_MODEL", "gemini-2.5-flash")
+
+_VALID_BUCKETS = {
+    "typography",
+    "vector",
+    "anime",
+    "artistic",
+    "interior_arch",
+    "photorealism_portrait",
+    "photorealism_product",
+    "photorealism_food",
+    "photorealism_fashion",
+    "photorealism_landscape",
+    "photorealism",
+}
+
+
+def _build_classifier_prompt(user_prompt: str, available_keys: list) -> str:
+    keys_csv = ", ".join(sorted(available_keys)) or "general"
+    return f"""You classify a user's image-generation request to route it through the right pipeline.
+
+USER PROMPT:
+{user_prompt.strip()}
+
+AVAILABLE category_keys (pick the BEST matching one, or "general" if none fit):
+{keys_csv}
+
+BUCKETS (pick exactly one):
+- typography      = ad / poster / banner / social media post / marketing creative — anything with on-image text
+- vector          = logo, icon, flat illustration, SVG-style
+- anime           = anime / manga style art
+- artistic        = painting, illustration, concept art, fantasy, surreal
+- interior_arch   = interior, room, architecture, building
+- photorealism_portrait = portrait, headshot, person photo (no on-image text)
+- photorealism_product  = product photography, packshot (no text overlay)
+- photorealism_food     = food, dish, restaurant photo
+- photorealism_fashion  = clothing, fashion shoot
+- photorealism_landscape= landscape, nature, scenery
+- photorealism          = generic photoreal scene
+
+Return JSON ONLY (no prose, no markdown fences):
+{{
+  "bucket": "<one of the buckets above>",
+  "category_key": "<one of the AVAILABLE category_keys, or 'general' if no fit>",
+  "has_text": true|false,
+  "is_ad": true|false,
+  "platform": "<instagram|linkedin|facebook|tiktok|youtube|pinterest|none>"
+}}
+
+RULES:
+- "post for instagram", "ad", "poster", "launch", "promo", "campaign" -> bucket=typography, has_text=true
+- A product launch ad with brand name -> typography even if user calls it a "photo"
+- Pure scene description ("car on mars", "anime girl in forest") -> appropriate non-typography bucket, has_text=false
+- If unsure between typography and photorealism: prefer typography when prompt mentions a brand, CTA, sale, headline, or platform.
+"""
+
+
+_CLASSIFICATION_FALLBACK = {
+    "bucket": "photorealism",
+    "category_key": "general",
+    "has_text": False,
+    "is_ad": False,
+    "platform": "none",
+}
+
+
+# Per-process cache: maps user_prompt -> classification result. Single-request
+# scope by design - enables generate_stream to call the classifier ONCE for
+# bucket routing and re-use the same result inside enrich() without paying
+# for a second Gemini call. Bounded to last 256 prompts (LRU not needed at
+# this scale - typical concurrent sessions << 256).
+_CLASSIFICATION_CACHE: Dict[str, Dict[str, Any]] = {}
+_CLASSIFICATION_CACHE_MAX = 256
+
+
+def _cache_classification(prompt: str, result: Dict[str, Any]) -> None:
+    if len(_CLASSIFICATION_CACHE) >= _CLASSIFICATION_CACHE_MAX:
+        # Drop oldest (insertion order) entry
+        _CLASSIFICATION_CACHE.pop(next(iter(_CLASSIFICATION_CACHE)))
+    _CLASSIFICATION_CACHE[prompt] = result
+
+
+async def classify_intent(user_prompt: str) -> Dict[str, Any]:
+    """Public async classifier - cached per prompt. Use this from generate_stream.
+
+    Returns the same dict as _classify_intent_gemini. Subsequent calls within
+    the same process for the SAME prompt return the cached result instantly,
+    so enrich() pays no extra cost when the bucket layer already classified.
+    """
+    cached = _CLASSIFICATION_CACHE.get(user_prompt)
+    if cached is not None:
+        return cached
+    result = await _classify_intent_gemini(user_prompt)
+    _cache_classification(user_prompt, result)
+    return result
+
+
+async def _classify_intent_gemini(user_prompt: str) -> Dict[str, Any]:
+    """Stage-1: Gemini classifies user prompt -> bucket + category_key + flags.
+
+    Returns a dict with keys: bucket, category_key, has_text, is_ad, platform.
+    On any error returns _CLASSIFICATION_FALLBACK so callers never crash.
+    """
+    if not user_prompt or not user_prompt.strip():
+        return dict(_CLASSIFICATION_FALLBACK)
+
+    try:
+        from app.services.smart.design_agent_chain import _get_gemini_client
+        from google.genai import types
+    except Exception as e:
+        logger.warning("[classifier] google-genai unavailable: %s", e)
+        return dict(_CLASSIFICATION_FALLBACK)
+
+    recipes = _load_category_recipes()
+    available_keys = list(recipes.keys()) + ["general"]
+    prompt = _build_classifier_prompt(user_prompt, available_keys)
+
+    try:
+        client = _get_gemini_client()
+        resp = await client.aio.models.generate_content(
+            model=_CLASSIFIER_MODEL,
+            contents=[{"role": "user", "parts": [{"text": prompt}]}],
+            config=types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=200,
+                response_mime_type="application/json",
+            ),
+        )
+        raw = (resp.text or "").strip()
+        data = json.loads(raw)
+    except Exception as e:
+        logger.warning("[classifier] gemini call failed: %s -- using fallback", e)
+        return dict(_CLASSIFICATION_FALLBACK)
+
+    # Validate + sanitize output
+    out = dict(_CLASSIFICATION_FALLBACK)
+    bucket = str(data.get("bucket") or "").strip()
+    if bucket in _VALID_BUCKETS:
+        out["bucket"] = bucket
+    cat_key = str(data.get("category_key") or "").strip()
+    if cat_key and (cat_key in recipes or cat_key == "general"):
+        out["category_key"] = cat_key
+    out["has_text"] = bool(data.get("has_text"))
+    out["is_ad"]    = bool(data.get("is_ad"))
+    platform = str(data.get("platform") or "none").strip().lower()
+    if platform in {"instagram", "linkedin", "facebook", "tiktok", "youtube", "pinterest", "none"}:
+        out["platform"] = platform
+
+    logger.info(
+        "[classifier] prompt=%r -> bucket=%s category=%s has_text=%s is_ad=%s platform=%s",
+        user_prompt[:60], out["bucket"], out["category_key"], out["has_text"], out["is_ad"], out["platform"],
+    )
+    return out
 
 
 def _format_recipe_for_prompt(rec: Dict[str, Any]) -> str:
@@ -401,6 +563,21 @@ RIGHT (visual descriptions - what the image actually contains):
 - "a small clean rectangle in the top-left containing the brand name"
 
 Functional labels (CTA, headline, subhead, benefit_lines, trust_signals) belong ONLY in `ad_copy` keys. The `prompt` field describes the FINISHED IMAGE as a photograph would, not as a creative brief would.
+
+**ABSOLUTE RULE - NEVER PUT MARKDOWN INSIDE QUOTED TEXT-TO-RENDER STRINGS:**
+Image models render the EXACT contents of `"..."` quoted strings onto the canvas. If you write `"## LIGHT AS AIR"` or `"*Flawless Everywhere*"` or `"**Shop Now**"`, the model PAINTS the literal `##`, `*`, `**` characters onto the image. The output looks broken.
+
+WRONG:
+- `the headline reads "## LIGHT AS AIR"`
+- `subhead in italic script "*Flawless Everywhere*"`
+- `CTA button reads "**SHOP NOW**"`
+
+RIGHT (use plain text inside the quotes; describe styling OUTSIDE the quotes):
+- `a large bold headline reads "LIGHT AS AIR"`
+- `subhead in elegant italic script reads "Flawless Everywhere"`
+- `CTA button reads "SHOP NOW" in bold white type`
+
+Forbidden characters INSIDE any `"..."` text string in the `prompt` field: `#`, `*`, `_`, `` ` ``, `~`, leading/trailing `-` `>` `+` `.`. Style instructions (bold, italic, large, uppercase, color) describe how the model should DRAW the text - put them OUTSIDE the quotes, never inside.
 
 ## LAYER 5 — TECHNICAL: Build the image_prompt
 Construct the `prompt` field using construction order (back to front):
@@ -1267,19 +1444,18 @@ def _build_user_message(
     style: Optional[str],
     brand_kit: Optional[Dict[str, Any]],
     style_reference_description: Optional[str] = None,
+    recipe: Optional[Dict[str, Any]] = None,
 ) -> str:
     parts = [f"USER REQUEST:\n{user_prompt.strip()}"]
     bucket_hint = _BUCKET_HINTS.get(bucket)
     if bucket_hint:
         parts.append(f"BUCKET: {bucket} - {bucket_hint}")
 
-    # Category recipe injection (mined from Pitt Image Ads + AdCopy datasets,
-    # union'd with manual recipes). Matched via alias keywords against the user
-    # prompt. Goes in the dynamic user message so the cached system prompt
-    # stays warm across all categories.
-    matched = _match_recipe(user_prompt)
-    if matched is not None:
-        parts.append(_format_recipe_for_prompt(matched))
+    # Category recipe injection. Recipe is pre-resolved by the Stage-1 Gemini
+    # classifier (see _classify_intent_gemini). Goes in the dynamic user
+    # message so the cached system prompt stays warm across all categories.
+    if recipe is not None:
+        parts.append(_format_recipe_for_prompt(recipe))
     parts.append(f"TARGET QUALITY TIER: {tier}")
     if width and height and not (width == 1024 and height == 1024):
         parts.append(f"REQUESTED CANVAS: {width}x{height} (use this to pick aspect_hint)")
@@ -1524,6 +1700,42 @@ def _scrub_metadata_leaks(text: str) -> str:
     return text
 
 
+# Markdown chars that image models render literally when wrapped inside the
+# "..." text-to-render strings: hashes, asterisks, underscores, backticks,
+# tildes. Plus stray leading/trailing punctuation that has no visual purpose.
+_MARKDOWN_IN_QUOTE_RE = re.compile(r'"([^"]{0,200})"')
+_MARKDOWN_CHARS_RE = re.compile(r"^[\s#*_`~\->.+]+|[\s#*_`~\->.+]+$")
+_INNER_MD_CHARS_RE = re.compile(r"[#*_`~]+")
+
+
+def _scrub_markdown_inside_quotes(text: str) -> str:
+    """Strip markdown markers from inside `"..."` text-to-render strings.
+
+    Image models render the contents of quoted strings verbatim onto the
+    canvas. If Haiku writes `"## LIGHT AS AIR"` or `"*Flawless Everywhere*"`,
+    the model paints `##` and `*` characters onto the image. Rule: keep the
+    words inside quotes; nuke the markup chars + leading/trailing junk.
+    """
+    if not text or '"' not in text:
+        return text
+
+    changed = [False]
+    def _fix(m: "re.Match[str]") -> str:
+        inner = m.group(1)
+        cleaned = _INNER_MD_CHARS_RE.sub("", inner)
+        cleaned = _MARKDOWN_CHARS_RE.sub("", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if cleaned != inner:
+            changed[0] = True
+        return f'"{cleaned}"' if cleaned else '""'
+
+    result = _MARKDOWN_IN_QUOTE_RE.sub(_fix, text)
+    if changed[0]:
+        logger.info("[markdown-in-quotes] scrubbed markdown markers from quoted text")
+        print("[markdown-in-quotes] scrubbed markdown markers from quoted text", flush=True)
+    return result
+
+
 def _sanitize_prompt(text: str, bucket: str = "") -> str:
     """Strip pitch-deck / placeholder language that image models render literally.
 
@@ -1544,6 +1756,14 @@ def _sanitize_prompt(text: str, bucket: str = "") -> str:
 
     # Pass 0b: strip any leaked API config key/value pairs.
     text = _scrub_metadata_leaks(text)
+
+    # Pass 0c: scrub markdown markers from INSIDE quoted text strings.
+    # Haiku sometimes writes `"## LIGHT AS AIR"` or `"*Flawless Everywhere*"`
+    # inside the prompt - image models then render the literal `##` / `*` chars
+    # ON the canvas because they treat the quoted block as text-to-render.
+    # Keep the quoted text itself; just strip the markup chars and stray
+    # leading/trailing punctuation.
+    text = _scrub_markdown_inside_quotes(text)
 
     # Pass 1: drop entire sentences mentioning multi-variant trigger words.
     text = _drop_multi_variant_sentences(text)
@@ -1683,9 +1903,26 @@ class SimplePromptEngine:
         """
         start = time.time()
         try:
+            # STAGE 1 - Gemini intent classifier (replaces keyword-based bucket
+            # detection AND alias-based recipe matching). Returns:
+            #   {bucket, category_key, has_text, is_ad, platform}
+            # Gemini decides; we lookup the matching recipe by exact key.
+            # Uses the per-process cache so a prior classify_intent() call from
+            # generate_stream's bucket layer doesn't pay twice.
+            classification = await classify_intent(user_prompt)
+            recipe = _recipe_by_key(classification.get("category_key") or "")
+
+            # If the caller passed a bucket but Gemini disagrees with high
+            # signal (e.g. typography vs photorealism_*), trust Gemini for the
+            # Haiku brief. The actual model routing in generate_stream uses the
+            # classification result via the returned dict.
+            effective_bucket = classification.get("bucket") or bucket
+
+            # STAGE 2 - Haiku enrichment with recipe-pre-injected user message.
             user_msg = _build_user_message(
-                user_prompt, bucket, tier, width, height, style, brand_kit,
+                user_prompt, effective_bucket, tier, width, height, style, brand_kit,
                 style_reference_description=style_reference_description,
+                recipe=recipe,
             )
             # Instructor returns a validated Pydantic instance (or raises after
             # max_retries exhausts). No more loose-JSON parsing.
@@ -1697,7 +1934,7 @@ class SimplePromptEngine:
             # CTA text we just filled. Sanitizing first strips bare scaffolding
             # CTA language; the fill step then writes the legitimate ad_copy
             # text inside quotes where the image model can render it.
-            sanitized = _sanitize_prompt(output.prompt.strip(), bucket=bucket)
+            sanitized = _sanitize_prompt(output.prompt.strip(), bucket=effective_bucket)
             clean_prompt = _fill_empty_quotes_from_adcopy(sanitized, output.ad_copy)
             raw_neg = output.negative_prompt.strip()
             combined_neg = f"{raw_neg}, {_ANTI_COLLAGE_NEGATIVES}" if raw_neg else _ANTI_COLLAGE_NEGATIVES
@@ -1722,6 +1959,10 @@ class SimplePromptEngine:
                 "platform":             output.platform or "general",
                 "copywriting_formula":  output.copywriting_formula or "simple",
                 "visual":               visual_dict,
+                # Stage-1 classifier output (Gemini) -- generate_stream uses
+                # `classification.bucket` to override keyword-based detection.
+                "classification":       classification,
+                "_recipe_key":          (recipe or {}).get("key"),
                 "_elapsed":             time.time() - start,
                 "_source":              "simple_engine",
             }
