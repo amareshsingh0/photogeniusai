@@ -543,9 +543,12 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
         # STAGE-1 Gemini intent classifier - replaces keyword-based bucket
         # detection. Result is cached per-prompt so simple_engine.enrich()
         # later in this same request reuses the classification for free.
+        # Use the RAW user prompt (req.prompt may have been mutated to the
+        # enriched Haiku output by an earlier path in admin parallel mode).
+        _classify_input = getattr(req, "_raw_user_prompt", None) or req.prompt
         try:
-            _classification = await classify_intent(req.prompt)
-            bucket = _classification.get("bucket") or detect_capability_bucket(req.prompt)
+            _classification = await classify_intent(_classify_input)
+            bucket = _classification.get("bucket") or detect_capability_bucket(_classify_input)
             logger.info(
                 "[router][%s] gemini-classified bucket=%s category=%s has_text=%s is_ad=%s",
                 trace_id, bucket,
@@ -555,7 +558,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             )
         except Exception as _ce:  # noqa: BLE001
             logger.warning("[router][%s] classifier failed (%s) - falling back to keyword detection", trace_id, _ce)
-            bucket = detect_capability_bucket(req.prompt)
+            bucket = detect_capability_bucket(_classify_input)
         norm_tier = normalize_quality_tier(quality)
         db_bucket = bucket.split("_")[0] if "_" in bucket else bucket
         model_cfg = None
@@ -1403,12 +1406,14 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
         from app.services.smart.model_config import get_model_supported_tiers
         from app.services.smart.simple_prompt_engine import classify_intent
 
-        # Stage-1 Gemini classifier (cached per-prompt). Falls back to keyword
-        # detection on any error so this dispatcher never breaks.
+        # Stage-1 Gemini classifier (cached per-prompt). Use raw user prompt
+        # (req.prompt may have been mutated by upstream enrichment). Falls
+        # back to keyword detection on any error so this never breaks.
+        _classify_input = getattr(req, "_raw_user_prompt", None) or req.prompt
         try:
-            bucket = (await classify_intent(req.prompt)).get("bucket") or detect_capability_bucket(req.prompt)
+            bucket = (await classify_intent(_classify_input)).get("bucket") or detect_capability_bucket(_classify_input)
         except Exception:
-            bucket = detect_capability_bucket(req.prompt)
+            bucket = detect_capability_bucket(_classify_input)
         # Normalize sub-bucket for DB lookup (photorealism_landscape → photorealism)
         db_bucket = bucket.split("_")[0] if "_" in bucket else bucket
 
@@ -1661,10 +1666,12 @@ async def _generate_with_model(
         from app.services.smart.config import detect_capability_bucket
         from app.services.smart.simple_prompt_engine import classify_intent
 
+        # Use RAW user prompt for classification (req.prompt may be enriched).
+        _classify_input = getattr(req, "_raw_user_prompt", None) or req.prompt
         try:
-            bucket = (await classify_intent(req.prompt)).get("bucket") or detect_capability_bucket(req.prompt)
+            bucket = (await classify_intent(_classify_input)).get("bucket") or detect_capability_bucket(_classify_input)
         except Exception:
-            bucket = detect_capability_bucket(req.prompt)
+            bucket = detect_capability_bucket(_classify_input)
         prompt_for_model = req.prompt
         simple_payload = getattr(req, "_simple_payload", None)
         if isinstance(simple_payload, dict):
@@ -1797,10 +1804,12 @@ async def stream_generate(req: StreamRequest, request: Request):
     if testing_enabled and req.reference_image_url:
         from app.services.smart.config import detect_capability_bucket
         from app.services.smart.simple_prompt_engine import classify_intent
+        # Use RAW user prompt; req.prompt may have been enriched upstream.
+        _classify_input = getattr(req, "_raw_user_prompt", None) or req.prompt
         try:
-            _bucket_for_dispatch = (await classify_intent(req.prompt)).get("bucket") or detect_capability_bucket(req.prompt)
+            _bucket_for_dispatch = (await classify_intent(_classify_input)).get("bucket") or detect_capability_bucket(_classify_input)
         except Exception:
-            _bucket_for_dispatch = detect_capability_bucket(req.prompt)
+            _bucket_for_dispatch = detect_capability_bucket(_classify_input)
         if _bucket_for_dispatch != "typography":
             use_parallel = False
             logger.info(

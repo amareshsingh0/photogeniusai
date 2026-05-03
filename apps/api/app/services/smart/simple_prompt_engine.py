@@ -404,7 +404,12 @@ _TEMPERATURE  = float(os.getenv("SIMPLE_ENGINE_TEMPERATURE", "0.7"))
 # vague filler, ensures negative space is explicit. Adds ~1s + ~$0.0008 per
 # generation. Flag-controlled, defaults ON for ads only.
 _USE_SELF_CRITIQUE = os.getenv("USE_SELF_CRITIQUE", "true").lower() != "false"
-_CRITIQUE_MAX_TOKENS = int(os.getenv("SELF_CRITIQUE_MAX_TOKENS", "1200"))
+# Critique returns the FULL improved SimpleEngineOutput JSON (12 fields incl
+# nested ad_copy + visual). Gemini 2.5 Flash with response_mime_type=json
+# burns ~600 tokens on internal reasoning before emitting. Empirically a
+# full critique payload runs 1500-2200 output tokens. Bumped to 4000 for
+# safety so we never truncate mid-string.
+_CRITIQUE_MAX_TOKENS = int(os.getenv("SELF_CRITIQUE_MAX_TOKENS", "4000"))
 _USE_CACHING  = os.getenv("USE_PROMPT_CACHING", "true").lower() != "false"
 # Instructor auto-retries up to N times when Haiku violates the schema
 # (each retry appends the validation error to the conversation, so the model
