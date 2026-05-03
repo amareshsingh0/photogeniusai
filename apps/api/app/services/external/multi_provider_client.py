@@ -310,7 +310,10 @@ def _distill_for_imagen(prompt: str) -> str:
             continue
         seen.add(text.lower())
         literals.append(text)
-        if len(literals) >= 3:
+        # Bumped from 3 -> 4 (May 4 2026) so brand + headline + subhead + CTA
+        # all survive distillation. Imagen handles 4 short text strings reliably;
+        # 5+ degrades quality.
+        if len(literals) >= 4:
             break
 
     # 2) Clean-strip-safe noise: bracketed placeholders, hashtags, markdown.
@@ -429,13 +432,22 @@ def _distill_for_imagen(prompt: str) -> str:
         if cleaned:
             parts.append(cleaned)
         if literals:
-            # Use only size/position descriptors — no structural words.
+            # Use only size/position descriptors - no structural words.
+            # 4-string layout (May 4 2026): brand at top, headline center,
+            # subhead below, CTA on a contrasting button at the bottom.
             text_parts = []
+            n = len(literals)
             for i, t in enumerate(literals):
                 if i == 0:
-                    text_parts.append(f'the text "{t}" displayed prominently in very large bold letters')
+                    text_parts.append(f'the text "{t}" displayed prominently in very large bold letters at the top')
                 elif i == 1:
                     text_parts.append(f'and the text "{t}" displayed in smaller letters below')
+                elif i == 2:
+                    text_parts.append(f'and the text "{t}" displayed in even smaller letters beneath')
+                elif i == 3 and n >= 4:
+                    # Last literal is typically the CTA - render on a prominent
+                    # contrasting bottom button so it's not lost.
+                    text_parts.append(f'and the text "{t}" displayed inside a prominent solid-colored button at the bottom of the image')
                 else:
                     text_parts.append(f'and the text "{t}" displayed in even smaller letters')
             parts.append("The image shows " + ", ".join(text_parts) + ".")

@@ -110,16 +110,34 @@ _CATEGORY_PRODUCT_NOUN: Dict[str, str] = {
 }
 
 
-def _product_noun(subject_category: str, brand: str = "") -> str:
-    """Return a concrete product noun for the category. Falls back to
-    'premium product' when the category isn't mapped."""
-    if not subject_category or subject_category == "general":
-        return "premium product"
-    noun = _CATEGORY_PRODUCT_NOUN.get(subject_category)
-    if noun:
-        return noun
-    # Soft fallback: humanize the key
-    return f"premium {subject_category.replace('_', ' ')} product"
+def _product_noun(subject_category: str, brand: str = "", recipe_key: str = "") -> str:
+    """Return a concrete product noun for the category.
+
+    Resolution order:
+      1. recipe_key (from Gemini classifier - most accurate, e.g. 'alcohol_beverage')
+      2. subject_category (from Haiku output - sometimes generic like 'entertainment')
+      3. fallback "premium product"
+
+    Why recipe_key wins: Haiku's subject_category enum is broader/looser than the
+    Gemini-classified category_key. For "AlcShip alcohol poster", classifier sets
+    category_key='alcohol_beverage' (perfect match in noun map), but Haiku may
+    set subject_category='entertainment' (no match -> "premium entertainment
+    product" garbage). Always prefer the classifier's key when available.
+    """
+    # Try recipe_key first - it's the Gemini-classified category and matches
+    # the _CATEGORY_PRODUCT_NOUN map keys directly.
+    if recipe_key and recipe_key not in ("", "general"):
+        noun = _CATEGORY_PRODUCT_NOUN.get(recipe_key)
+        if noun:
+            return noun
+    # Then try Haiku's subject_category
+    if subject_category and subject_category not in ("", "general"):
+        noun = _CATEGORY_PRODUCT_NOUN.get(subject_category)
+        if noun:
+            return noun
+        # Soft fallback: humanize the key
+        return f"premium {subject_category.replace('_', ' ')} product"
+    return "premium product"
 
 # Designer-brief words Flux renders literally or misinterprets as composition
 # instructions ("locked across the top third" -> Flux may tile the text).
@@ -710,7 +728,8 @@ def _format_for_flux(base_prompt: str, payload: Dict[str, Any]) -> str:
     # Scene opener (photographic, not designer) + audience tone.
     # Use _CATEGORY_PRODUCT_NOUN map for a concrete photograph-able subject
     # (Flux locks onto whatever noun comes first; "alcohol_beverage" -> garbage).
-    product_noun = _product_noun(subject_category, brand)
+    recipe_key = (payload.get("_recipe_key") or "").strip()
+    product_noun = _product_noun(subject_category, brand, recipe_key)
     opener = f"A {mood} commercial photograph of a {product_noun} for the brand {brand}" if brand else f"A {mood} commercial photograph of a {product_noun}"
     if target_audience:
         ta = target_audience.split(",")[0].split(";")[0].strip()
@@ -980,7 +999,8 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
     # food product" (May 4 2026 visual regression) - the noun map fixes that.
     _GENERIC_INTENTS = {"ad", "advertisement", "poster", "banner", "creative",
                         "image", "graphic", "design", "general", "story", "post"}
-    subject_phrase = _product_noun(subject_category, brand)
+    recipe_key = (payload.get("_recipe_key") or "").strip()
+    subject_phrase = _product_noun(subject_category, brand, recipe_key)
     # If user-provided intent is concrete (not generic), prefer it.
     if intent and intent not in _GENERIC_INTENTS and subject_category in ("", "general"):
         subject_phrase = intent.replace("_", " ")
@@ -1225,7 +1245,10 @@ def _format_for_wavespeed(base_prompt: str, payload: Dict[str, Any]) -> str:
     # noun catches its parser (chocolate balls, dessert, etc - May 4 2026
     # regression). Lead with a concrete photograph-able product noun from
     # _CATEGORY_PRODUCT_NOUN.
-    product_noun = _product_noun(subject_category, brand)
+    # Prefer Gemini classifier's recipe_key over Haiku's subject_category
+    # (classifier is more accurate - sees full prompt including platform/brand).
+    recipe_key = (payload.get("_recipe_key") or "").strip()
+    product_noun = _product_noun(subject_category, brand, recipe_key)
     parts: list[str] = []
 
     # Opener: concrete subject FIRST, brand second, mood third.

@@ -516,7 +516,7 @@ class VisualDirection(BaseModel):
     lighting:         str = Field(default="", description="Light direction, quality, temperature: 'golden-hour backlight rim-lighting', 'overhead softbox with bounce'.")
     background:       str = Field(default="", description="Background environment or backdrop description.")
     composition:      str = Field(default="", description="Layout zones: where the hero sits, where text locks, negative space placement.")
-    visual_hierarchy: str = Field(default="", max_length=200, description=(
+    visual_hierarchy: str = Field(default="", max_length=400, description=(
         "How the eye should travel through the image. Pick ONE pattern and name elements by position: "
         "'Z-pattern: brand top-left -> hero top-right -> benefits middle -> CTA bottom-right' (good for ads with multiple text blocks), or "
         "'F-pattern: stacked left column - logo, headline, subhead, benefits, CTA - hero on right' (good for text-heavy posters), or "
@@ -601,7 +601,7 @@ class SimpleEngineOutput(BaseModel):
     # These calibrate tone, urgency, and visual choices BEFORE design.
     target_audience: str = Field(
         default="",
-        max_length=140,
+        max_length=300,
         description=(
             "Specific demographic + psychographic target. Examples: "
             "'Gen-Z teens 16-22, mobile-first, trend-driven', "
