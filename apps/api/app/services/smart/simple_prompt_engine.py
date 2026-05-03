@@ -453,20 +453,22 @@ class AdCopy(BaseModel):
         description="Call-to-action - 2-3 WORDS MAXIMUM (Shop Now / Book Today / Learn More). Empty for non-ad content.")
 
     # Phase-2 Typography Architecture (May 4 2026 framework expansion)
-    headline_typography: str = Field(default="", max_length=200, description=(
+    # Caps generous - Haiku writes verbose styling specs; brevity enforced
+    # downstream in formatters / critique, not at schema layer.
+    headline_typography: str = Field(default="", max_length=400, description=(
         "Per-element styling for the HEADLINE. Format: 'font: <family> | weight: <bold|black|regular> | size: large | color: <hex or name> | tracking: <tight|normal|wide>'. "
         "Example: 'font: Playfair Display serif | weight: black | size: large | color: pure white | tracking: tight'. "
         "Pick from the project's MAX 2 fonts (1 display + 1 body)."
     ))
-    subhead_typography: str = Field(default="", max_length=200, description=(
+    subhead_typography: str = Field(default="", max_length=400, description=(
         "Per-element styling for the SUBHEAD. Same format as headline_typography. Example: 'font: Inter sans-serif | weight: regular | size: medium | color: light gold | tracking: wide'."
     ))
-    cta_typography: str = Field(default="", max_length=200, description=(
+    cta_typography: str = Field(default="", max_length=400, description=(
         "Per-element styling for the CTA button. Example: 'font: Inter sans-serif | weight: bold | size: medium | color: white text on rose-gold pill button'."
     ))
 
     # Regulated industry compliance (May 4 framework expansion)
-    legal_disclaimer: str = Field(default="", max_length=200, description=(
+    legal_disclaimer: str = Field(default="", max_length=400, description=(
         "MANDATORY for regulated categories - alcohol, tobacco, pharma, financial, gambling. Examples: "
         "alcohol -> '21+ ONLY. DRINK RESPONSIBLY.' | "
         "pharma -> 'Consult your doctor. Read label carefully.' | "
@@ -490,7 +492,9 @@ class VisualDirection(BaseModel):
     """Art director's visual brief — mood, palette, light, layout."""
 
     # CONCEPT layer (May 4 2026 framework expansion - "designer's mental model")
-    visual_metaphor: str = Field(default="", max_length=300, description=(
+    # Caps generous - Haiku writes verbose metaphor descriptions; brevity
+    # encouraged via system prompt + critique, not enforced by Pydantic.
+    visual_metaphor: str = Field(default="", max_length=600, description=(
         "The CONCEPT that makes this ad memorable. Designers don't just photograph the product - they invent a visual metaphor that communicates the USP without words. "
         "Examples: "
         "waterproof shoes -> 'shoe in mid-air being struck by a water splash that beads off cleanly' | "
@@ -507,7 +511,7 @@ class VisualDirection(BaseModel):
 
     mood:             str = Field(default="", description="Emotional register: celebratory, intimate, punchy, serene, aspirational, gritty, dreamy, bold.")
     color_palette:    str = Field(default="", description="60-30-10 RULE - state the dominant (60%) + secondary (30%) + accent (10%) colors with explicit ratios. Format: 'deep navy 60% (background), champagne gold 30% (product highlights), electric coral 10% (CTA button only)'. The 10% accent MUST be the most contrasting color and reserved for the CTA.")
-    color_psychology_intent: str = Field(default="", max_length=120, description=(
+    color_psychology_intent: str = Field(default="", max_length=400, description=(
         "WHY these colors were chosen - the emotional response targeted. Examples: "
         "'urgency + appetite' (red+yellow for fast food), 'trust + professionalism' (deep blue for B2B), "
         "'luxury + exclusivity' (black + gold for premium), 'calm + clean' (sage + cream for wellness), "
@@ -523,7 +527,7 @@ class VisualDirection(BaseModel):
         "'Center-out: hero dead-center, headline above, CTA below' (good for minimalist 1-3 word ads). "
         "Hero NEVER dead-center for non-minimalist - place it on a Rule-of-Thirds intersection."
     ))
-    typography_style: str = Field(default="", max_length=200, description=(
+    typography_style: str = Field(default="", max_length=500, description=(
         "Font choice signals brand personality. Pick MAX 2 fonts (1 display for headline + 1 body for everything else, NEVER more than 2): "
         "Serif (Times/Playfair) = trust, heritage, luxury, fashion. "
         "Sans-Serif (Inter/Montserrat/Helvetica) = modern, tech, friendly, clean. "
@@ -2504,11 +2508,21 @@ class SimplePromptEngine:
         except ValidationError as ve:
             # Instructor exhausted retries — Haiku could not produce valid JSON
             # even after self-correction. Log the schema errors and fall back.
-            logger.error(
-                "[simple-engine] Pydantic validation failed after %d retries: %s",
-                _INSTRUCTOR_MAX_RETRIES, ve.errors(),
+            # Logged at WARNING + print so it surfaces in pm2 logs reliably
+            # (logger.error sometimes filtered by handler config).
+            err_summary = [
+                f"{'.'.join(str(p) for p in e.get('loc', ()))}={e.get('type', '?')}"
+                for e in ve.errors()[:5]
+            ]
+            logger.warning(
+                "[simple-engine] Pydantic validation failed after %d retries (%d errors) - falling back to RAW user prompt. Fields: %s",
+                _INSTRUCTOR_MAX_RETRIES, ve.error_count(), ", ".join(err_summary),
             )
-            print(f"[SIMPLE-ENGINE-VALIDATION-FAIL] {ve.errors()}", flush=True)
+            print(f"[SIMPLE-ENGINE-VALIDATION-FAIL] {ve.error_count()} errors: {err_summary}", flush=True)
+            # Print full first error for debugging
+            if ve.errors():
+                first = ve.errors()[0]
+                print(f"[SIMPLE-ENGINE-VALIDATION-FAIL] first error: loc={first.get('loc')} msg={first.get('msg')} input_len={len(str(first.get('input', '')))}", flush=True)
             return self._fallback(user_prompt, start, f"validation_error: {ve.error_count()} issues")
         except Exception as e:
             logger.exception("[simple-engine] enrich failed: %s — falling back to raw prompt", e)
