@@ -41,11 +41,119 @@ import logging
 import os
 import re
 import time
-from typing import Any, Dict, Literal, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Category recipes loader — UNION of two sources, mined data takes priority.
+#
+#   1. category_recipes_mined.json  -  written by scripts/mine_category_recipes.py
+#                                       from Pitt Image Ads (64K real ads / 38
+#                                       industry topics) + AdCopy programmatic
+#                                       dataset. Data-driven, auto-regenerable.
+#   2. category_recipes.json        -  hand-curated entries (e.g. ayurveda,
+#                                       packaging, wedding) for verticals the
+#                                       Pitt taxonomy does not cover.
+#
+# Both load lazily once per process. Match against the user's prompt happens
+# via per-recipe `aliases` keyword list. The matched recipe is injected into
+# the dynamic USER MESSAGE (not the cached system prompt) so prompt-cache
+# warmth is preserved.
+# ---------------------------------------------------------------------------
+_DATA_DIR = Path(__file__).resolve().parent / "data"
+_RECIPES_MINED_PATH = _DATA_DIR / "category_recipes_mined.json"
+_RECIPES_MANUAL_PATH = _DATA_DIR / "category_recipes.json"
+
+_CATEGORY_RECIPES: Optional[Dict[str, Dict[str, Any]]] = None
+
+
+def _load_category_recipes() -> Dict[str, Dict[str, Any]]:
+    """Lazy-load + merge mined and manual recipe files. Mined wins on key collision."""
+    global _CATEGORY_RECIPES
+    if _CATEGORY_RECIPES is not None:
+        return _CATEGORY_RECIPES
+
+    merged: Dict[str, Dict[str, Any]] = {}
+    for path in (_RECIPES_MANUAL_PATH, _RECIPES_MINED_PATH):  # mined loaded LAST so it wins
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[recipes] failed to load %s: %s", path.name, e)
+            continue
+        for k, v in data.items():
+            if k.startswith("_") or not isinstance(v, dict):
+                continue
+            merged[k] = v
+        logger.info("[recipes] loaded %s (%d entries -> %d merged)", path.name, len(data), len(merged))
+
+    _CATEGORY_RECIPES = merged
+    return merged
+
+
+def _match_recipe(user_prompt: str) -> Optional[Dict[str, Any]]:
+    """Return the best matching recipe by aliases keyword scan, or None.
+
+    Scoring: count of distinct alias hits (case-insensitive substring on the
+    user prompt). Ties resolved by recipe with more aliases (more specific).
+    Only returns a match when at least one alias hits.
+    """
+    recipes = _load_category_recipes()
+    if not recipes:
+        return None
+    needle = user_prompt.lower()
+    best_key, best_score = None, 0
+    for key, rec in recipes.items():
+        aliases = rec.get("aliases") or []
+        if not aliases:
+            continue
+        score = sum(1 for a in aliases if a and a.lower() in needle)
+        if score > best_score:
+            best_key, best_score = key, score
+    if best_score == 0 or best_key is None:
+        return None
+    return {"key": best_key, **recipes[best_key]}
+
+
+def _format_recipe_for_prompt(rec: Dict[str, Any]) -> str:
+    """Render a matched recipe as a compact REFERENCE PATTERNS block for Haiku.
+
+    Kept ASCII-only and bullet-light so it parses cleanly inside the user message
+    without confusing the JSON response_model.
+    """
+    key = rec.get("key", "category")
+    bits: List[str] = [f"REFERENCE PATTERNS for category={key} (real-world ad data, use as inspiration NOT verbatim):"]
+
+    def _take(field: str, label: str, n: int = 6) -> None:
+        vals = rec.get(field) or []
+        if not isinstance(vals, list):
+            return
+        cleaned = [str(v).strip() for v in vals if str(v).strip()]
+        if not cleaned:
+            return
+        bits.append(f"  {label}: " + " | ".join(cleaned[:n]))
+
+    _take("hero_patterns",          "common headlines",        n=6)
+    _take("cta_patterns",           "common CTAs",             n=5)
+    _take("trust_signals",          "trust signals",           n=6)
+    _take("benefit_labels",         "benefit labels",          n=5)
+    _take("top_sentiments",         "dominant tone",           n=4)
+    _take("top_strategies",         "rhetorical strategies",   n=3)
+    _take("distinctive_vocabulary", "vocabulary that signals this category", n=12)
+
+    palette  = (rec.get("color_palette") or "").strip()
+    lighting = (rec.get("lighting") or "").strip()
+    photo    = (rec.get("photography") or "").strip()
+    if palette:  bits.append(f"  palette hint: {palette}")
+    if lighting: bits.append(f"  lighting hint: {lighting}")
+    if photo:    bits.append(f"  photography hint: {photo}")
+
+    return "\n".join(bits)
 
 _CLAUDE_MODEL = os.getenv("SIMPLE_ENGINE_MODEL", "claude-haiku-4-5-20251001")
 _MAX_TOKENS   = int(os.getenv("SIMPLE_ENGINE_MAX_TOKENS", "2200"))
@@ -1163,7 +1271,15 @@ def _build_user_message(
     parts = [f"USER REQUEST:\n{user_prompt.strip()}"]
     bucket_hint = _BUCKET_HINTS.get(bucket)
     if bucket_hint:
-        parts.append(f"BUCKET: {bucket} — {bucket_hint}")
+        parts.append(f"BUCKET: {bucket} - {bucket_hint}")
+
+    # Category recipe injection (mined from Pitt Image Ads + AdCopy datasets,
+    # union'd with manual recipes). Matched via alias keywords against the user
+    # prompt. Goes in the dynamic user message so the cached system prompt
+    # stays warm across all categories.
+    matched = _match_recipe(user_prompt)
+    if matched is not None:
+        parts.append(_format_recipe_for_prompt(matched))
     parts.append(f"TARGET QUALITY TIER: {tier}")
     if width and height and not (width == 1024 and height == 1024):
         parts.append(f"REQUESTED CANVAS: {width}x{height} (use this to pick aspect_hint)")

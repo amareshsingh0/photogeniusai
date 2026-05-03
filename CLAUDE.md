@@ -204,6 +204,32 @@ tier = normalize_quality_tier(user_input_tier)  # Always normalizes to 1k/2k/4k
 
 ---
 
+## CATEGORY RECIPES (Data-Driven, May 3 2026)
+
+Per-category ad heuristics (headlines, CTAs, trust signals, tone, vocabulary, palette) are loaded from JSON at runtime and injected into the Haiku USER message based on keyword match against the user prompt. Cached system prompt stays warm.
+
+**Files** (`apps/api/app/services/smart/data/`):
+- `category_recipes.json` — manual entries for verticals Pitt taxonomy misses (ayurveda, packaging, wedding, dental, salon, etc.)
+- `category_recipes_mined.json` — auto-generated from Pitt Image Ads (CVPR 2017, 64K real ads, 38 industry topics) + PeterBrendan AdCopy programmatic dataset
+
+**Loader**: `_load_category_recipes()` in `simple_prompt_engine.py` — lazy union, mined wins on key collision.
+
+**Matcher**: `_match_recipe(user_prompt)` — scores each recipe by alias-keyword hits in the prompt; highest score wins. Returns None when nothing matches (Haiku falls back to its 14 hardcoded system-prompt recipes).
+
+**Regenerate mined data** (run on server where datasets live):
+```bash
+cd ~/PhotoGenius-AI/apps/api && source venv/bin/activate
+python3 scripts/mine_category_recipes.py   # writes category_recipes_mined.json
+# then scp file back to local repo, commit, deploy
+```
+
+**Datasets on server** (`~/PhotoGenius-AI/datasets/`, ~30MB):
+- `pitt-ads-text/image/` — Pitt annotations (Topics, Slogans, QA_Action, Sentiments, Strategies)
+- `ad-copy/` — PeterBrendan/Ads_Creative_Ad_Copy_Programmatic CSV
+- `marketing-social/` — RafaM97 marketing brief examples
+
+---
+
 ## SPRINT STATUS (as of 2026-04-17)
 
 | Sprint | Feature | Status |
