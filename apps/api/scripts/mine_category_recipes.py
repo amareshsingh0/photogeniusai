@@ -109,8 +109,18 @@ def _read_list_file(path: Path) -> dict[int, str]:
     a tolerant id+abbreviation extraction that doesn't anchor at start.
     """
     out: dict[int, str] = {}
-    raw_text = path.read_bytes().decode("utf-8", errors="replace")
-    # Drop any non-ASCII chars (BOM, replacement chars, smart quotes).
+    raw_bytes = path.read_bytes()
+    # Pitt files mix encodings: Topics_List.txt is UTF-16 LE (\xff\xfe BOM),
+    # Sentiments/Strategies are UTF-8. Auto-detect by BOM.
+    if raw_bytes.startswith(b"\xff\xfe"):
+        raw_text = raw_bytes.decode("utf-16-le", errors="replace")
+    elif raw_bytes.startswith(b"\xfe\xff"):
+        raw_text = raw_bytes.decode("utf-16-be", errors="replace")
+    elif raw_bytes.startswith(b"\xef\xbb\xbf"):
+        raw_text = raw_bytes[3:].decode("utf-8", errors="replace")
+    else:
+        raw_text = raw_bytes.decode("utf-8", errors="replace")
+    # Drop any non-ASCII chars (smart quotes, residual BOM, replacement chars).
     text = ASCII_RE.sub(" ", raw_text)
     for line in text.splitlines():
         line = line.strip()
