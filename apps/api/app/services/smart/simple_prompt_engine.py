@@ -337,6 +337,13 @@ def _format_recipe_for_prompt(rec: Dict[str, Any]) -> str:
 _CLAUDE_MODEL = os.getenv("SIMPLE_ENGINE_MODEL", "claude-haiku-4-5-20251001")
 _MAX_TOKENS   = int(os.getenv("SIMPLE_ENGINE_MAX_TOKENS", "2200"))
 _TEMPERATURE  = float(os.getenv("SIMPLE_ENGINE_TEMPERATURE", "0.7"))
+
+# Self-critique pass (Gap C, May 3 2026). When ON, ad prompts run a 2nd
+# Haiku review that tightens the brief: shorter punchier headlines, removes
+# vague filler, ensures negative space is explicit. Adds ~1s + ~$0.0008 per
+# generation. Flag-controlled, defaults ON for ads only.
+_USE_SELF_CRITIQUE = os.getenv("USE_SELF_CRITIQUE", "true").lower() != "false"
+_CRITIQUE_MAX_TOKENS = int(os.getenv("SELF_CRITIQUE_MAX_TOKENS", "1200"))
 _USE_CACHING  = os.getenv("USE_PROMPT_CACHING", "true").lower() != "false"
 # Instructor auto-retries up to N times when Haiku violates the schema
 # (each retry appends the validation error to the conversation, so the model
@@ -368,13 +375,16 @@ AspectHint = Literal[
 class AdCopy(BaseModel):
     """On-image text rendered by the model. Empty strings when not relevant."""
 
-    # Core fields — backward-compatible with existing generate_stream.py consumers
-    headline: str = Field(default="", max_length=200,
-        description="Primary attention hook — the main large text on the image.")
-    subhead:  str = Field(default="", max_length=400,
-        description="Secondary line adding context below the headline.")
-    cta:      str = Field(default="", max_length=120,
-        description="Call-to-action (Shop Now / Register / Learn More). Empty for non-ad content.")
+    # Core fields - backward-compatible with existing generate_stream.py consumers.
+    # Length caps tightened May 3 2026 to match real ad-copy brevity (most
+    # high-converting ads use 2-5 word headlines per Pitt Image Ads dataset
+    # analysis). Image models render short text reliably, long text mangles.
+    headline: str = Field(default="", max_length=40,
+        description="Primary attention hook - 2-5 WORDS MAXIMUM, the main large text on the image. Ads with longer headlines render poorly. Examples: 'LIGHT AS AIR', 'BLOOD SUGAR CONTROLLED', 'CRAFT YOUR MOMENT'.")
+    subhead:  str = Field(default="", max_length=80,
+        description="Secondary line adding context below the headline - 5-10 WORDS MAXIMUM. Example: 'Flawless Everywhere'.")
+    cta:      str = Field(default="", max_length=25,
+        description="Call-to-action - 2-3 WORDS MAXIMUM (Shop Now / Book Today / Learn More). Empty for non-ad content.")
 
     # Extended fields — Art Director Brain additions
     benefit_lines: list[str] = Field(default_factory=list,
@@ -392,10 +402,30 @@ class VisualDirection(BaseModel):
 
     mood:             str = Field(default="", description="Emotional register: celebratory, intimate, punchy, serene, aspirational, gritty, dreamy, bold.")
     color_palette:    str = Field(default="", description="Primary + secondary + accent colors. Use craft vocabulary: 'warm cream 60%, deep olive 30%, brushed brass 10%'.")
+    color_psychology_intent: str = Field(default="", max_length=120, description=(
+        "WHY these colors were chosen - the emotional response targeted. Examples: "
+        "'urgency + appetite' (red+yellow for fast food), 'trust + professionalism' (deep blue for B2B), "
+        "'luxury + exclusivity' (black + gold for premium), 'calm + clean' (sage + cream for wellness), "
+        "'energy + youth' (electric + neon for Gen-Z). NEVER pick colors randomly - always state the intent."
+    ))
     lighting:         str = Field(default="", description="Light direction, quality, temperature: 'golden-hour backlight rim-lighting', 'overhead softbox with bounce'.")
     background:       str = Field(default="", description="Background environment or backdrop description.")
     composition:      str = Field(default="", description="Layout zones: where the hero sits, where text locks, negative space placement.")
-    typography_style: str = Field(default="", description="Font style guidance: 'bold condensed sans', 'elegant hand-lettered script', 'vintage slab serif'.")
+    visual_hierarchy: str = Field(default="", max_length=200, description=(
+        "How the eye should travel through the image. Pick ONE pattern and name elements by position: "
+        "'Z-pattern: brand top-left -> hero top-right -> benefits middle -> CTA bottom-right' (good for ads with multiple text blocks), or "
+        "'F-pattern: stacked left column - logo, headline, subhead, benefits, CTA - hero on right' (good for text-heavy posters), or "
+        "'Center-out: hero dead-center, headline above, CTA below' (good for minimalist 1-3 word ads). "
+        "Hero NEVER dead-center for non-minimalist - place it on a Rule-of-Thirds intersection."
+    ))
+    typography_style: str = Field(default="", max_length=200, description=(
+        "Font choice signals brand personality. Pick MAX 2 fonts (1 display for headline + 1 body for everything else, NEVER more than 2): "
+        "Serif (Times/Playfair) = trust, heritage, luxury, fashion. "
+        "Sans-Serif (Inter/Montserrat/Helvetica) = modern, tech, friendly, clean. "
+        "Script/handwritten = elegant, personal, wedding/boutique. "
+        "Slab serif (Roboto Slab) = bold, confident, editorial. "
+        "Format: 'display: bold condensed sans-serif (Helvetica Black) / body: clean sans (Inter Regular)'."
+    ))
 
 
 class SimpleEngineOutput(BaseModel):
@@ -462,6 +492,33 @@ class SimpleEngineOutput(BaseModel):
         ),
     )
 
+    # Phase-1 Strategy fields (May 3 2026 - 4-Phase Ad Creator Brain)
+    # These calibrate tone, urgency, and visual choices BEFORE design.
+    target_audience: str = Field(
+        default="",
+        max_length=140,
+        description=(
+            "Specific demographic + psychographic target. Examples: "
+            "'Gen-Z teens 16-22, mobile-first, trend-driven', "
+            "'Working moms 28-40, time-pressed, value quality + safety', "
+            "'Corporate executives 35-55, B2B buyers, trust signals critical', "
+            "'Affluent urban millennials 25-35, aspirational lifestyle'. "
+            "If user did not specify, INFER from product category + platform + cultural context. "
+            "Empty string ONLY when there is genuinely no target (pure scene/portrait)."
+        ),
+    )
+    objective: str = Field(
+        default="awareness",
+        description=(
+            "Primary commercial goal driving every design choice: "
+            "awareness (build brand recall - logo + emotional hook dominate, single bold visual, minimal text) | "
+            "conversion (drive immediate action - CTA prominent, urgency cues, price/discount visible) | "
+            "engagement (social interaction - curiosity hook, scroll-stop visual, swipe-up cue) | "
+            "education (inform/explain - benefit list visible, trust signals, longer copy ok) | "
+            "retention (reinforce existing customers - loyalty/insider tone, exclusive feel)"
+        ),
+    )
+
     # Structured copy and visual brief
     ad_copy: Optional[AdCopy] = Field(
         default=None,
@@ -488,6 +545,135 @@ _SYSTEM_PROMPT = """You are a world-class creative director AND art director. Yo
 # 5-LAYER ART DIRECTOR PROCESS — RUN THIS FOR EVERY REQUEST
 
 Before writing a single word, run all 5 layers silently in your head:
+
+# =================================================================
+# THE 4-PHASE AD CREATOR BRAIN
+# =================================================================
+# Every ad creator works through FOUR phases in this exact order:
+#   PHASE 1 - STRATEGY  (groundwork before any visual decision)
+#   PHASE 2 - VISUAL PSYCHOLOGY  (color/typo/hierarchy/lighting choices)
+#   PHASE 3 - COMPOSITION & LAYOUT  (negative space, rule of thirds)
+#   PHASE 4 - COPYWRITING & ACTION  (the hook + the CTA)
+#
+# Skipping a phase produces "AI slop" - technically valid but
+# emotionally empty. Walking the phases is what separates a
+# professional ad from a generic stock image.
+# =================================================================
+
+## PHASE 1 - STRATEGY: Decide BEFORE you design
+
+Before writing a single word of the prompt, fill these strategic fields:
+
+### 1A. TARGET AUDIENCE (`target_audience` field)
+Who will see this? The audience drives EVERY downstream choice - tone, palette, hierarchy, copy density.
+Be specific - not "everyone", but a concrete demographic + psychographic:
+
+- "Gen-Z teens 16-22, mobile-first, trend-driven, short attention" -> bright neon, asymmetric layout, 1-3 word hooks, meme-fluent
+- "Working moms 28-40, time-pressed, value safety + quality" -> warm trust palette, calm composition, benefit-led copy
+- "Corporate executives 35-55, B2B buyers, risk-averse" -> deep blue, sans-serif precision, trust signals (logos/numbers/badges) prominent
+- "Affluent urban millennials 25-35, aspirational lifestyle" -> editorial photography, neutral palette + 1 luxe accent, single bold serif headline
+- "Senior citizens 55+, healthcare consumers" -> high-contrast text, large legible fonts, clinical-clean palette, doctor/family imagery
+
+If the user did not specify the audience, INFER it from product category + platform + cultural cues. Do not leave this empty for ad intent.
+
+### 1B. OBJECTIVE (`objective` field) - decides everything visual
+This is the primary commercial goal. Each objective demands a different visual treatment:
+
+- **awareness** -> goal is brand recall. Logo + emotional hook dominate. Single bold visual. Minimal text. CTA optional or subtle. Examples: Coca-Cola "Open Happiness", Apple silhouette dancers.
+- **conversion** -> drive immediate action. CTA prominent + urgency cues (countdown / "TODAY ONLY" / discount %). Price visible if relevant. Trust badges visible. Examples: "Flat 50% Off Today", "Book Before Midnight".
+- **engagement** -> social interaction. Curiosity gap in headline ("The secret to..."), scroll-stop visual, swipe-up cue, comment bait.
+- **education** -> inform/explain. Benefit list visible, longer copy ok, before/after panels, infographic-style.
+- **retention** -> existing customers. Loyalty/insider tone, exclusive offer feel, "members only" vibe.
+
+ALWAYS state the objective in the prompt narrative so the image model knows what to emphasize. Example: "for an awareness campaign emphasizing brand recall through one bold visual" vs "for a conversion campaign with the discount badge and CTA front-and-center".
+
+### 1C. PLATFORM (`platform` field) - dictates aspect + safe zones
+Already covered by the DETECTED PLATFORM block (when present). Match the detected platform's aspect_hint, layout_note, text_rule, must_have. If no platform detected, infer from intent (story = 9:16, feed = 4:5, hoarding = landscape).
+
+---
+
+## PHASE 2 - VISUAL PSYCHOLOGY: Why these choices
+
+### 2A. COLOR PSYCHOLOGY (`visual.color_palette` + `visual.color_psychology_intent`)
+Colors are NEVER picked for "looking nice". Every palette signals an emotion. Use this map:
+
+- **Red** (urgency, hunger, passion, sale) -> fast food (KFC/Zomato), clearance ads, Netflix, news alerts
+- **Orange** (energy, warmth, friendly, accessible) -> Fanta, Home Depot, fitness brands
+- **Yellow** (optimism, attention, caution, food appetite) -> McDonald's, IKEA, taxi/delivery
+- **Green** (nature, wealth, health, eco, growth) -> Whole Foods, Mamaearth, banks (Citi), fintech (Robinhood), Spotify
+- **Blue** (trust, security, professionalism, calm) -> banks (Chase), tech (Meta/IBM/Samsung/PayPal), healthcare, B2B SaaS
+- **Purple** (luxury, creativity, royalty, spirituality) -> Hallmark, Cadbury, beauty brands
+- **Pink** (femininity, romance, playful, youth) -> beauty (Glossier), wellness, dating apps, Barbie
+- **Black + Gold** (luxury, exclusivity, premium, timeless) -> Rolex, premium spirits, high-end fashion (Chanel)
+- **White + soft pastels** (clean, minimal, modern, wellness, beauty) -> Apple, Glossier, skincare premium
+- **Earth tones** (cream, terracotta, olive, sage) -> sustainable, organic, ayurveda, artisanal, slow living
+- **Electric/neon** (energy, youth, futurist, tech) -> Gen-Z brands, gaming, crypto, fitness apps
+- **Black + neon accent** (techno-futurist B2B SaaS) -> AI/dev tools (Vercel, Linear), high-performance gear
+
+Always state WHY in `color_psychology_intent`. Examples:
+- "trust + professionalism" for B2B SaaS
+- "urgency + appetite" for QSR sale
+- "luxury + exclusivity" for premium watch
+- "calm + clinical safety" for medical
+- "vitality + youth" for energy drink
+
+### 2B. TYPOGRAPHY - MAX 2 FONTS RULE (`visual.typography_style`)
+A professional ad uses MAXIMUM 2 fonts (1 display for headline + 1 body for everything else). NEVER 3 or more. Mixing 3+ fonts looks amateur.
+
+Font personality map:
+- **Serif** (Playfair, Times, Merriweather) -> trust, heritage, luxury, fashion editorial, wedding, traditional brands
+- **Sans-Serif Geometric** (Inter, Geist, Helvetica, Montserrat) -> modern, clean, tech, friendly, B2B SaaS, startup
+- **Sans-Serif Condensed Bold** (Bebas Neue, Oswald, Anton) -> impact, sports, action, headlines that shout
+- **Slab Serif** (Roboto Slab, Rockwell) -> bold, confident, editorial, blog
+- **Script/Handwritten** (Pacifico, Dancing Script) -> elegant, personal, wedding, boutique cafe, beauty
+- **Display/Decorative** (only for headlines, never body) -> luxury cosmetics, music posters, niche brands
+- **Monospace** (JetBrains Mono, Fira Code) -> developer tools, technical, retro/terminal vibe
+
+Format the field as: `display: <display font choice> / body: <body font choice>` -- example: `display: bold condensed sans-serif (Bebas Neue) / body: clean sans (Inter Regular)`.
+
+### 2C. VISUAL HIERARCHY (`visual.visual_hierarchy`) - guide the eye
+Decide HOW the eye should travel across the image. Pick one pattern and name elements by position:
+
+- **Z-pattern** (best for ads with logo + headline + supporting + CTA): brand top-left -> headline top-right -> benefits middle -> CTA bottom-right. Eye moves naturally L->R, top->bottom.
+- **F-pattern** (best for text-heavy posters, social posts with details): stacked LEFT column - logo, headline, subhead, benefits, CTA - hero photo on RIGHT side. Western reading habit.
+- **Center-out** (best for minimalist 1-3 word ads): hero dead-center, headline above OR below, single CTA below. Use ONLY when content is genuinely minimal.
+
+**Rule of Thirds**: For non-minimalist ads, NEVER place the hero dead-center. Place it on a Rule-of-Thirds intersection (1/3 from any edge) - the image feels dynamic, not static. State this explicitly in the prompt: "the hero product positioned at the right-third intersection".
+
+### 2D. MOOD + LIGHTING (already covered) - matches audience + palette
+Recap: lighting carries emotion. Energy drink = high-contrast neon. Skincare = soft natural. Coffee = warm golden. Tech = clean diffused. Always match lighting to mood + palette consistency.
+
+---
+
+## PHASE 3 - COMPOSITION & LAYOUT
+
+Already enforced via the formatters' NEGATIVE SPACE blocks. Repeat in your `prompt`:
+- Reserve 35%+ as clean copy space behind text
+- Background DIRECTLY behind every quoted text string must be calm/low-contrast
+- State "Rule of Thirds intersection for hero" when composition is non-minimalist
+
+---
+
+## PHASE 4 - COPYWRITING & ACTION
+
+### 4A. The HOOK (the headline)
+The headline must pass the THUMB TEST: would a user STOP scrolling at this in 200ms?
+
+Hook patterns that work:
+- **Curiosity gap**: "The secret nobody tells you about..."
+- **Bold benefit**: "LIGHT AS AIR." (myPowder)
+- **Problem name**: "Tired of dull skin?"
+- **Bold claim with proof**: "10x faster than the competition"
+- **Cultural shorthand**: "BEAST MODE", "GLOW UP", "NO BS"
+
+Apply HERO HEADLINE RULE (2-5 words max) - covered below in Layer 2.
+
+### 4B. The CTA
+Every conversion/engagement ad MUST have a clear CTA verb. Pure-awareness ads can skip it.
+Verbs that convert: Shop Now / Buy Today / Book Free Consultation / Get the App / Learn More / Sign Up / Claim Discount.
+Always pair the CTA with placement: "bottom-center pill button reading 'Shop Now' in the brand accent color, on a calm clean surface for legibility".
+
+---
 
 ## LAYER 1 — STRATEGIC: What is this?
 Identify the content type precisely. It matters because each type has different rules:
@@ -1945,6 +2131,24 @@ class SimplePromptEngine:
             # max_retries exhausts). No more loose-JSON parsing.
             output: SimpleEngineOutput = await asyncio.to_thread(self._call_sync, user_msg)
 
+            # STAGE 2.5 - Critique pass via GEMINI (per project rule: Haiku
+            # owns enrichment; Gemini owns all other LLM steps). Only runs
+            # for ad intent where headline tightness + copy-space matter.
+            # 10-point checklist covering all 4 phases of the ad-creator
+            # framework. Adds ~$0.0001 + ~1.5s. Failure is non-fatal.
+            if _USE_SELF_CRITIQUE and bool(classification.get("is_ad")):
+                critique_start = time.time()
+                improved = await self._critique_with_gemini(output, user_prompt, classification)
+                logger.info(
+                    "[critique] (%.2fs) headline: %r -> %r | objective=%s audience=%r",
+                    time.time() - critique_start,
+                    (output.ad_copy.headline if output.ad_copy else "") or "",
+                    (improved.ad_copy.headline if improved.ad_copy else "") or "",
+                    improved.objective,
+                    (improved.target_audience or "")[:60],
+                )
+                output = improved
+
             # ORDER MATTERS: sanitize FIRST, then fill empty quotes.
             # Reason: _sanitize_prompt has a CTA-verb stripper ("Shop Now",
             # "Click here", etc — line ~674) that would re-empty any quoted
@@ -1970,12 +2174,15 @@ class SimplePromptEngine:
                 "intent":               output.intent.strip() or "general",
                 "aspect_hint":          output.aspect_hint,
                 "ad_copy":              ad_copy_dict,
-                # Art Director Brain — new fields
+                # Art Director Brain — campaign intelligence
                 "campaign_type":        output.campaign_type or "general",
                 "subject_category":     output.subject_category or "general",
                 "platform":             output.platform or "general",
                 "copywriting_formula":  output.copywriting_formula or "simple",
                 "visual":               visual_dict,
+                # Phase-1 Strategy fields (May 3 2026 - 4-Phase Ad Creator Brain)
+                "target_audience":      output.target_audience or "",
+                "objective":            output.objective or "awareness",
                 # Stage-1 classifier output (Gemini) -- generate_stream uses
                 # `classification.bucket` to override keyword-based detection.
                 "classification":       classification,
@@ -2037,6 +2244,140 @@ class SimplePromptEngine:
             response_model=SimpleEngineOutput,
             max_retries=_INSTRUCTOR_MAX_RETRIES,
         )
+
+    async def _critique_with_gemini(
+        self, draft: SimpleEngineOutput, user_prompt: str, classification: Dict[str, Any]
+    ) -> SimpleEngineOutput:
+        """Stage-2.5 critique pass via Gemini 2.5 Flash.
+
+        Per project decision (May 3 2026): Haiku owns prompt enrichment; Gemini
+        owns ALL other LLM steps (intent classification + critique + future
+        review tasks). Same model that already classified the intent reviews
+        the Haiku draft against a 10-point ad-creator checklist covering all
+        4 phases (Strategy / Visual Psychology / Composition / Copy).
+
+        Returns the improved SimpleEngineOutput. Failure non-fatal - returns
+        the original draft so the pipeline never breaks.
+
+        Cost / latency: ~$0.0001 + ~1.5s per ad generation (Gemini 2.5 Flash
+        with response_mime_type=json, ~600 input + ~800 output tokens).
+        """
+        try:
+            from app.services.smart.design_agent_chain import _get_gemini_client
+            from google.genai import types
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[critique] google-genai unavailable: %s -- skipping critique", e)
+            return draft
+
+        # Pull every relevant draft field for the review.
+        ac = draft.ad_copy
+        vis = draft.visual
+        review_msg = (
+            f"USER ORIGINAL REQUEST:\n{user_prompt.strip()}\n\n"
+            f"INTENT CLASSIFIER (from Stage-1 Gemini):\n"
+            f"  bucket={classification.get('bucket')}, category={classification.get('category_key')}, "
+            f"is_ad={classification.get('is_ad')}, has_text={classification.get('has_text')}, "
+            f"platform={classification.get('platform')}\n\n"
+            f"HAIKU FIRST DRAFT (review and improve - DO NOT start over):\n"
+            f"=== prompt (image-gen prompt) ===\n{draft.prompt[:2000]}\n\n"
+            f"=== ad_copy ===\n"
+            f"  headline:          {(ac.headline if ac else '') or '(empty)'}\n"
+            f"  subhead:           {(ac.subhead if ac else '') or '(empty)'}\n"
+            f"  cta:               {(ac.cta if ac else '') or '(empty)'}\n"
+            f"  benefit_lines:     {(ac.benefit_lines if ac else []) or '(empty)'}\n"
+            f"  trust_signals:     {(ac.trust_signals if ac else []) or '(empty)'}\n"
+            f"  emotional_tagline: {(ac.emotional_tagline if ac else None) or '(empty)'}\n"
+            f"  brand_name:        {(ac.brand_name if ac else None) or '(empty)'}\n\n"
+            f"=== visual ===\n"
+            f"  mood:                     {(vis.mood if vis else '') or '(empty)'}\n"
+            f"  color_palette:            {(vis.color_palette if vis else '') or '(empty)'}\n"
+            f"  color_psychology_intent:  {(vis.color_psychology_intent if vis else '') or '(empty)'}\n"
+            f"  lighting:                 {(vis.lighting if vis else '') or '(empty)'}\n"
+            f"  background:               {(vis.background if vis else '') or '(empty)'}\n"
+            f"  composition:              {(vis.composition if vis else '') or '(empty)'}\n"
+            f"  visual_hierarchy:         {(vis.visual_hierarchy if vis else '') or '(empty)'}\n"
+            f"  typography_style:         {(vis.typography_style if vis else '') or '(empty)'}\n\n"
+            f"=== strategy ===\n"
+            f"  target_audience:     {draft.target_audience or '(empty - INFER and fill)'}\n"
+            f"  objective:           {draft.objective or 'awareness'}\n"
+            f"  campaign_type:       {draft.campaign_type}\n"
+            f"  copywriting_formula: {draft.copywriting_formula}\n\n"
+            "===== REVIEW CHECKLIST (10 points - apply ALL) =====\n\n"
+            "PHASE 1 - STRATEGY:\n"
+            "  1. target_audience: must be specific demographic + psychographic. If empty for an ad, infer from product+platform. NOT 'everyone'.\n"
+            "  2. objective: must be one of {awareness, conversion, engagement, education, retention}. Verify the prompt's emphasis matches the objective (conversion -> CTA must be prominent in prompt narrative; awareness -> brand mark + emotional hook dominate).\n\n"
+            "PHASE 2 - VISUAL PSYCHOLOGY:\n"
+            "  3. color_psychology_intent: must state WHY the palette was chosen ('trust + professionalism', 'urgency + appetite', 'luxury + exclusivity'). NEVER empty for ads.\n"
+            "  4. typography_style: format MUST be 'display: <font> / body: <font>'. MAX 2 fonts total. Reject any draft with 3+ fonts named.\n"
+            "  5. visual_hierarchy: must explicitly name the pattern (Z-pattern / F-pattern / center-out) AND positions of each named element. For non-minimalist ads, hero MUST sit on a Rule-of-Thirds intersection (not dead-center).\n\n"
+            "PHASE 3 - COMPOSITION:\n"
+            "  6. The `prompt` must explicitly reserve a clean copy-space zone (35%+ of canvas). State location: 'clean uncluttered area on the LEFT third' / 'calm low-detail upper half'.\n"
+            "  7. The background DIRECTLY behind every quoted text string must be stated as calm/low-contrast in the prompt narrative.\n\n"
+            "PHASE 4 - COPYWRITING:\n"
+            "  8. headline: 2-5 WORDS MAX (Nike-level). If longer, rewrite punchier. Pass the THUMB TEST - would a user STOP scrolling at this in 200ms?\n"
+            "  9. cta: 2-3 WORDS MAX, action verb ('Shop Now', 'Book Today', 'Learn More'). For conversion objective MUST be present.\n"
+            " 10. benefit_lines: each entry 2-3 words MAX (icon-badge format). Reject full sentences in this list.\n\n"
+            "===== HARD ANTI-PATTERNS (must remove) =====\n"
+            "  A. NO markdown chars (#, *, _, `, ~) inside any \"...\" quoted text in the prompt.\n"
+            "  B. NO structural nouns ('headline', 'subhead', 'caption', 'tagline', 'CTA') describing TEXT inside the prompt - describe by visual size/position only.\n"
+            "  C. NO vague filler ('amazing', 'great', 'best ever', 'truly', 'really') - replace with concrete imagery.\n"
+            "  D. Keep the same intent + brand + scene structure. Tighten + clarify - do NOT redesign.\n\n"
+            "Return the IMPROVED draft as a JSON object with EXACTLY this shape (every key required, omit nothing):\n"
+            "{\n"
+            '  "intent": "...",\n'
+            '  "prompt": "...",\n'
+            '  "negative_prompt": "...",\n'
+            '  "aspect_hint": "square_hd|portrait_4_3|landscape_4_3|portrait_9_16|landscape_16_9",\n'
+            '  "campaign_type": "...",\n'
+            '  "subject_category": "...",\n'
+            '  "platform": "...",\n'
+            '  "copywriting_formula": "AIDA|PAS|BAB|simple",\n'
+            '  "target_audience": "...",\n'
+            '  "objective": "awareness|conversion|engagement|education|retention",\n'
+            '  "ad_copy": {"headline":"...","subhead":"...","cta":"...","benefit_lines":[],"trust_signals":[],"emotional_tagline":null,"brand_name":null},\n'
+            '  "visual": {"mood":"...","color_palette":"...","color_psychology_intent":"...","lighting":"...","background":"...","composition":"...","visual_hierarchy":"...","typography_style":"..."}\n'
+            "}\n"
+            "Output JSON only - no prose, no markdown fences."
+        )
+
+        try:
+            client = _get_gemini_client()
+            resp = await client.aio.models.generate_content(
+                model=_CLASSIFIER_MODEL,
+                contents=[{"role": "user", "parts": [{"text": review_msg}]}],
+                config=types.GenerateContentConfig(
+                    temperature=0.4,
+                    max_output_tokens=_CRITIQUE_MAX_TOKENS,
+                    response_mime_type="application/json",
+                ),
+            )
+            raw = (resp.text or "").strip()
+            if not raw:
+                finish = resp.candidates[0].finish_reason if resp.candidates else "UNKNOWN"
+                logger.warning("[critique] empty Gemini response (finish=%s) -- keeping draft", finish)
+                return draft
+            if raw.startswith("```"):
+                raw = re.sub(r"^```(?:json)?\s*|\s*```\s*$", "", raw, flags=re.MULTILINE).strip()
+            first, last = raw.find("{"), raw.rfind("}")
+            if first != -1 and last != -1 and last > first:
+                raw = raw[first:last + 1]
+            data = json.loads(raw)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[critique] gemini call failed: %s -- keeping draft", e)
+            return draft
+
+        # Validate the improved JSON against the same Pydantic schema. If the
+        # critique broke any constraint, fall back to the draft.
+        try:
+            improved = SimpleEngineOutput.model_validate(data)
+        except ValidationError as ve:
+            logger.warning(
+                "[critique] gemini output failed Pydantic validation (%d issues) -- keeping draft: %s",
+                ve.error_count(), ve.errors()[:2],
+            )
+            return draft
+
+        return improved
 
 
 # Singleton

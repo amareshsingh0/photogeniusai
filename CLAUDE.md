@@ -238,6 +238,60 @@ IMAGE MODEL
 
 **Bucket detection in `generate_stream.py`**: All 4 call sites of `detect_capability_bucket` are now wrapped in `await classify_intent(prompt)` first - keyword detection is the fallback only.
 
+---
+
+## AD QUALITY UPGRADES (May 3 2026)
+
+Five gap-closing improvements deployed together to narrow the gap with ChatGPT/Gemini's native ad outputs:
+
+**A. Negative-space directives in every formatter** - GPT formatter has explicit `NEGATIVE SPACE:` bullet, Imagen formatter adds a dedicated copy-space sentence, Flux + Wan AD-mode formatters bake "clean uncluttered area on one side of the frame" into the prompt.
+
+**B. Pydantic hard caps on text lengths** - `headline` max 40 chars (2-5 words), `subhead` max 80 (5-10), `cta` max 25 (2-3). Previously 200/400/120. Forces Nike-level brevity at the schema layer.
+
+**D. Flux + Wan formatters rewritten** - Both used to be near-passthroughs of Haiku output. Now they construct AD-mode prompts from `simple_payload` structured fields, with research-grade templates: Flux gets 85mm camera physics + negative-space + max 4 short text strings. Wan gets `/imagine prompt:`-style scene narrative + max 1 short headline (Wan can't render longer text reliably). Both keep SCENE-mode passthrough for non-ad prompts.
+
+**E. Background-behind-text clauses** - Each text-element bullet in GPT formatter now ends with "background DIRECTLY behind these letters must be a clean uncluttered surface". Same idea woven into Imagen's negative-space sentence.
+
+**C. Stage-2.5 critique pass (now via GEMINI)** - Per project rule: Haiku owns prompt enrichment, Gemini owns ALL other LLM steps. The critique pass calls Gemini 2.5 Flash with a 10-point checklist covering all 4 phases of the ad-creator framework. Only fires when `classification.is_ad == True`. Flag: `USE_SELF_CRITIQUE` (default `true`). +$0.0001 / +~1.5s per ad generation. Failure non-fatal (keeps draft).
+
+---
+
+## 4-PHASE AD CREATOR BRAIN (May 3 2026)
+
+The full ad-creator mental model now baked into the system prompt + schema + formatters + critique. Every ad walks through 4 phases - skipping any phase produces "AI slop" (technically valid, emotionally empty).
+
+**PHASE 1 - STRATEGY** (decisions made BEFORE any visual choice)
+- `target_audience` (new field) - specific demographic + psychographic. Examples: "Gen-Z teens 16-22, mobile-first, trend-driven", "Corporate executives 35-55, B2B buyers".
+- `objective` (new field) - one of awareness | conversion | engagement | education | retention. Drives EVERY visual choice (conversion -> CTA dominant; awareness -> brand mark + emotional hook dominate; etc).
+- `platform` (existing) - dictates aspect ratio + safe zones via PLATFORM_SPECS.
+
+**PHASE 2 - VISUAL PSYCHOLOGY** (why each design choice)
+- `color_psychology_intent` (new field) - WHY these colors were chosen ('trust + professionalism', 'urgency + appetite', 'luxury + exclusivity'). Never empty for ads.
+- Color map in system prompt: red=urgency/hunger, blue=trust/B2B, green=eco/wealth, black+gold=luxury, etc.
+- `typography_style` (tightened) - format `display: <font> / body: <font>`. MAX 2 fonts total (1 display + 1 body). Mixing 3+ = amateur.
+- `visual_hierarchy` (new field) - Z-pattern | F-pattern | center-out, named with element positions. Hero placed on Rule-of-Thirds intersection (NEVER dead-center for non-minimalist).
+
+**PHASE 3 - COMPOSITION** (already enforced)
+- 35%+ negative space reservation in every formatter
+- Clean background DIRECTLY behind quoted text strings
+- Rule of Thirds explicit in hierarchy field
+
+**PHASE 4 - COPYWRITING** (already enforced)
+- Headline 2-5 words MAX (Pydantic + system prompt + critique)
+- Pass the THUMB TEST (would a user STOP at 200ms?)
+- CTA 2-3 words, action verb, mandatory for conversion objective
+
+## LLM ROLE SPLIT (May 3 2026 - project rule)
+
+| Stage | Model | Purpose |
+|---|---|---|
+| 1. Intent classification | Gemini 2.5 Flash | bucket + category_key + has_text + is_ad + platform |
+| 2. Prompt enrichment | Claude Haiku 4.5 | structured ad brief generation (the ONLY Haiku call) |
+| 2.5. Critique pass | Gemini 2.5 Flash | 10-point ad-creator checklist review of Haiku draft |
+| 3. Per-model formatting | (deterministic Python) | model dialect translation |
+
+Rule: Haiku owns prompt enrichment ONLY. Every other LLM step (classification, critique, future review/judging tasks) uses Gemini.
+
 **Regenerate mined data** (run on server where datasets live):
 ```bash
 cd ~/PhotoGenius-AI/apps/api && source venv/bin/activate

@@ -293,6 +293,10 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     subject_category: str = payload.get("subject_category", "general")
     intent:           str = (payload.get("intent") or "").strip()
 
+    # Phase-1 strategy fields (May 3 2026 - 4-Phase Ad Creator Brain)
+    target_audience: str = (payload.get("target_audience") or "").strip()
+    objective:       str = (payload.get("objective") or "awareness").strip().lower()
+
     headline   = (ad_copy.get("headline") or "").strip()
     subhead    = (ad_copy.get("subhead") or "").strip()
     cta        = (ad_copy.get("cta") or "").strip()
@@ -303,10 +307,12 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     mood        = (visual.get("mood") or "").strip()
     palette     = (visual.get("color_palette") or "").strip()
+    psy_intent  = (visual.get("color_psychology_intent") or "").strip()
     lighting    = (visual.get("lighting") or "").strip()
     composition = (visual.get("composition") or "").strip()
     background  = (visual.get("background") or "").strip()
     typo        = (visual.get("typography_style") or "").strip()
+    hierarchy   = (visual.get("visual_hierarchy") or "").strip()
 
     persona_specialty = {
         "beauty":      "luxury beauty and cosmetics campaigns",
@@ -322,6 +328,15 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     cat_label  = subject_category.replace("_", " ") if subject_category != "general" else "consumer"
     intent_phrase = intent.replace("_", " ") if intent and intent != "general" else camp_label
 
+    # Objective -> emphasis hint that calibrates what the model should foreground.
+    objective_emphasis = {
+        "awareness":  "emphasizing brand recall through one bold iconic visual and a confident emotional hook (logo and headline dominate; CTA is secondary or omitted)",
+        "conversion": "engineered to drive immediate action with the call-to-action button visually prominent, urgency cues visible (limited-time, discount, badge), and trust signals present near the CTA",
+        "engagement": "designed to stop the scroll with a curiosity hook and a single dominant visual that invites the viewer to swipe, comment, or save",
+        "education":  "structured to inform clearly with a benefit list visible, supporting evidence near the headline, and trust signals at the bottom",
+        "retention":  "tuned to feel exclusive and insider for existing customers, with loyalty/exclusive cues and a personalized warm tone",
+    }.get(objective, "engineered for clear brand communication")
+
     sections: list[str] = []
 
     # Persona prefix
@@ -330,6 +345,15 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
         f"{persona_specialty}."
     )
 
+    # PHASE 1 - STRATEGY brief (audience + objective)
+    strategy_bits: list[str] = []
+    if target_audience:
+        strategy_bits.append(f"- TARGET AUDIENCE: {target_audience}")
+    strategy_bits.append(f"- PRIMARY OBJECTIVE: {objective} ({objective_emphasis})")
+    if campaign_type and campaign_type != "general":
+        strategy_bits.append(f"- CAMPAIGN TYPE: {campaign_type.replace('_', ' ')}")
+    sections.append("STRATEGY BRIEF:\n" + "\n".join(strategy_bits))
+
     # PRIMARY COMMAND
     subject_phrase = f"the {cat_label} category" if cat_label != "consumer" else "a consumer brand"
     if brand_name:
@@ -337,8 +361,8 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     sections.append(
         "PRIMARY COMMAND:\n"
         f"Generate a single, cohesive image of a polished {intent_phrase} for "
-        f"{subject_phrase}. Single unified composition - no panels, no variants, "
-        "no collage. Render as a finished print-ready advertisement."
+        f"{subject_phrase}, {objective_emphasis}. Single unified composition - "
+        "no panels, no variants, no collage. Render as a finished print-ready advertisement."
     )
 
     # TEXT ELEMENTS TO RENDER (key/value list)
@@ -378,6 +402,38 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     )
     layout_lines.append(f"- COMPOSITION: {composition or comp_default}")
 
+    # VISUAL HIERARCHY - Phase 2C of the ad-creator framework. Names the
+    # eye-travel pattern and element positions so the model knows where each
+    # text element + the hero photo go. Also enforces Rule of Thirds.
+    if hierarchy:
+        layout_lines.append(f"- VISUAL HIERARCHY: {hierarchy}")
+    else:
+        layout_lines.append(
+            "- VISUAL HIERARCHY: Z-pattern - brand mark top-left, hero headline "
+            "in the upper-right region, supporting copy in the middle, "
+            "call-to-action at the bottom-right. Hero product placed on the "
+            "right-third Rule-of-Thirds intersection (NOT dead-center)."
+        )
+
+    # NEGATIVE SPACE / COPY SPACE - critical for typography legibility.
+    layout_lines.append(
+        "- NEGATIVE SPACE: Reserve at least 35% of the canvas as clean, "
+        "uncluttered copy space (where the headline lockup sits) - either the "
+        "upper half, the left third, or wherever the primary text region is "
+        "placed. The background DIRECTLY behind every text element must be a "
+        "calm, low-contrast surface (solid color, soft gradient, or out-of-"
+        "focus area) so each letter reads cleanly with no visual interference."
+    )
+
+    # COLOR PSYCHOLOGY - Phase 2A. Tells the model WHY this palette was chosen.
+    if palette and psy_intent:
+        layout_lines.append(
+            f"- COLOR PSYCHOLOGY: Use the palette {palette} - chosen to signal "
+            f"{psy_intent}. Color choices must reinforce this emotional intent."
+        )
+    elif palette:
+        layout_lines.append(f"- COLOR PALETTE: {palette}")
+
     if background:
         layout_lines.append(f"- PRODUCT: A high-resolution product photograph. {background}")
     else:
@@ -401,7 +457,9 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     if headline:
         layout_lines.append(
             "- HEADLINE PLACEMENT: Center the HERO_HEADLINE in the upper-middle text region, "
-            "in large bold uppercase condensed sans-serif. Dominant text element."
+            "in large bold uppercase condensed sans-serif. Dominant text element. "
+            "The background DIRECTLY behind these letters must be a clean uncluttered "
+            "surface so every character is fully legible and crisp."
         )
 
     if subhead:
@@ -430,7 +488,8 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     if cta:
         layout_lines.append(
             "- CTA PLACEMENT: At the bottom-center, render the CALL_TO_ACTION as either an elegant "
-            "script-style line of text or a prominent pill-shaped button in the brand accent color."
+            "script-style line of text or a prominent pill-shaped button in the brand accent color. "
+            "Place it on a calm, contrasting surface so the words read instantly from a thumbnail."
         )
 
     if signals:
@@ -440,15 +499,24 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
             "in small-caps or tracked sans-serif."
         )
 
+    # TYPOGRAPHY (Phase 2B) - explicit max-2-fonts directive.
+    if typo:
+        layout_lines.append(
+            f"- TYPOGRAPHY: {typo}. Use a MAXIMUM of 2 distinct fonts in the "
+            "entire image (1 display for headlines + 1 body for everything "
+            "else). Never mix 3 or more font families - that is amateur."
+        )
+    else:
+        layout_lines.append(
+            "- TYPOGRAPHY: Pair one bold display font for the headline with "
+            "one clean sans-serif for body and small text. MAX 2 fonts total."
+        )
+
     style_parts: list[str] = []
     if mood:
         style_parts.append(mood)
-    if palette:
-        style_parts.append(f"palette of {palette}")
     if lighting:
         style_parts.append(lighting)
-    if typo:
-        style_parts.append(f"typography: {typo}")
     style_parts.append("premium commercial photography quality")
     layout_lines.append("- STYLE AND TONE: " + ", ".join(style_parts) + ".")
 
@@ -481,23 +549,114 @@ def _format_for_flux(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     We strip designer-brief vocab that Flux misinterprets as literal text to
     render on the image, while keeping camera + lighting + scene details.
+    Round 4: rebuild from structured payload for AD intent (research-grade
+    template) instead of just stripping the Haiku output.
     """
-    ad_copy: Optional[Dict] = payload.get("ad_copy")
+    ad_copy: Optional[Dict] = payload.get("ad_copy") or {}
+    visual:  Optional[Dict] = payload.get("visual") or {}
 
-    # Strip layout/composition jargon that confuses Flux
-    cleaned = _FLUX_STRIP.sub("", base_prompt)
+    # Pure scene (no ad copy) - just clean Haiku's prompt and return.
+    if not _is_ad_intent(payload):
+        cleaned = _FLUX_STRIP.sub("", base_prompt)
+        cleaned = re.sub(r"  +", " ", cleaned).strip()
+        logger.info("[formatter][flux/scene] %d->%d chars", len(base_prompt), len(cleaned))
+        return cleaned
+
+    # AD MODE - construct a Flux-native ad prompt from structured data.
+    headline = (ad_copy.get("headline") or "").strip()
+    subhead  = (ad_copy.get("subhead") or "").strip()
+    cta      = (ad_copy.get("cta") or "").strip()
+    brand    = (ad_copy.get("brand_name") or "").strip()
+
+    mood       = (visual.get("mood") or "polished").split(",")[0].strip()
+    palette    = (visual.get("color_palette") or "").strip()
+    psy_intent = (visual.get("color_psychology_intent") or "").strip()
+    lighting   = (visual.get("lighting") or "").strip()
+    background = (visual.get("background") or "").strip()
+    hierarchy  = (visual.get("visual_hierarchy") or "").strip()
+    subject_category = (payload.get("subject_category") or "general").strip()
+    target_audience  = (payload.get("target_audience") or "").strip()
+    objective        = (payload.get("objective") or "awareness").strip().lower()
+
+    parts: list[str] = []
+
+    # Scene opener (photographic, not designer) + audience tone
+    cat_clean = subject_category.replace("_", " ") if subject_category != "general" else "product"
+    opener = f"A {mood} commercial photograph of the {brand} {cat_clean}" if brand else f"A {mood} commercial product photograph"
+    if target_audience:
+        ta = target_audience.split(",")[0].split(";")[0].strip()
+        if ta and len(ta) <= 80:
+            opener += f" aimed at {ta}"
+    parts.append(opener)
+
+    # Objective-specific emphasis
+    if objective == "conversion":
+        parts.append("composed to drive immediate action with the call-to-action visually dominant")
+    elif objective == "awareness":
+        parts.append("composed around one bold iconic visual for brand recall")
+    elif objective == "engagement":
+        parts.append("composed as a single scroll-stopping shot with curiosity-driving framing")
+
+    # Background environment (Flux loves scene physics)
+    if background:
+        bg_clean = _FLUX_STRIP.sub("", background).strip()
+        if bg_clean:
+            parts.append(f"set against {bg_clean}")
+
+    # Lighting (Flux excels at light physics)
+    if lighting:
+        lt_clean = _FLUX_STRIP.sub("", lighting).strip()
+        if lt_clean:
+            parts.append(f"lit with {lt_clean}")
+    else:
+        parts.append("lit with soft diffused studio lighting from the upper left")
+
+    parts.append("captured on an 85mm lens at f/4 with shallow background falloff, sharp on the product, ultra-detailed, photorealistic")
+
+    # NEGATIVE SPACE - Flux understands "leave room" well in natural language
+    parts.append(
+        "with a large clean uncluttered area on one side of the frame for the text, "
+        "the surface behind every word kept calm and low-contrast for crisp legibility"
+    )
+
+    # Visual hierarchy - Flux respects positional cues. Strip designer vocab.
+    if hierarchy:
+        h_clean = _FLUX_STRIP.sub("", hierarchy).strip().rstrip(",.;:")
+        if h_clean and len(h_clean) <= 200:
+            parts.append(f"composition follows a {h_clean}")
+
+    # Text rendering - keep text strings short, in quotes (Flux 2 renders 1-3 short strings well)
+    text_bits: list[str] = []
+    if brand:
+        text_bits.append(f'the brand mark "{brand}" in a small refined typeface in the top corner')
+    if headline:
+        text_bits.append(f'a large bold headline reading "{headline}" in the clean text area')
+    if subhead and len(subhead.split()) <= 8:
+        text_bits.append(f'a smaller line beneath reading "{subhead}"')
+    if cta:
+        text_bits.append(f'a prominent button at the bottom reading "{cta}"')
+
+    if text_bits:
+        parts.append("Text on the image: " + "; ".join(text_bits) + ".")
+
+    # Palette + color psychology intent (Phase 2A)
+    if palette:
+        # Strip percent breakdowns - Flux renders them literally
+        pal_clean = re.sub(r"\s*\d{1,3}\s*%", "", palette).strip().rstrip(",.;:")
+        if pal_clean:
+            if psy_intent:
+                parts.append(f"Palette: {pal_clean} - signaling {psy_intent}")
+            else:
+                parts.append(f"Palette: {pal_clean}")
+
+    # Quality anchors
+    parts.append("8k, commercial advertising photography, single unified composition")
+
+    cleaned = ". ".join(p.rstrip(".") for p in parts if p) + "."
+    cleaned = _FLUX_STRIP.sub("", cleaned)
     cleaned = re.sub(r"  +", " ", cleaned).strip()
 
-    # If text is needed and ad_copy has a headline, append a simple text hint
-    if ad_copy:
-        headline = (ad_copy.get("headline") or "").strip()
-        cta      = (ad_copy.get("cta") or "").strip()
-        if headline and f'"{headline}"' not in cleaned:
-            cleaned += f' Text overlay: "{headline}"'
-            if cta:
-                cleaned += f' with "{cta}" button below.'
-
-    logger.info("[formatter][flux] %d->%d chars", len(base_prompt), len(cleaned))
+    logger.info("[formatter][flux/ad] %d->%d chars", len(base_prompt), len(cleaned))
     return cleaned
 
 
@@ -659,12 +818,16 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     mood          = (visual.get("mood") or "").strip()
     palette       = (visual.get("color_palette") or "").strip()
+    psy_intent    = (visual.get("color_psychology_intent") or "").strip()
     lighting      = (visual.get("lighting") or "").strip()
     background    = (visual.get("background") or "").strip()
+    hierarchy     = (visual.get("visual_hierarchy") or "").strip()
 
     intent: str          = (payload.get("intent") or "").strip()
     campaign_type        = (payload.get("campaign_type") or "general").strip()
     subject_category     = (payload.get("subject_category") or "general").strip()
+    target_audience      = (payload.get("target_audience") or "").strip()
+    objective            = (payload.get("objective") or "awareness").strip().lower()
 
     # Subject  -  what the image is OF. Pull from category first (more concrete),
     # then a clean intent if it's not a generic word like "ad"/"poster"/"general".
@@ -682,7 +845,7 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     sentences: list[str] = []
 
-    # -- 1. Opening framing (mood + category + subject) ----------------------------------------------------------------------
+    # -- 1. Opening framing (mood + category + subject + audience tone) -----
     mood_word = mood.split(",")[0].strip() if mood else "polished"
     # Pick correct article (a/an) based on first vowel of mood_word.
     article = "an" if mood_word and mood_word[0].lower() in "aeiou" else "a"
@@ -701,13 +864,39 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
             opener += f" {subject_phrase}"
     elif subject_phrase and sp_lower != "product":
         opener += f" for {subject_phrase}"
+
+    # Audience tone - woven in as adjective phrase, not as a separate sentence
+    # (keeps Imagen narrative natural). Truncate long audience to first phrase.
+    if target_audience:
+        ta = target_audience.split(",")[0].split(";")[0].strip()
+        if ta and len(ta) <= 80:
+            opener += f" aimed at {ta}"
     sentences.append(opener + ".")
+
+    # Objective hint - tells Imagen what to emphasize without structural words.
+    if objective == "conversion":
+        sentences.append("The composition foregrounds the call-to-action prominently with urgency cues nearby for immediate response.")
+    elif objective == "awareness":
+        sentences.append("The composition is built around one bold iconic visual and a confident emotional anchor that builds brand recall.")
+    elif objective == "engagement":
+        sentences.append("The composition uses a single dominant scroll-stopping visual and a curiosity hook to invite interaction.")
+    elif objective == "education":
+        sentences.append("The composition presents clear supporting information arranged hierarchically with trust signals visible.")
 
     # -- 2. Background / scene base ----------------------------------------------------------------------
     if background:
         bg_clean = _IMAGEN_DESIGNER_VOCAB.sub("", background).strip()
         if bg_clean:
             sentences.append(f"The background is {bg_clean}.")
+
+    # NEGATIVE SPACE: explicit copy-space sentence so Imagen reserves a clean
+    # zone for the headline. Wording carefully avoids structural nouns like
+    # "line of text", "headline", "caption" that Imagen renders LITERALLY on
+    # the canvas (see Apr 24 2026 bug log on multi_provider_client.py).
+    sentences.append(
+        "A large clean uncluttered area covers at least one third of the image "
+        "with a calm low-detail surface so every word reads cleanly and crisply."
+    )
 
     # -- 3. Top-down spatial walk-through ----------------------------------------------------------------------
     # Top-left: brand mark (if brand exists)
@@ -769,18 +958,32 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
             f"each labeled with one of: {signal_labels}."
         )
 
-    # -- 4. Closing aesthetic anchor (palette + lighting) ----------------------------------------------------------------------
+    # -- 4. Closing aesthetic anchor (palette + lighting + color psychology) -
     closing_parts: list[str] = []
     if palette:
         palette_clean = _IMAGEN_DESIGNER_VOCAB.sub("", palette).strip().rstrip(",.;:")
         if palette_clean:
-            closing_parts.append(f"{palette_clean} palette")
+            # Weave color-psychology intent into the palette mention so Imagen
+            # picks colors that reinforce the emotion. Carefully avoid the
+            # word "palette" inside structural-trigger zones.
+            if psy_intent:
+                closing_parts.append(f"{palette_clean} colors signaling {psy_intent}")
+            else:
+                closing_parts.append(f"{palette_clean} palette")
     if lighting:
         light_clean = _IMAGEN_DESIGNER_VOCAB.sub("", lighting).strip().rstrip(",.;:")
         if light_clean:
             closing_parts.append(f"{light_clean}")
     closing_parts.append("premium commercial photography style, single unified composition")
     sentences.append(", ".join(closing_parts).capitalize() + ".")
+
+    # Visual hierarchy hint - placed AFTER the spatial walk-through so Imagen
+    # has already heard the layout. Prepend "with" to keep it as adjectival
+    # framing (avoids structural noun trigger). Strip designer vocab patterns.
+    if hierarchy:
+        h_clean = _IMAGEN_DESIGNER_VOCAB.sub("", hierarchy).strip().rstrip(",.;:")
+        if h_clean and len(h_clean) <= 180:
+            sentences.append(f"Composition follows a {h_clean}.")
 
     result = " ".join(s for s in sentences if s).strip()
     # Final scrub  -  guarantee no functional vocab leaked through.
@@ -802,34 +1005,108 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
 # add noise. Send a pure photographic scene and skip text-rendering hints.
 
 def _format_for_wavespeed(base_prompt: str, payload: Dict[str, Any]) -> str:
-    """Scene-only prompt for WaveSpeed models (wan_2_7 etc.)."""
-    visual: Dict[str, Any] = payload.get("visual") or {}
+    """Scene-first prompt for WaveSpeed models (wan_2_7 / grok_2_imagine / hunyuan).
+
+    Round 4: research-recommended starting template (PDF page 14):
+        /imagine prompt: [Highly detailed, commercial photography style]
+        A <category> advertisement for ... <full descriptive narrative> ...
+
+    These models render scenes beautifully but text rendering is hit-or-miss.
+    Strategy: build a full descriptive scene narrative + at most 1 short
+    headline string (Wan 2.7 renders 1-2 word strings reliably, longer breaks).
+    """
+    visual:  Dict[str, Any] = payload.get("visual") or {}
     ad_copy: Dict[str, Any] = payload.get("ad_copy") or {}
 
-    # Strip the affirmative anchor and designer vocab; keep scene intact.
-    scene = re.sub(
-        r"^\s*ONE single unified (?:image|photograph)[^.]*\.\s*",
-        "",
-        base_prompt,
-        flags=re.IGNORECASE,
-    ).strip()
-    scene = _IMAGEN_DESIGNER_VOCAB.sub("", scene)
-    scene = re.sub(r"  +", " ", scene).strip()
-
-    parts: list[str] = []
-    if scene:
-        parts.append(scene)
-
-    # Add only the headline as a single text hint  -  wan_2_7 sometimes
-    # renders short text. No subhead, no benefits, no trust strip.
     headline = (ad_copy.get("headline") or "").strip()
-    if headline and f'"{headline}"' not in scene:
-        parts.append(f'Bold text reading "{headline}" placed prominently.')
+    brand    = (ad_copy.get("brand_name") or "").strip()
+    cta      = (ad_copy.get("cta") or "").strip()
 
-    palette = (visual.get("color_palette") or "").strip()
-    if palette and "palette" not in palette.lower():
-        parts.append(f"Color tones of {palette}.")
+    mood       = (visual.get("mood") or "polished").split(",")[0].strip()
+    palette    = (visual.get("color_palette") or "").strip()
+    psy_intent = (visual.get("color_psychology_intent") or "").strip()
+    lighting   = (visual.get("lighting") or "").strip()
+    background = (visual.get("background") or "").strip()
+    hierarchy  = (visual.get("visual_hierarchy") or "").strip()
+    subject_category = (payload.get("subject_category") or "general").strip()
+    target_audience  = (payload.get("target_audience") or "").strip()
+    objective        = (payload.get("objective") or "awareness").strip().lower()
 
-    result = " ".join(parts).strip()
-    logger.info("[formatter][wavespeed] %d->%d chars", len(base_prompt), len(result))
+    # PURE SCENE - no ad copy: clean Haiku's prompt, return.
+    if not _is_ad_intent(payload):
+        scene = re.sub(
+            r"^\s*ONE single unified (?:image|photograph)[^.]*\.\s*",
+            "",
+            base_prompt,
+            flags=re.IGNORECASE,
+        ).strip()
+        scene = _IMAGEN_DESIGNER_VOCAB.sub("", scene)
+        scene = re.sub(r"  +", " ", scene).strip()
+        logger.info("[formatter][wavespeed/scene] %d->%d chars", len(base_prompt), len(scene))
+        return scene
+
+    # AD MODE - construct a Wan-native scene narrative from structured data.
+    parts: list[str] = ["Highly detailed commercial photography style"]
+
+    cat_clean = subject_category.replace("_", " ") if subject_category != "general" else "product"
+    opener = f"a {mood} advertisement scene featuring the {brand} {cat_clean}" if brand else f"a {mood} {cat_clean} advertisement scene"
+    if target_audience:
+        ta = target_audience.split(",")[0].split(";")[0].strip()
+        if ta and len(ta) <= 80:
+            opener += f" aimed at {ta}"
+    parts.append(opener)
+
+    # Objective-specific emphasis
+    if objective == "conversion":
+        parts.append("framed to make the brand call-to-action visually dominant")
+    elif objective == "awareness":
+        parts.append("framed around one bold iconic visual for brand recall")
+    elif objective == "engagement":
+        parts.append("framed as a single scroll-stopping shot")
+
+    if background:
+        bg_clean = _IMAGEN_DESIGNER_VOCAB.sub("", background).strip()
+        if bg_clean:
+            parts.append(f"set in {bg_clean}")
+
+    if lighting:
+        lt_clean = _IMAGEN_DESIGNER_VOCAB.sub("", lighting).strip()
+        if lt_clean:
+            parts.append(lt_clean)
+    else:
+        parts.append("dramatic studio lighting from upper-left with soft fill")
+
+    parts.append("captured with cinematic depth, ultra-sharp focus on the product, premium 8k commercial photography")
+
+    # Negative space directive in Wan-friendly natural language
+    parts.append("a generous clean uncluttered area on one side of the frame providing calm space for the brand text")
+
+    # Visual hierarchy - Wan respects spatial cues
+    if hierarchy:
+        h_clean = _IMAGEN_DESIGNER_VOCAB.sub("", hierarchy).strip().rstrip(",.;:")
+        if h_clean and len(h_clean) <= 180:
+            parts.append(f"composition follows a {h_clean}")
+
+    # ONE short text string only - Wan struggles with long text
+    if headline and len(headline.split()) <= 5:
+        parts.append(f'with the bold word "{headline}" displayed prominently against the clean area')
+    if cta and len(cta.split()) <= 3 and brand:
+        # Only add CTA if very short and we have brand context
+        parts.append(f'a small button below reads "{cta}"')
+
+    if palette:
+        pal_clean = re.sub(r"\s*\d{1,3}\s*%", "", palette).strip().rstrip(",.;:")
+        if pal_clean:
+            if psy_intent:
+                parts.append(f"warm color tones of {pal_clean} signaling {psy_intent}")
+            else:
+                parts.append(f"warm color tones of {pal_clean}")
+
+    parts.append("photorealistic, single unified scene, no panels, no collage")
+
+    result = ", ".join(p.rstrip(",.") for p in parts if p) + "."
+    result = _IMAGEN_DESIGNER_VOCAB.sub("", result)
+    result = re.sub(r"  +", " ", result).strip()
+
+    logger.info("[formatter][wavespeed/ad] %d->%d chars", len(base_prompt), len(result))
     return result
