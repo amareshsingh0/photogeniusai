@@ -1,0 +1,443 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "purpose": "Category-specific ad recipes injected into Haiku user message at runtime. Extends the 14 hardcoded recipes in the system prompt without bloating the cache. New categories can be added here without code changes.",
+    "fields": "aliases (list of keyword triggers), hero_patterns, subhead_style, benefit_labels, trust_signals, cta_patterns, tagline_style, photography, color_palette, lighting, composition, aspect_default",
+    "ascii_only": true
+  },
+
+  "medical_pharma": {
+    "aliases": ["medicine", "tablet", "syrup", "capsule", "pharmacy", "pharma", "medical", "drug", "prescription", "OTC", "antibiotic", "vaccine", "hospital", "clinic", "doctor", "dispensary"],
+    "hero_patterns": ["BACKED BY SCIENCE", "TRUSTED CARE", "RECOVERY, REIMAGINED", "HEALTH FIRST", "WELLNESS DELIVERED"],
+    "subhead_style": "calm reassuring sentence, 5-10 words, clinical confidence",
+    "benefit_labels": ["FDA Approved", "Lab Tested", "Doctor Recommended", "Fast Acting", "Side-Effect Free", "Pediatric Safe", "GMP Certified"],
+    "trust_signals": ["FDA Approved", "ISO 9001", "WHO Pre-qualified", "GMP Certified", "Doctor Recommended", "BIS Standard"],
+    "cta_patterns": ["Consult Doctor", "Buy Online", "Find a Pharmacy", "Book Appointment", "Order Now"],
+    "tagline_style": "calm assurance about wellness or recovery; never make health claims that overpromise",
+    "photography": "Clinical-clean white background OR lifestyle of a recovered, smiling person with soft medical lighting; product packaging shown frontal with dosage info legible",
+    "color_palette": "Clinical white 50% + trust-blue 25% + sage green 15% + neutral grey 10%",
+    "lighting": "Soft, even, medically clean - high-key with minimal shadow, gentle fill from all sides",
+    "composition": "Product or healthy-lifestyle hero with calm composition, certifications strip prominently bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "ayurveda_herbal": {
+    "aliases": ["ayurveda", "ayurvedic", "herbal", "natural medicine", "tulsi", "ashwagandha", "neem", "turmeric", "haldi", "honey", "panchakarma", "kerala oil", "vedic", "vaidya", "dosha", "vata", "pitta", "kapha", "chyawanprash"],
+    "hero_patterns": ["NATURE HEALS", "ANCIENT WISDOM", "PURE AND POWERFUL", "ROOTED IN TRADITION", "VEDIC STRENGTH"],
+    "subhead_style": "warm earthy sentence with classical Sanskrit reference, evokes lineage",
+    "benefit_labels": ["100% Natural", "Sun Dried", "Cold Pressed", "Lab Tested", "No Preservatives", "Vedic Recipe", "Single-Origin Herb"],
+    "trust_signals": ["AYUSH Certified", "FSSAI Approved", "GMP Certified", "Made in India", "Sun-Dried"],
+    "cta_patterns": ["Order Now", "Find a Vaidya", "Shop Authentic", "Book Consultation"],
+    "tagline_style": "wisdom + nature blend; e.g. 'From the Vedas to your wellness'",
+    "photography": "Mortar and pestle with raw herbs, terracotta pot, copper utensil, brass lamp, scattered dried roots and leaves; warm sun-side lighting catching the powder dust",
+    "color_palette": "Earthy terracotta 30% + sage green 25% + warm cream 25% + saffron-gold 15% + bark brown 5%",
+    "lighting": "Warm sun-lit window light with slight golden haze, soft bounce, natural practical glow",
+    "composition": "Hero product flanked by raw herbs and traditional vessels, hand pouring or mortar-and-pestle in mid-action, certifications bottom strip",
+    "aspect_default": "square_hd"
+  },
+
+  "packaging_design": {
+    "aliases": ["packaging", "product packaging", "box design", "label design", "carton", "pouch", "sachet", "bottle label", "wrapper", "tin", "jar label", "tube label", "package mockup", "shelf-ready"],
+    "hero_patterns": ["BRAND NAME large", "PRODUCT TYPE secondary", "key-claim quoted"],
+    "subhead_style": "single product descriptor (e.g. 'Cold-pressed Olive Oil'); legible at shelf distance",
+    "benefit_labels": ["Net Weight 250g", "Best Before", "Active Ingredient %", "Servings 30", "Cold Pressed", "No Added Sugar"],
+    "trust_signals": ["FSSAI Lic. No.", "ISO 22000", "Vegetarian Mark (green dot)", "Recyclable", "Made in India"],
+    "cta_patterns": ["See back panel for usage", "QR for full info"],
+    "tagline_style": "clean factual product descriptor, never abstract poetry",
+    "photography": "Product packaging shown FRONTAL on a clean shelf or studio cyc; macro detail of label legibility; show side panel + back panel mockup variants if multi-angle; specular highlight on metallic finish",
+    "color_palette": "Brand primary (typically saturated) 50% + product-category accent 30% + clean white background 20%; ALWAYS include the green-dot vegetarian mark or red-dot non-vegetarian mark for food/pharma packaging",
+    "lighting": "Studio softbox key from upper-front, sharp shadow, flat overhead for top-of-pack reads, polarized to control reflections on glossy surfaces",
+    "composition": "Pack centered or 3/4 angle, label fully legible at thumbnail size, brand wordmark dominates upper third of pack, regulatory marks bottom-third",
+    "aspect_default": "square_hd"
+  },
+
+  "pet_care": {
+    "aliases": ["pet", "dog", "cat", "puppy", "kitten", "pet food", "kibble", "veterinary", "vet", "pet shampoo", "leash", "litter", "aquarium", "fish food"],
+    "hero_patterns": ["TAILS UP", "PURRFECT NUTRITION", "BORN TO RUN", "BARK LOUDER", "BECAUSE THEY DESERVE IT"],
+    "subhead_style": "warm playful one-liner about the pet's wellbeing",
+    "benefit_labels": ["Grain Free", "Real Meat First", "Vet Approved", "Joint Support", "Shiny Coat", "Dental Care"],
+    "trust_signals": ["Vet Recommended", "Grain Free", "AAFCO Compliant", "No Artificial Colours", "Made in India"],
+    "cta_patterns": ["Shop Now", "Find at Pet Stores", "Subscribe and Save"],
+    "tagline_style": "emotional bond between owner and pet",
+    "photography": "Hero pet (dog/cat) mid-action with tongue out or ears up, OR product hero with kibble spilling, warm golden side-light, shallow DoF on the pet's eyes",
+    "color_palette": "Warm honey-gold 40% + soft cream 30% + brand accent (red/blue/green) 20% + chocolate brown 10%",
+    "lighting": "Warm window-side light, golden bias, soft fill, catchlight in the pet's eyes",
+    "composition": "Pet hero left or right with product on opposite side, brand mark top-left, trust strip bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "baby_kids": {
+    "aliases": ["baby", "infant", "newborn", "toddler", "diaper", "kids", "children", "baby food", "stroller", "baby cream", "baby shampoo", "kids toy", "kids wear"],
+    "hero_patterns": ["GENTLE BY NATURE", "TINY HANDS, BIG DREAMS", "SOFTLY DOES IT", "PURE AS LOVE"],
+    "subhead_style": "tender warm sentence about safety and softness",
+    "benefit_labels": ["Hypoallergenic", "Pediatrician Tested", "Tear Free", "0-3 Months", "Plant-Based", "Soft Cotton"],
+    "trust_signals": ["Pediatrician Approved", "Hypoallergenic", "Dermatologically Tested", "No Parabens", "Cruelty Free"],
+    "cta_patterns": ["Shop Now", "Find a Store", "Subscribe Monthly"],
+    "tagline_style": "warm parental love, never preachy",
+    "photography": "Baby hands or feet detail, soft pastel-bathed setting, mother's hand caressing the product, ultra-soft window light",
+    "color_palette": "Soft pastel cream 40% + powder pink/blue 25% + mint or lavender 15% + warm brown text 20%",
+    "lighting": "Diffused window light with high-key fill, no hard shadows, dreamy soft glow",
+    "composition": "Tender hero with hands, product on right, brand top-left, certifications bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "religious_spiritual": {
+    "aliases": ["pooja", "puja", "diwali", "navratri", "ganesh", "krishna", "shiva", "ram", "durga", "saraswati", "lakshmi", "temple", "mandir", "incense", "agarbatti", "diya", "rakhi", "eid", "ramadan", "christmas", "easter", "guru", "sikh", "guruwani"],
+    "hero_patterns": ["Festival name large script", "blessing line", "deity name elegant"],
+    "subhead_style": "blessing or shubh muhurat phrase in Hindi/Sanskrit + English",
+    "benefit_labels": ["Hand-Made", "Pure Cotton Wick", "Sandalwood", "Pure Ghee", "Traditional Recipe"],
+    "trust_signals": ["Hand-Crafted", "Hindu Mahasabha Approved", "Pure Ghee", "Made in Kashi/Mathura/Tirupati"],
+    "cta_patterns": ["Order Now", "Book Pooja", "Find a Temple", "Send Blessings"],
+    "tagline_style": "devotional, may include Sanskrit shloka snippet",
+    "photography": "Diya, marigold petals scattered, brass kalash, sandalwood paste, rangoli border; warm golden practical light; deity silhouette or motif tastefully integrated",
+    "color_palette": "Saffron 30% + maroon-red 25% + warm gold 20% + ivory cream 15% + tulsi green 10%",
+    "lighting": "Warm candle-lit / diya-lit, soft golden glow, slight haze; reverent atmosphere",
+    "composition": "Hero motif (deity / lamp / flower) center, devotional copy framing, ornate border, festive props at corners",
+    "aspect_default": "portrait_4_3"
+  },
+
+  "books_publishing": {
+    "aliases": ["book", "novel", "publisher", "bookstore", "memoir", "author", "ebook", "kindle", "literature", "poetry", "anthology", "biography", "autobiography"],
+    "hero_patterns": ["title large bold", "tagline italic below", "author NAME at bottom"],
+    "subhead_style": "evocative book tagline, 6-12 words, hints at the central conflict",
+    "benefit_labels": ["Bestseller", "300 Pages", "Hardcover", "Ages 16+", "Award-Winning"],
+    "trust_signals": ["NYT Bestseller", "Booker Shortlist", "Sahitya Akademi Awardee", "Translated in 14 Languages"],
+    "cta_patterns": ["Pre-order Now", "Available on Amazon", "In Stores Now", "Read Excerpt"],
+    "tagline_style": "literary hook; one sentence that makes a reader stop",
+    "photography": "Hero book cover hovering over a dark moody surface OR styled flat-lay with coffee, glasses, fountain pen, ink swirls; macro detail of cover stock and foil",
+    "color_palette": "Cover-driven: usually deep blacks/burgundy/forest-green with single foil accent; cream paper highlights",
+    "lighting": "Single hard key from upper-left creating strong rim on the cover edge, dark falloff, slight grain",
+    "composition": "Cover hero center or 3/4, author name + tagline beneath, blurb quote box on the side",
+    "aspect_default": "portrait_4_3"
+  },
+
+  "music_albums": {
+    "aliases": ["album", "single", "EP", "music release", "song drop", "musician", "band", "rapper", "playlist", "spotify", "apple music", "concert tour", "tour dates"],
+    "hero_patterns": ["ARTIST NAME huge", "ALBUM TITLE secondary", "OUT NOW / REL DATE"],
+    "subhead_style": "evocative one-line album tagline or release date",
+    "benefit_labels": ["12 Tracks", "Vinyl Available", "Limited Edition", "Bonus Content"],
+    "trust_signals": ["Grammy-Nominated Producer", "Recorded at Abbey Road", "Mixed by [Engineer]"],
+    "cta_patterns": ["Stream Now", "Pre-save", "Buy Vinyl", "Tour Tickets"],
+    "tagline_style": "evocative phrase that captures the album's mood",
+    "photography": "Artist editorial portrait OR conceptual album-cover-style hero (object, motif, abstract); dramatic single-source lighting; bold contrast",
+    "color_palette": "Genre-driven: hip-hop = neon-on-black; indie = washed-out pastels; metal = blood-red on black; electronic = cyan-magenta-black",
+    "lighting": "Editorial portrait light or conceptual studio with hard color gels",
+    "composition": "Artist or motif fills 2/3, title typography fills the rest, streaming platform icons row at bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "podcast_audio": {
+    "aliases": ["podcast", "podcaster", "audio show", "spotify show", "apple podcast", "season launch", "episode drop", "audio series"],
+    "hero_patterns": ["SHOW NAME bold", "EP # / TITLE secondary", "host name script"],
+    "subhead_style": "topic hook for this episode/season, 8-15 words",
+    "benefit_labels": ["Weekly Drops", "Bonus Q&A", "Ad-Free Premium", "Transcripts"],
+    "trust_signals": ["Top 10 in Education", "1M+ Downloads", "Featured on Apple Podcasts"],
+    "cta_patterns": ["Listen Now", "Subscribe Free", "Available Everywhere"],
+    "tagline_style": "conversational hook; 'we talk about X' style",
+    "photography": "Host portrait with headphones / mic, OR conceptual cover with motif; warm studio lighting; sometimes microphone macro",
+    "color_palette": "Two-tone bold: usually a brand color + black, or muted earthy with bright accent",
+    "lighting": "Studio key with warm bias, slight rim, intentional simplicity",
+    "composition": "Host or motif on left, show title big right, mic-and-headphones icon row, platform logos bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "political_ngo": {
+    "aliases": ["NGO", "charity", "donate", "fundraiser", "election", "campaign poster", "vote", "rally", "community service", "social impact", "non profit"],
+    "hero_patterns": ["DEMAND CHANGE", "VOTE FOR HOPE", "EVERY CHILD COUNTS", "JOIN THE MOVEMENT"],
+    "subhead_style": "stat or call-to-action, 8-12 words, emotional but factual",
+    "benefit_labels": ["1 in 5 Children Hungry", "100% Goes to Beneficiary", "Tax Deductible", "Transparent Reporting"],
+    "trust_signals": ["80G Tax Exempt", "GuideStar Platinum", "10K Lives Touched", "Audited by KPMG"],
+    "cta_patterns": ["Donate Now", "Volunteer", "Vote on May 4", "Sign the Petition"],
+    "tagline_style": "emotional + factual; never manipulative",
+    "photography": "Documentary style of beneficiaries or rally crowds, low color saturation, golden-hour or harsh midday for impact, faces in dignity not pity",
+    "color_palette": "Mission-driven: usually two strong colors (red+white, blue+yellow) with high contrast",
+    "lighting": "Documentary natural light, slight grain, hopeful even when serious",
+    "composition": "Hero subject (face or scene) fills 60%, copy column with stat on left, donate CTA bottom-right, regulatory bottom",
+    "aspect_default": "portrait_4_3"
+  },
+
+  "sports_team": {
+    "aliases": ["sports team", "football club", "cricket team", "ipl", "isl", "basketball team", "fan jersey", "match day", "rivalry", "season opener"],
+    "hero_patterns": ["MATCHDAY", "DEFEND THE TURF", "RISE TOGETHER", "OUR TIME"],
+    "subhead_style": "match details: opponent, date, venue",
+    "benefit_labels": ["Live on Star Sports", "Doors 5:00 PM", "Family Stand", "Limited Tickets"],
+    "trust_signals": ["Official Club Merchandise", "Fan Loyalty Discount"],
+    "cta_patterns": ["Book Tickets", "Buy Jersey", "Watch Live", "Join Fan Club"],
+    "tagline_style": "war-cry energy, tribal belonging",
+    "photography": "Hero athlete in mid-action sweat-detail, OR team huddle backlit by stadium floods, OR jersey hero on dark; harsh rim-light, dramatic action freeze",
+    "color_palette": "Team primary 60% + team secondary 25% + black 10% + warm gold accent 5%",
+    "lighting": "Stadium floods, hard rim, contrasty cinematic, sweat catching light",
+    "composition": "Hero athlete or team huddle fills 2/3, match details column on left, sponsor logos bottom",
+    "aspect_default": "landscape_16_9"
+  },
+
+  "movies_streaming": {
+    "aliases": ["movie poster", "film", "trailer drop", "streaming", "netflix", "prime video", "hotstar", "cinema release", "ott premiere", "web series"],
+    "hero_patterns": ["TITLE huge", "tagline secondary", "release date / streaming platform"],
+    "subhead_style": "evocative tagline that captures the central conflict, 6-10 words",
+    "benefit_labels": [],
+    "trust_signals": ["Cannes Selection", "8.4 IMDb", "Rotten Tomatoes Certified Fresh"],
+    "cta_patterns": ["Streaming Now", "In Theaters May 4", "Watch Trailer", "Stream on Prime"],
+    "tagline_style": "high-concept hook; reveals the conflict not the plot",
+    "photography": "Hero actor portrait with dramatic rim light OR conceptual key art (object/motif/silhouette); deep cinematic shadows; bold color grade",
+    "color_palette": "Genre-driven: thriller = teal+orange; horror = blood-red on black; romance = warm pastels; sci-fi = cyan+blue+purple",
+    "lighting": "Cinematic key with strong rim, deep shadow falloff, dramatic side-light",
+    "composition": "Hero actor/motif fills upper 2/3, title block lower 1/3, cast names/credits bottom strip, laurel marks if award-nominated",
+    "aspect_default": "portrait_4_3"
+  },
+
+  "gaming_esports": {
+    "aliases": ["game launch", "video game", "esports", "twitch stream", "console", "mobile game", "battle royale", "MOBA", "BGMI", "valorant", "call of duty", "fortnite", "tournament"],
+    "hero_patterns": ["GAME TITLE bold", "SEASON / EXPANSION secondary", "OUT NOW / DROP DATE"],
+    "subhead_style": "feature drop or competitive hook",
+    "benefit_labels": ["120 FPS", "4K HDR", "Cross-Play", "Free Weekend", "Battle Pass"],
+    "trust_signals": ["Made by [Studio]", "Pro-Esports Certified", "10M+ Players"],
+    "cta_patterns": ["Play Free", "Pre-Order", "Join the Beta", "Watch the Reveal"],
+    "tagline_style": "high-octane hook with edge",
+    "photography": "Hero character render in dynamic action pose, neon-tinted rim light, particle FX (sparks, embers, smoke), cinematic 3D lighting",
+    "color_palette": "Neon (electric blue + magenta + acid yellow) on deep blacks, OR moody desaturated greens for tactical games",
+    "lighting": "Cinematic 3D rim light, neon practical fill, particle glow, lens flare",
+    "composition": "Character hero center, weapon/loadout silhouette beside, title big top, platform logos (PC/PS5/Xbox) bottom",
+    "aspect_default": "landscape_16_9"
+  },
+
+  "dating_app": {
+    "aliases": ["dating app", "matchmaking", "tinder style", "love app", "find love", "soulmate", "matrimony", "shaadi"],
+    "hero_patterns": ["SWIPE INTO LOVE", "FIND YOUR PERSON", "REAL CONNECTIONS", "MATCH WITH MEANING"],
+    "subhead_style": "warm reassuring sentence about authenticity",
+    "benefit_labels": ["Verified Profiles", "AI Match", "Voice Notes", "Video Date", "No Bots"],
+    "trust_signals": ["10M+ Matches Made", "Verified Profiles Only", "Privacy First"],
+    "cta_patterns": ["Download Free", "Try Premium", "Find Matches Today"],
+    "tagline_style": "modern romantic without cheesy",
+    "photography": "Two warmly-lit phones showing the app interface, OR a smiling couple lifestyle shot, soft warm window light, intimate framing",
+    "color_palette": "Brand pink/red 40% + soft cream 30% + warm peach 20% + brand accent 10%",
+    "lighting": "Warm sunset bias, soft fill, intimate glow",
+    "composition": "Phone mockups center or right, copy left, couple lifestyle inset (optional), CTA pill bottom",
+    "aspect_default": "portrait_4_3"
+  },
+
+  "crypto_web3": {
+    "aliases": ["crypto", "bitcoin", "ethereum", "NFT", "web3", "blockchain", "defi", "wallet", "exchange", "coin launch", "metaverse"],
+    "hero_patterns": ["OWN YOUR FUTURE", "DECENTRALIZED FOREVER", "BUILD ON CHAIN", "MINT THE NEW WAVE"],
+    "subhead_style": "technical-but-accessible value prop, 8-12 words",
+    "benefit_labels": ["0% Trading Fee", "100+ Tokens", "Cold-Storage Vault", "Layer 2 Speed", "Self-Custody"],
+    "trust_signals": ["SOC 2 Compliant", "$1B Insured", "Audited by Trail of Bits", "10M+ Users"],
+    "cta_patterns": ["Get the App", "Connect Wallet", "Mint Now", "Trade Free"],
+    "tagline_style": "future-focused, ownership-centric",
+    "photography": "Floating phone mockup with crypto interface, holographic gradient rim, neon glow, abstract chain-link visuals OR token render",
+    "color_palette": "Deep space black 50% + electric cyan 20% + neon magenta 15% + holographic gradient 15%",
+    "lighting": "Holographic gradient backlight, sharp neon rim, dark studio gradient",
+    "composition": "Device mockup or token render center, spec callouts on side, brand wordmark top, CTA bottom",
+    "aspect_default": "portrait_4_3"
+  },
+
+  "restaurant_cafe": {
+    "aliases": ["restaurant launch", "cafe opening", "fine dining", "bistro", "diner", "food truck", "pop up", "menu launch"],
+    "hero_patterns": ["NOW OPEN", "GRAND OPENING", "TASTE THE NEIGHBOURHOOD", "EAT WHERE LOCALS DO"],
+    "subhead_style": "menu-style intro: cuisine + neighborhood + hours",
+    "benefit_labels": ["Wood-Fired", "Locally Sourced", "Open Late", "Live Music Sundays", "Outdoor Seating"],
+    "trust_signals": ["FSSAI Reg.", "Featured in Time Out", "TripAdvisor 5-Star"],
+    "cta_patterns": ["Reserve a Table", "Order Delivery", "Walk-Ins Welcome", "Visit Us"],
+    "tagline_style": "warm neighborhood-feel sentence",
+    "photography": "Hero plate of signature dish with steam, OR warmly-lit dining room with golden hour streaming through windows, OR chef plating in mid-action",
+    "color_palette": "Warm earth tones (terracotta + cream + olive + brass) for intimate places, or bold pop colors for casual diners",
+    "lighting": "Golden window-side, warm practical bulbs, slight bounce, intimate atmosphere",
+    "composition": "Hero food or interior fills 2/3, address+hours on left or right, social handles bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "salon_spa": {
+    "aliases": ["salon", "spa", "haircut", "facial", "massage", "manicure", "pedicure", "beauty parlour", "wellness retreat", "barber shop"],
+    "hero_patterns": ["YOUR ME-TIME", "PAMPER, RESTORED", "HAIR. SKIN. SOUL.", "BEAUTY ON YOUR SCHEDULE"],
+    "subhead_style": "warm aspirational sentence about self-care",
+    "benefit_labels": ["L'Oreal Pro", "Organic Products", "Open 7 Days", "Online Booking", "Couple Suites"],
+    "trust_signals": ["Certified Stylists", "Hygienic Tools", "Imported Products", "10K+ Happy Clients"],
+    "cta_patterns": ["Book Now", "Walk-Ins Welcome", "Get the App"],
+    "tagline_style": "self-care + indulgence",
+    "photography": "Hands giving a treatment, candle and warm towels, marble + wood interior, soft warm light",
+    "color_palette": "Warm cream + dusty rose + sage green + brushed brass accents",
+    "lighting": "Soft warm window-light with intimate practical glow",
+    "composition": "Lifestyle hero on right, services list on left, address bottom",
+    "aspect_default": "portrait_4_3"
+  },
+
+  "dental_clinic": {
+    "aliases": ["dentist", "dental", "tooth", "orthodontic", "braces", "implant", "teeth whitening", "smile makeover", "dental clinic"],
+    "hero_patterns": ["SMILE BRIGHTER", "PAIN-FREE DENTISTRY", "YOUR PERFECT SMILE", "MODERN DENTAL CARE"],
+    "subhead_style": "calm reassuring sentence about painless care",
+    "benefit_labels": ["Painless Treatment", "Same-Day Crowns", "Sedation Available", "EMI Available", "Insurance Accepted"],
+    "trust_signals": ["BDS Certified", "DCI Reg.", "20+ Years Experience", "10K+ Smiles"],
+    "cta_patterns": ["Book Consultation", "Free First Visit", "WhatsApp Us"],
+    "tagline_style": "calm professional reassurance",
+    "photography": "Patient with confident smile, OR clean clinical interior with modern equipment, soft cool lighting",
+    "color_palette": "Trust-blue 40% + clinical white 35% + mint green 15% + warm accent 10%",
+    "lighting": "Clean even high-key, no shadows, optimistic",
+    "composition": "Patient smile hero or clinic interior, services list, doctor credentials, contact strip bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "optical_eyewear": {
+    "aliases": ["spectacles", "glasses", "sunglasses", "frames", "eyewear", "optician", "contact lens", "lens replacement", "vision test"],
+    "hero_patterns": ["SEE BETTER", "FRAMED FOR YOU", "CLARITY, CRAFTED", "STYLE MEETS VISION"],
+    "subhead_style": "function-meets-fashion sentence",
+    "benefit_labels": ["Anti-Glare", "Blue-Light Block", "1-Year Warranty", "Free Eye Test", "BOGO 50% Off"],
+    "trust_signals": ["Certified Optometrist", "Imported Frames", "Lens Crafted in Germany", "30-Day Returns"],
+    "cta_patterns": ["Book Eye Test", "Try On Virtually", "Shop Frames"],
+    "tagline_style": "style + function fusion",
+    "photography": "Macro of frames detail, OR styled portrait of model wearing the frames, soft editorial lighting, lens reflections",
+    "color_palette": "Sophisticated muted (charcoal + cream + tortoise + brand accent)",
+    "lighting": "Editorial portrait key, slight rim catching the lens, soft fill",
+    "composition": "Frame macro or model hero, frame collection grid optional, store address bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "school_k12": {
+    "aliases": ["school admission", "K-12", "primary school", "secondary school", "CBSE", "ICSE", "international school", "boarding school", "preschool", "kindergarten"],
+    "hero_patterns": ["ADMISSIONS OPEN", "WHERE LEADERS BEGIN", "LEARNING FOR LIFE", "BUILDING TOMORROW"],
+    "subhead_style": "warm aspirational sentence about child's future",
+    "benefit_labels": ["CBSE Affiliated", "Smart Classes", "Sports Coaching", "Music & Arts", "AC Buses", "STEM Lab"],
+    "trust_signals": ["CBSE Affiliated", "20+ Years", "100% Pass Record", "AICTE Approved"],
+    "cta_patterns": ["Apply Now", "Schedule a Visit", "Download Brochure"],
+    "tagline_style": "child's potential + school's mission",
+    "photography": "Children in uniform learning, lab activity, sports field, classroom; bright optimistic light, faces in focus",
+    "color_palette": "School colors (often blue + yellow + white) or warm academic tones",
+    "lighting": "Bright outdoor or naturally-lit classroom, optimistic and clean",
+    "composition": "Children hero with classroom/campus context, key stats column, contact + apply CTA bottom",
+    "aspect_default": "portrait_4_3"
+  },
+
+  "coaching_test_prep": {
+    "aliases": ["coaching", "JEE", "NEET", "UPSC", "CAT", "GATE", "IIT prep", "AIIMS prep", "test series", "mock test", "rank booster", "GRE", "GMAT", "SAT"],
+    "hero_patterns": ["CRACK NEET 2027", "RANK 1 IS HERE", "YOUR IIT JOURNEY STARTS NOW", "BEAT THE EXAM"],
+    "subhead_style": "stats + stake; e.g. 'Last year 200+ AIRs under 100'",
+    "benefit_labels": ["Live Doubt Solving", "Daily Mock Tests", "All-India Rank Predictor", "PYQ Bank", "1-on-1 Mentor"],
+    "trust_signals": ["AIR-1 Mentors", "10K+ Selections", "98% Selection Rate", "AICTE Approved"],
+    "cta_patterns": ["Enroll Now", "Free Demo Class", "Download App"],
+    "tagline_style": "ambition + proof of results",
+    "photography": "Top scorers with rank cards, OR focused student studying with books and laptop, OR teacher at whiteboard, bright optimistic lighting",
+    "color_palette": "Trust-blue + warm gold + cream + bold accent for urgency",
+    "lighting": "Bright, optimistic, slight study-lamp warmth",
+    "composition": "Top-scorer hero or focused student, rank stats column, demo CTA bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "wedding_services": {
+    "aliases": ["wedding planner", "wedding photography", "bridal makeup", "wedding venue", "destination wedding", "shaadi", "wedding decor", "haldi mehendi", "wedding catering"],
+    "hero_patterns": ["YOUR PERFECT DAY", "FOREVER STARTS HERE", "CRAFTED MOMENTS", "WEDDINGS, REIMAGINED"],
+    "subhead_style": "romantic aspirational sentence",
+    "benefit_labels": ["End-to-End Planning", "Decor + Catering + Photography", "200-2000 Guests", "PAN India", "Destination Weddings"],
+    "trust_signals": ["500+ Weddings Planned", "Featured in WedMeGood", "Bridal Asia Award", "5-Star Reviews"],
+    "cta_patterns": ["Book Consultation", "Get a Quote", "View Portfolio"],
+    "tagline_style": "romantic timeless promise",
+    "photography": "Bride/groom intimate moment, OR decor wide shot with floral arches and lighting, OR bridal portrait detail, golden-hour warm",
+    "color_palette": "Cream + dusty rose + sage + rose-gold + ivory",
+    "lighting": "Golden-hour warmth, soft window light, intimate glow",
+    "composition": "Couple/decor hero, services list, contact bottom",
+    "aspect_default": "portrait_4_3"
+  },
+
+  "florist_bouquet": {
+    "aliases": ["florist", "bouquet", "flower delivery", "wedding flowers", "anniversary flowers", "rose bouquet", "lily arrangement", "fresh flowers"],
+    "hero_patterns": ["BLOOM WITH LOVE", "FLOWERS THAT FEEL", "PETALS OF EMOTION", "FRESH-PICKED MORNINGS"],
+    "subhead_style": "emotional one-liner about gifting",
+    "benefit_labels": ["Same-Day Delivery", "Hand-Tied", "Fresh from Farm", "Free Card", "Subscription Available"],
+    "trust_signals": ["Locally Grown", "100% Fresh Guarantee", "Same-Day Delivery"],
+    "cta_patterns": ["Order Now", "Send Flowers", "Subscribe Monthly"],
+    "tagline_style": "tender emotional gifting",
+    "photography": "Hero bouquet on a marble or rustic wooden surface, hand-tying detail, water droplets on petals, soft golden window light",
+    "color_palette": "Bouquet-driven (pinks/whites/yellows) + cream backdrop + sage green",
+    "lighting": "Soft window-side, golden practical, ultra-soft fill",
+    "composition": "Bouquet hero center, hand inserting a stem, occasion options column, CTA bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "bakery_cake": {
+    "aliases": ["bakery", "cake shop", "cupcake", "wedding cake", "birthday cake", "patisserie", "cookie", "macaron", "donut", "fresh bread"],
+    "hero_patterns": ["FRESH-BAKED LOVE", "EVERY OCCASION, ICED", "OVEN TO YOU", "CAKES THAT SAY MORE"],
+    "subhead_style": "emotional sentence about celebrations",
+    "benefit_labels": ["Eggless Available", "100% Natural Cream", "Custom Designs", "Same-Day Delivery", "Vegan Options"],
+    "trust_signals": ["FSSAI Reg.", "Award-Winning Pastry Chef", "5K+ Cakes Crafted"],
+    "cta_patterns": ["Order Custom Cake", "Browse Menu", "Subscribe Weekly"],
+    "tagline_style": "warm celebratory",
+    "photography": "Hero cake with icing detail and glaze drip, slice cross-section showing crumb, warm display-case glow, pastry hands in motion",
+    "color_palette": "Cream + pastel pink + soft brown + golden caramel + brand accent",
+    "lighting": "Warm bakery practical light, golden window-bias, intimate",
+    "composition": "Hero cake or pastry on right, occasion menu on left, contact bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "legal_services": {
+    "aliases": ["law firm", "lawyer", "advocate", "legal advice", "criminal lawyer", "civil law", "corporate lawyer", "divorce lawyer", "property lawyer", "tax consultant"],
+    "hero_patterns": ["JUSTICE, DELIVERED", "YOUR LEGAL ALLY", "FIGHTING FOR YOU", "RIGHTS, PROTECTED"],
+    "subhead_style": "calm authoritative sentence about expertise",
+    "benefit_labels": ["20+ Years Practice", "Free First Consultation", "Pan-India Network", "Confidential", "100% Transparent Fees"],
+    "trust_signals": ["Bar Council Reg.", "20+ Years", "1000+ Cases Won", "Listed in Forbes Legal 100"],
+    "cta_patterns": ["Schedule Consultation", "Talk to a Lawyer", "Free Case Review"],
+    "tagline_style": "authoritative + reassuring",
+    "photography": "Lawyer at desk with case files OR scales-of-justice motif OR courthouse architecture, formal lighting, dignified",
+    "color_palette": "Deep navy + cream + gold accent + rich burgundy",
+    "lighting": "Formal directional key with deep shadows, classic portrait lighting",
+    "composition": "Lawyer portrait or motif hero, practice areas list, contact prominently bottom",
+    "aspect_default": "portrait_4_3"
+  },
+
+  "insurance_finance": {
+    "aliases": ["insurance", "life insurance", "health insurance", "term plan", "ULIP", "mutual fund", "investment", "pension plan", "wealth management", "retirement"],
+    "hero_patterns": ["SECURE TOMORROW", "FAMILY FIRST", "PROTECT WHAT MATTERS", "WEALTH, GUIDED"],
+    "subhead_style": "factual benefit + emotional family promise",
+    "benefit_labels": ["1 Crore Cover", "Tax Savings 80C", "Cashless Hospitals", "Whole-Life Cover", "ZERO Claim Rejection"],
+    "trust_signals": ["IRDAI Reg.", "98% Claim Settlement", "30-Day Free Look", "10M+ Policyholders"],
+    "cta_patterns": ["Get a Quote", "Calculate Premium", "Book Advisor Call"],
+    "tagline_style": "calm assurance about family protection",
+    "photography": "Multi-generational family lifestyle, OR couple smiling at advisor, OR umbrella-over-family conceptual, warm lifestyle lighting",
+    "color_palette": "Trust-blue 50% + warm cream 30% + gold accent 10% + warm earth 10%",
+    "lighting": "Warm natural family lighting, hopeful and optimistic",
+    "composition": "Family hero, plan benefits column, premium calculator widget, regulatory bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "loans_credit": {
+    "aliases": ["personal loan", "home loan", "credit card", "EMI", "loan against property", "education loan", "instant loan", "credit score"],
+    "hero_patterns": ["INSTANT APPROVAL", "DREAM HOME, FUNDED", "YOUR EMI, YOUR CHOICE", "CREDIT WHEN YOU NEED IT"],
+    "subhead_style": "factual rate + speed promise",
+    "benefit_labels": ["8.5% Interest", "Instant Disbursal", "Zero Processing Fee", "EMI from Rs.999", "5-Min Approval"],
+    "trust_signals": ["RBI Reg.", "ISO 27001", "1M+ Customers", "98% Approval Rate"],
+    "cta_patterns": ["Apply Now", "Check Eligibility", "Calculate EMI"],
+    "tagline_style": "speed + ease",
+    "photography": "Happy customer with new house/car keys, OR phone showing app approval, OR family-in-new-home lifestyle, warm aspirational",
+    "color_palette": "Brand + warm gold + cream + trust-blue",
+    "lighting": "Warm aspirational lifestyle lighting",
+    "composition": "Customer hero with achieved-dream context, rate column, apply CTA bottom",
+    "aspect_default": "square_hd"
+  },
+
+  "astrology_numerology": {
+    "aliases": ["astrology", "horoscope", "numerology", "tarot", "vastu", "palmistry", "kundli", "rashi", "zodiac", "spiritual reading"],
+    "hero_patterns": ["YOUR STARS, REVEALED", "DESTINY DECODED", "VEDIC WISDOM", "WHAT THE STARS SAY"],
+    "subhead_style": "mystical + actionable sentence",
+    "benefit_labels": ["Free Birth Chart", "30-Min Consultation", "Vedic Method", "Voice Reading", "Hindi & English"],
+    "trust_signals": ["20+ Years Practice", "10K+ Readings", "Certified Astrologer"],
+    "cta_patterns": ["Get Your Reading", "Free Kundli", "Book Astrologer"],
+    "tagline_style": "mystical + warm",
+    "photography": "Cosmic constellation overlay, zodiac wheel, palm with henna, kundli chart, candle-lit ritual setup, mystical purple-gold lighting",
+    "color_palette": "Deep cosmic violet 40% + saffron-gold 25% + midnight blue 20% + cream 15%",
+    "lighting": "Mystical candle-lit warmth with cosmic backdrop, slight haze",
+    "composition": "Mystical motif hero, services menu, astrologer credentials, book CTA",
+    "aspect_default": "portrait_4_3"
+  },
+
+  "yoga_meditation": {
+    "aliases": ["yoga", "meditation", "mindfulness", "pranayama", "yoga retreat", "yoga teacher training", "guided meditation", "wellness retreat", "yoga class"],
+    "hero_patterns": ["BREATHE INTO BALANCE", "YOUR DAILY STILLNESS", "MOVE INTO PEACE", "ANCIENT, EVERYDAY"],
+    "subhead_style": "calm mindful sentence about presence",
+    "benefit_labels": ["7-Day Free Trial", "Live + Recorded Classes", "Beginner Friendly", "10-Minute Sessions", "Certified Teachers"],
+    "trust_signals": ["Yoga Alliance Certified", "RYT 500", "1M+ Sessions Completed"],
+    "cta_patterns": ["Start Free Trial", "Book a Class", "Download App"],
+    "tagline_style": "calm + breath-centered",
+    "photography": "Yoga pose hero in soft natural light, OR meditator with mountain/ocean backdrop, OR rolled mat with wooden floor, warm dawn light",
+    "color_palette": "Sage green 30% + cream 30% + warm sand 20% + dusty rose accent 20%",
+    "lighting": "Soft dawn or sunset light, warm bias, intimate calm",
+    "composition": "Yoga pose or meditator hero, class schedule, app download CTA",
+    "aspect_default": "portrait_4_3"
+  }
+}
