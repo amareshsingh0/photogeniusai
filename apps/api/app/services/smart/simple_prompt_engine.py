@@ -193,13 +193,51 @@ _CLASSIFICATION_FALLBACK = {
 }
 
 
+def _fallback_classification(user_prompt: str) -> Dict[str, Any]:
+    """When Gemini is unavailable (quota / permission / network), use the
+    keyword-based bucket detector + cheap heuristics so the pipeline still
+    routes correctly. Better than the static fallback for ad prompts.
+    """
+    out = dict(_CLASSIFICATION_FALLBACK)
+    try:
+        from app.services.smart.config import detect_capability_bucket
+        out["bucket"] = detect_capability_bucket(user_prompt) or "photorealism"
+    except Exception:
+        pass
+    needle = (user_prompt or "").lower()
+    # Heuristic ad-intent flags so the critique pass + per-model formatters
+    # still know this is an ad even when Gemini can't classify.
+    ad_signals = ("ad", "advert", "poster", "banner", "promo", "campaign",
+                  "launch", "sale", "offer", "discount", "brand", "buy",
+                  "shop", "post", "reel", "story", "instagram", "facebook",
+                  "linkedin", "tiktok", "youtube")
+    if out["bucket"] in ("typography", "ad_creative") or any(s in needle for s in ad_signals):
+        out["is_ad"] = True
+        out["has_text"] = True
+        if "typography" not in out["bucket"]:
+            out["bucket"] = "typography"
+    for plat in ("instagram", "linkedin", "facebook", "tiktok", "youtube", "pinterest"):
+        if plat in needle:
+            out["platform"] = plat
+            break
+    return out
+
+
 # Per-process cache: maps user_prompt -> classification result. Single-request
 # scope by design - enables generate_stream to call the classifier ONCE for
 # bucket routing and re-use the same result inside enrich() without paying
-# for a second Gemini call. Bounded to last 256 prompts (LRU not needed at
-# this scale - typical concurrent sessions << 256).
+# for a second Gemini call. Bounded to last 256 prompts.
+#
+# Concurrency: admin parallel mode dispatches 6+ model workers simultaneously.
+# Without locking, all 6 hit classify_intent BEFORE the first call's await
+# returns and writes the cache - causing 6 concurrent Gemini calls and
+# blowing through free-tier quota (5/min). The per-prompt asyncio.Lock
+# ensures only ONE classifier call fires per unique prompt; the other 5
+# wait on the lock, then read the cached result.
 _CLASSIFICATION_CACHE: Dict[str, Dict[str, Any]] = {}
 _CLASSIFICATION_CACHE_MAX = 256
+_CLASSIFICATION_LOCKS: Dict[str, asyncio.Lock] = {}
+_LOCKS_REGISTRY_LOCK = asyncio.Lock()
 
 
 def _cache_classification(prompt: str, result: Dict[str, Any]) -> None:
@@ -209,19 +247,42 @@ def _cache_classification(prompt: str, result: Dict[str, Any]) -> None:
     _CLASSIFICATION_CACHE[prompt] = result
 
 
-async def classify_intent(user_prompt: str) -> Dict[str, Any]:
-    """Public async classifier - cached per prompt. Use this from generate_stream.
+async def _get_prompt_lock(prompt: str) -> asyncio.Lock:
+    """Return (creating if needed) an asyncio.Lock unique to this prompt."""
+    async with _LOCKS_REGISTRY_LOCK:
+        lock = _CLASSIFICATION_LOCKS.get(prompt)
+        if lock is None:
+            # GC: keep the registry from growing unbounded.
+            if len(_CLASSIFICATION_LOCKS) >= _CLASSIFICATION_CACHE_MAX:
+                _CLASSIFICATION_LOCKS.pop(next(iter(_CLASSIFICATION_LOCKS)))
+            lock = asyncio.Lock()
+            _CLASSIFICATION_LOCKS[prompt] = lock
+        return lock
 
-    Returns the same dict as _classify_intent_gemini. Subsequent calls within
-    the same process for the SAME prompt return the cached result instantly,
-    so enrich() pays no extra cost when the bucket layer already classified.
+
+async def classify_intent(user_prompt: str) -> Dict[str, Any]:
+    """Public async classifier - cached per prompt with per-prompt locking.
+
+    Concurrency-safe: when N concurrent callers ask for the same prompt's
+    classification, only ONE fires the Gemini call; the other N-1 wait on
+    the lock, then read the cached result instantly. This prevents the
+    admin parallel mode (6 model workers) from making 6 concurrent calls
+    and blowing the free-tier quota (5 RPM on gemini-2.5-flash).
     """
+    # Fast path: cache hit, no lock needed.
     cached = _CLASSIFICATION_CACHE.get(user_prompt)
     if cached is not None:
         return cached
-    result = await _classify_intent_gemini(user_prompt)
-    _cache_classification(user_prompt, result)
-    return result
+
+    # Slow path: take the per-prompt lock, double-check cache, then call.
+    lock = await _get_prompt_lock(user_prompt)
+    async with lock:
+        cached = _CLASSIFICATION_CACHE.get(user_prompt)
+        if cached is not None:
+            return cached
+        result = await _classify_intent_gemini(user_prompt)
+        _cache_classification(user_prompt, result)
+        return result
 
 
 async def _classify_intent_gemini(user_prompt: str) -> Dict[str, Any]:
@@ -231,14 +292,14 @@ async def _classify_intent_gemini(user_prompt: str) -> Dict[str, Any]:
     On any error returns _CLASSIFICATION_FALLBACK so callers never crash.
     """
     if not user_prompt or not user_prompt.strip():
-        return dict(_CLASSIFICATION_FALLBACK)
+        return _fallback_classification(user_prompt)
 
     try:
         from app.services.smart.design_agent_chain import _get_gemini_client
         from google.genai import types
     except Exception as e:
         logger.warning("[classifier] google-genai unavailable: %s", e)
-        return dict(_CLASSIFICATION_FALLBACK)
+        return _fallback_classification(user_prompt)
 
     recipes = _load_category_recipes()
     available_keys = list(recipes.keys()) + ["general"]
@@ -264,7 +325,7 @@ async def _classify_intent_gemini(user_prompt: str) -> Dict[str, Any]:
             # Empty body - likely safety blocked or model didn't comply.
             finish = resp.candidates[0].finish_reason if resp.candidates else "UNKNOWN"
             logger.warning("[classifier] empty Gemini response (finish_reason=%s) -- using fallback", finish)
-            return dict(_CLASSIFICATION_FALLBACK)
+            return _fallback_classification(user_prompt)
         # Strip any stray markdown fences just in case.
         if raw.startswith("```"):
             raw = re.sub(r"^```(?:json)?\s*|\s*```\s*$", "", raw, flags=re.MULTILINE).strip()
@@ -276,7 +337,7 @@ async def _classify_intent_gemini(user_prompt: str) -> Dict[str, Any]:
     except Exception as e:
         logger.warning("[classifier] gemini call failed: %s -- raw=%r -- using fallback",
                        e, (raw[:200] if 'raw' in locals() else "<no response>"))
-        return dict(_CLASSIFICATION_FALLBACK)
+        return _fallback_classification(user_prompt)
 
     # Validate + sanitize output
     out = dict(_CLASSIFICATION_FALLBACK)
