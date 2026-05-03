@@ -1718,9 +1718,14 @@ async def _generate_with_model(
             raw_prompt = getattr(req, "_raw_user_prompt", req.prompt) or req.prompt
             original_prompt = raw_prompt[:1000]
 
+            # Prisma Python client requires the relation form (`user.connect`)
+            # rather than scalar `userId` for create(); also rejects None for
+            # nullable Json fields - pass an empty dict instead so the field
+            # is always present.
+            _meta_payload = {"text_validation": text_validation} if text_validation else {}
             generation = await prisma.generation.create(
                 data={
-                    "userId": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c",  # DEV_USER UUID
+                    "user": {"connect": {"id": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c"}},  # DEV_USER UUID
                     "mode": "REALISM",  # Default mode
                     "originalPrompt": original_prompt,
                     "enhancedPrompt": prompt_for_model,
@@ -1735,7 +1740,7 @@ async def _generate_with_model(
                     "modelUsed": model_id,
                     "bucket": bucket,
                     "generationTimeSeconds": latency,
-                    "metadata": json.dumps({"text_validation": text_validation}) if text_validation else None,
+                    "metadata": json.dumps(_meta_payload),
                 }
             )
 

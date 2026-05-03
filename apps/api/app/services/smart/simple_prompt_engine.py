@@ -251,7 +251,11 @@ async def _classify_intent_gemini(user_prompt: str) -> Dict[str, Any]:
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
             config=types.GenerateContentConfig(
                 temperature=0.1,
-                max_output_tokens=400,
+                # Gemini 2.5 Flash with response_mime_type=json sometimes burns
+                # ~1000 tokens of internal "thinking" before emitting the JSON.
+                # 1500 = safe ceiling for our 5-key payload, well under the
+                # model's 8192 hard cap.
+                max_output_tokens=1500,
                 response_mime_type="application/json",
             ),
         )
