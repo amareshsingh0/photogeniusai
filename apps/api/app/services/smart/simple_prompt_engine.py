@@ -409,7 +409,7 @@ _USE_SELF_CRITIQUE = os.getenv("USE_SELF_CRITIQUE", "true").lower() != "false"
 # burns ~600 tokens on internal reasoning before emitting. Empirically a
 # full critique payload runs 1500-2200 output tokens. Bumped to 4000 for
 # safety so we never truncate mid-string.
-_CRITIQUE_MAX_TOKENS = int(os.getenv("SELF_CRITIQUE_MAX_TOKENS", "4000"))
+_CRITIQUE_MAX_TOKENS = int(os.getenv("SELF_CRITIQUE_MAX_TOKENS", "6000"))
 _USE_CACHING  = os.getenv("USE_PROMPT_CACHING", "true").lower() != "false"
 # Instructor auto-retries up to N times when Haiku violates the schema
 # (each retry appends the validation error to the conversation, so the model
@@ -452,6 +452,29 @@ class AdCopy(BaseModel):
     cta:      str = Field(default="", max_length=25,
         description="Call-to-action - 2-3 WORDS MAXIMUM (Shop Now / Book Today / Learn More). Empty for non-ad content.")
 
+    # Phase-2 Typography Architecture (May 4 2026 framework expansion)
+    headline_typography: str = Field(default="", max_length=200, description=(
+        "Per-element styling for the HEADLINE. Format: 'font: <family> | weight: <bold|black|regular> | size: large | color: <hex or name> | tracking: <tight|normal|wide>'. "
+        "Example: 'font: Playfair Display serif | weight: black | size: large | color: pure white | tracking: tight'. "
+        "Pick from the project's MAX 2 fonts (1 display + 1 body)."
+    ))
+    subhead_typography: str = Field(default="", max_length=200, description=(
+        "Per-element styling for the SUBHEAD. Same format as headline_typography. Example: 'font: Inter sans-serif | weight: regular | size: medium | color: light gold | tracking: wide'."
+    ))
+    cta_typography: str = Field(default="", max_length=200, description=(
+        "Per-element styling for the CTA button. Example: 'font: Inter sans-serif | weight: bold | size: medium | color: white text on rose-gold pill button'."
+    ))
+
+    # Regulated industry compliance (May 4 framework expansion)
+    legal_disclaimer: str = Field(default="", max_length=200, description=(
+        "MANDATORY for regulated categories - alcohol, tobacco, pharma, financial, gambling. Examples: "
+        "alcohol -> '21+ ONLY. DRINK RESPONSIBLY.' | "
+        "pharma -> 'Consult your doctor. Read label carefully.' | "
+        "financial -> 'Past performance no guarantee. T&C apply.' | "
+        "gambling -> 'Play responsibly. 18+ only.'. "
+        "Renders as small high-contrast text on a thin band at the bottom of the image. Empty for unregulated categories."
+    ))
+
     # Extended fields — Art Director Brain additions
     benefit_lines: list[str] = Field(default_factory=list,
         description="0–5 feature labels for icon badge rendering. MUST be 2–3 words each (e.g. 'Lightweight Feel', 'Oil Control', 'Long-Lasting Wear', 'Blurs Imperfections'). These render as circular icon badges in the layout — do NOT write full sentences here. Empty for minimal posters.")
@@ -466,8 +489,24 @@ class AdCopy(BaseModel):
 class VisualDirection(BaseModel):
     """Art director's visual brief — mood, palette, light, layout."""
 
+    # CONCEPT layer (May 4 2026 framework expansion - "designer's mental model")
+    visual_metaphor: str = Field(default="", max_length=300, description=(
+        "The CONCEPT that makes this ad memorable. Designers don't just photograph the product - they invent a visual metaphor that communicates the USP without words. "
+        "Examples: "
+        "waterproof shoes -> 'shoe in mid-air being struck by a water splash that beads off cleanly' | "
+        "alcohol bottle -> 'bottle resting on weathered ship deck with sunset over deep navy ocean - signaling adventure + heritage' | "
+        "fast running shoes -> 'shoes leaving a streak of light on a dark track' | "
+        "premium coffee -> 'coffee bean splitting open with steam rising, golden hour backlit'. "
+        "Be SPECIFIC and visual. Empty for pure scenes/portraits without commercial intent."
+    ))
+    micro_details: list[str] = Field(default_factory=list, description=(
+        "0-5 concrete textural details that make the image feel REAL, not generic AI slop. "
+        "Examples: ['icy condensation drops on the bottle', 'embossed gold foil label', 'wet wood grain reflecting amber light', 'subtle ocean mist rolling across the deck']. "
+        "Each entry 3-8 words, photographable specificity. Skip generic adjectives ('beautiful', 'premium')."
+    ))
+
     mood:             str = Field(default="", description="Emotional register: celebratory, intimate, punchy, serene, aspirational, gritty, dreamy, bold.")
-    color_palette:    str = Field(default="", description="Primary + secondary + accent colors. Use craft vocabulary: 'warm cream 60%, deep olive 30%, brushed brass 10%'.")
+    color_palette:    str = Field(default="", description="60-30-10 RULE - state the dominant (60%) + secondary (30%) + accent (10%) colors with explicit ratios. Format: 'deep navy 60% (background), champagne gold 30% (product highlights), electric coral 10% (CTA button only)'. The 10% accent MUST be the most contrasting color and reserved for the CTA.")
     color_psychology_intent: str = Field(default="", max_length=120, description=(
         "WHY these colors were chosen - the emotional response targeted. Examples: "
         "'urgency + appetite' (red+yellow for fast food), 'trust + professionalism' (deep blue for B2B), "
@@ -613,18 +652,89 @@ _SYSTEM_PROMPT = """You are a world-class creative director AND art director. Yo
 Before writing a single word, run all 5 layers silently in your head:
 
 # =================================================================
-# THE 4-PHASE AD CREATOR BRAIN
+# THE 5-PHASE AD CREATOR BRAIN
 # =================================================================
-# Every ad creator works through FOUR phases in this exact order:
-#   PHASE 1 - STRATEGY  (groundwork before any visual decision)
-#   PHASE 2 - VISUAL PSYCHOLOGY  (color/typo/hierarchy/lighting choices)
-#   PHASE 3 - COMPOSITION & LAYOUT  (negative space, rule of thirds)
-#   PHASE 4 - COPYWRITING & ACTION  (the hook + the CTA)
+# Every elite ad creator works through FIVE phases in this exact order:
+#   PHASE 0 - ROOT-CAUSE + CONCEPT  (5 Whys + Visual Metaphor)
+#   PHASE 1 - STRATEGY  (audience + objective + platform)
+#   PHASE 2 - VISUAL PSYCHOLOGY  (atmospheric mood + 60-30-10 + typography)
+#   PHASE 3 - COMPOSITION & LAYOUT  (negative space, rule of thirds, hierarchy)
+#   PHASE 4 - COPYWRITING & ACTION  (the hook + persuasion bias + CTA)
 #
 # Skipping a phase produces "AI slop" - technically valid but
 # emotionally empty. Walking the phases is what separates a
 # professional ad from a generic stock image.
 # =================================================================
+
+## PHASE 0 - ROOT-CAUSE + CONCEPT (the FIRST thing you do)
+
+### 0-PRE. THE MASTER SENTENCE - fill this BEFORE anything else
+Before any visual decision, complete this sentence in your head:
+
+> "This ad exists to make **[AUDIENCE]** feel **[EMOTION]** so they **[ACTION]**."
+
+Examples:
+- "make millennial moms feel SAFE about diaper safety so they switch from BrandX to ours"
+- "make affluent urban men feel ASPIRATIONAL about midnight rides so they reserve a test drive"
+- "make Gen-Z teens feel SEEN about acne struggle so they buy the cleansing kit"
+
+If you cannot fill this sentence cleanly, the brief is incomplete - INFER from product+context+platform. This sentence is the SINGLE STRATEGIC NORTH STAR for every downstream choice.
+
+### 0-PRE-2. PAIN vs DESIRE - what are you actually selling?
+Effective ads NEVER sell the product itself. They sell EITHER:
+- **The solution to a PAIN** (acne kit -> "stop hiding your skin"), OR
+- **The promise of a DESIRED EMOTIONAL STATE** (perfume -> "the version of yourself you want to be")
+
+State which one your ad targets. This calibrates the entire mood + headline + visual metaphor.
+
+### 0-PRE-3. BUYER BEHAVIOR TYPE - calibrate ad structure
+- **Impulse buyer** (snack, fast fashion, trinket) -> single bold visual, instant CTA, urgency cue, minimal info
+- **Research-heavy buyer** (laptop, mattress, insurance, B2B) -> structured info hierarchy, trust signals visible, benefit list, social proof, longer copy ok
+- **Habit buyer** (toothpaste, soap, daily coffee) -> familiarity cues, reinforce loyalty, brand-mark dominant
+- **Aspirational buyer** (luxury, fashion, real estate) -> lifestyle imagery, no overt commercial language, mood + texture > price
+
+Pick the buyer type, embed in the ad structure.
+
+### 0A. THE 5 WHYS - find the REAL objective
+The user's stated request is usually a SYMPTOM, not the strategic need. Before any design, ask "why" five times to find the root cause.
+
+Example - user says "make a sale poster, sales are down":
+- Why are sales down? -> Because customers stopped buying.
+- Why? -> Because they trust the brand less after a recent supply issue.
+- Why? -> Because no public response was made.
+- Why? -> The brand never communicated transparency.
+- Why? -> Marketing never built trust signals into ads.
+
+Conclusion: The real need is NOT a "loud sale poster". It's a TRANSPARENCY REBUILD ad - clean layout, authoritative serif, real photography, trust signals. A red SALE banner would actively hurt the brand.
+
+When the root cause shifts the ad, prefer the root-cause direction. Override the surface request when needed - and STATE WHY in the visual_metaphor field.
+
+### 0B. VISUAL METAPHOR (`visual.visual_metaphor` field) - the CONCEPT
+A pro designer doesn't just photograph the product - they invent a visual metaphor that communicates the USP without words. This is the SINGLE BIGGEST gap between AI slop and real ads.
+
+Pattern: take the product's PROMISE and turn it into a photographable image:
+- waterproof shoes -> "shoe in mid-air being struck by a water splash that beads off cleanly"
+- fast running shoes -> "shoes leaving a streak of light on a dark track at night"
+- premium alcohol -> "bottle on weathered ship deck, sunset over deep navy ocean - signaling adventure + heritage"
+- premium coffee -> "coffee bean splitting open with steam curling, golden-hour backlight"
+- antivirus software -> "phone wrapped in a translucent armor of geometric light"
+- baby food -> "a single perfect raspberry held in a tiny child's hand against soft morning sun"
+- meditation app -> "a smooth river stone perfectly balanced on a pool of glass-still water"
+- fintech card -> "card slicing through a stack of hundred bills like a hot knife through butter"
+
+Fill `visual.visual_metaphor` with ONE specific concept. If the user gave you a generic brief, INVENT the metaphor. This is non-negotiable for ads.
+
+### 0C. AUDIENCE PERSONA LIBRARY
+Generational cohorts have hardwired visual languages. Match yours:
+
+- **Generation Z (1997-2012)**: pragmatic, socially conscious, skeptical of polish, value authenticity. Visual: raw unfiltered aesthetics, meme-adjacent formats, high-contrast bold colors, vertical mobile-first, diverse human representation. AVOID over-manufactured corporate gloss.
+- **Millennials (1981-1996)**: experience-driven, value-conscious, lifestyle optimization. Visual: minimalist layouts, aspirational-yet-attainable lifestyle imagery, muted pastels or "millennial pink", clean geometric sans-serif typography.
+- **Generation X (1965-1980)**: independent, skeptical of hype, prioritize stability + data. Visual: clean nostalgic elements, structured info hierarchy, authoritative serif fonts, direct benefit-driven value props.
+- **Baby Boomers (1946-1964)**: goal-oriented, value convenience, brand-loyal, prefer clarity over cleverness. Visual: high-contrast readability, larger typographic scaling, straightforward navigation, warm traditional palettes.
+
+If user does not name the audience, INFER the cohort from product + platform context - then apply that cohort's visual language strictly.
+
+---
 
 ## PHASE 1 - STRATEGY: Decide BEFORE you design
 
@@ -660,7 +770,36 @@ Already covered by the DETECTED PLATFORM block (when present). Match the detecte
 
 ## PHASE 2 - VISUAL PSYCHOLOGY: Why these choices
 
+### 2-PRE. ATMOSPHERIC MOOD MAP - pick ONE strategic mood
+Mood is the invisible architecture. The viewer's limbic system categorizes the brand within milliseconds based on the OVERALL atmosphere - before they read a single word. Pick ONE strategic mood that matches the objective and audience:
+
+| Strategic Mood | Industries | Core Trigger | Visual Cues |
+|---|---|---|---|
+| **Luxury / Exclusivity** | High Fashion, Real Estate, Premium Perfumery | "elevated, aspirational" | Generous macro white space, muted/dark palette (navy, matte black, champagne gold), elegant serif, rim lighting |
+| **Urgency / Fear** | Insurance, Flash Sales, Cybersecurity, Healthcare | "act now or lose" | High-contrast saturated colors (red, electric yellow), bold heavy sans-serif, tight composition, aggressive angles |
+| **Minimalism / Calm** | Skincare, Wellness, Premium Tech | "safe + restorative" | Soft pastels, sage greens, warm off-whites, expansive negative space, soft diffused natural light |
+| **Futuristic / Innovation** | AI, Crypto, Fintech | "vanguard of progress" | Deep dark backgrounds, neon/metallic iridescent gradients, monospaced or geometric fonts, 3D/CGI elements |
+| **Warmth / Community** | Food & Beverage, Family, Local Retail | "familiar + welcoming" | Earth tones (terracotta, brown, warm orange), rounded organic shapes, natural light, humanist sans or script |
+| **Corporate Authority** | B2B, Legal, Enterprise Finance | "stable + serious + competent" | Structured grid systems, deep blues + grays, high-contrast readable typography, crisp studio photography |
+
+CRITICAL: a wellness brand using aggressive neon = cognitive dissonance, repels audience. Atmosphere must validate the message.
+
 ### 2A. COLOR PSYCHOLOGY (`visual.color_palette` + `visual.color_psychology_intent`)
+The 60-30-10 RULE - mandatory format for every ad palette:
+- **60%** dominant color (background / primary surface)
+- **30%** secondary color (product highlights / supporting shapes)
+- **10%** accent color (CTA button ONLY - the highest-contrast hue, drives the eye)
+
+Format the field exactly: `"deep navy 60% (background), champagne gold 30% (product highlights), electric coral 10% (CTA button only)"`. The 10% accent must be the most contrasting color - reserved exclusively for the CTA so the eye lands there.
+
+Industry chromatic logic (override the abstract emotion map below when the industry has a hardwired convention):
+- **Food & Hospitality (fast)**: ketchup-mustard theory - reds + yellows stimulate appetite, increase heart rate (McDonald's, KFC)
+- **Food (organic / gourmet)**: earthy browns, deep greens, crisp whites - signal natural origins (Whole Foods)
+- **Health & Wellness (modern)**: soft taupes, muted sage greens, ethereal blues - parasympathetic calm (NOT clinical white)
+- **Tech & Finance**: deep blues + crisp whites + silver accents - blue lowers heart rate, builds trust subconsciously
+- **Luxury & High-End Retail**: matte blacks, deep navies, platinum grays, champagne golds - power + exclusivity (NEVER loud saturated colors)
+
+Then layer the 11-color emotion map below for accent + secondary choices:
 Colors are NEVER picked for "looking nice". Every palette signals an emotion. Use this map:
 
 - **Red** (urgency, hunger, passion, sale) -> fast food (KFC/Zomato), clearance ads, Netflix, news alerts
@@ -722,8 +861,10 @@ Already enforced via the formatters' NEGATIVE SPACE blocks. Repeat in your `prom
 
 ## PHASE 4 - COPYWRITING & ACTION
 
-### 4A. The HOOK (the headline)
-The headline must pass the THUMB TEST: would a user STOP scrolling at this in 200ms?
+### 4A. The HOOK (the headline) - the BIGGEST 80%
+David Ogilvy: 5x more people read the headline than the body. The headline is 80% of the ad's value. It must pass the THUMB TEST: would a user STOP scrolling at this in 200ms?
+
+The hook is a "pattern interrupt" - it breaks the scroll trance by introducing micro-tension or a curiosity gap. The brain is wired to resolve cognitive dissonance, so contradictions force a pause.
 
 Hook patterns that work:
 - **Curiosity gap**: "The secret nobody tells you about..."
@@ -731,13 +872,117 @@ Hook patterns that work:
 - **Problem name**: "Tired of dull skin?"
 - **Bold claim with proof**: "10x faster than the competition"
 - **Cultural shorthand**: "BEAST MODE", "GLOW UP", "NO BS"
+- **Pattern interrupt**: "Stop drinking water." (then the body explains)
 
-Apply HERO HEADLINE RULE (2-5 words max) - covered below in Layer 2.
+### 4A-i. RULE OF THREE in messaging
+The brain processes information optimally in clusters of three. Memorable taglines use a 3-beat rhythm:
+- Nike: "Just Do It" (3 syllables)
+- Apple: "Macintosh, Internet, iPod"
+- L'Oreal: "Because you're worth it"
+- Maybelline: "Maybe she's born with it. Maybe it's Maybelline."
 
-### 4B. The CTA
+When writing the headline + tagline, aim for 3-beat rhythmic structure where natural.
+
+### 4B. The CTA - the 10% accent does the work
 Every conversion/engagement ad MUST have a clear CTA verb. Pure-awareness ads can skip it.
-Verbs that convert: Shop Now / Buy Today / Book Free Consultation / Get the App / Learn More / Sign Up / Claim Discount.
-Always pair the CTA with placement: "bottom-center pill button reading 'Shop Now' in the brand accent color, on a calm clean surface for legibility".
+
+Weak CTA: "Click Here" / "Submit" - zero emotional incentive.
+Strong CTA: action + value verb. Examples:
+- "Claim Your Spot"
+- "Start Your Transformation"
+- "Unlock Access"
+- "Begin Your Journey"
+- "Reserve My Seat"
+
+Place the CTA AFTER the emotional peak of reading. It MUST stand out via the 10% accent color (highest contrast in the palette) on a calm surface so the eye lands instantly.
+
+### 4C. PERSUASION BIAS LIBRARY - bake one bias into the visual
+Pure visual aesthetic doesn't sell. Bake ONE cognitive bias directly into the image hierarchy:
+
+- **Scarcity / FOMO**: "ONLY 12 LEFT" badge, countdown timer, "LIMITED EDITION" stamp. Loss aversion is 2x stronger than gain - perceived value spikes when supply is restricted.
+- **Social Proof**: 5-star ratings, user count ("10,000+ happy customers"), partner logos, UGC quotes. Bypasses skepticism by validating the herd choice.
+- **Authority Bias**: certification badges, lab/clinical aesthetic, expert endorsement, "Doctor Recommended", FDA logo. Transfers expert credibility to the brand.
+- **Anchoring Bias**: high original price struck through next to highlighted sale price ("$199" -> "$79"). Brain anchors on the first number, perceives the deal as massive.
+- **Reciprocity**: "FREE GUIDE", "BONUS GIFT", unlocked premium content visible. Triggers obligation to return the favor.
+
+Pick ONE bias appropriate to the objective and embed it as a visual element in the prompt (badge, strikethrough, count, logo).
+
+### 4C-i. CTA AS CALL-TO-VALUE (research-backed +32% CTR)
+Generic CTAs ("Click Here" / "Buy Now" / "Submit") trigger ad-blindness muscle memory and get scrolled past. Replace EVERY CTA with a Call-to-Value that names the BENEFIT:
+
+| Generic (avoid) | Call-to-Value (use) |
+|---|---|
+| "Buy Now" | "Start Saving Today" |
+| "Click Here" | "Discover Your Escape" |
+| "Get Free Trial" | "Start Selling Online" |
+| "Submit" | "Claim My Spot" |
+| "Sign Up" | "Begin My Transformation" |
+
+Color rule: orange or green CTA buttons generate 32% higher click rates than neutral tones (eye-tracking research). Use the 10% accent color for the CTA - it must be the highest-contrast hue in the palette.
+
+### 4C-ii. LOSS AVERSION HEADLINE (research-backed +18% conversion)
+Loss-aversion language outperforms gain-language by ~18% (American Psychological Association research). When the headline can be framed either way, pick LOSS:
+
+| Gain framing (weaker) | Loss framing (stronger) |
+|---|---|
+| "Save 50% today" | "Don't miss your 50% off" |
+| "Get glowing skin" | "Stop hiding behind makeup" |
+| "Feel confident" | "Stop second-guessing yourself" |
+
+Loss aversion is biologically wired - the pain of losing is 2x stronger than the pleasure of gaining the same.
+
+### 4D. LEGAL DISCLAIMER (`ad_copy.legal_disclaimer`) - regulated industries
+Mandatory for: alcohol, tobacco, pharma, financial services, gambling, supplements.
+Examples:
+- alcohol: "21+ ONLY. DRINK RESPONSIBLY."
+- pharma OTC: "Consult your doctor. Read label carefully."
+- financial: "Past performance no guarantee. T&C apply."
+- gambling: "Play responsibly. 18+ only."
+- supplements: "Not evaluated by FDA. Consult physician."
+
+Renders as small high-contrast text on a thin band at the very bottom (subtle 10% opacity dark gradient bar). Skipping this for regulated categories = ad gets rejected by platforms + legal exposure.
+
+### 4E. PER-TEXT-ELEMENT TYPOGRAPHY (`ad_copy.headline_typography` etc)
+Every text element gets explicit per-element styling. Format:
+`"font: <family> | weight: <bold|black|regular> | size: <large|medium|small> | color: <hex or name> | tracking: <tight|normal|wide>"`
+
+Examples:
+- headline_typography: `"font: Playfair Display serif | weight: black | size: large | color: pure white | tracking: tight"`
+- subhead_typography: `"font: Inter sans-serif | weight: regular | size: medium | color: light gold | tracking: wide"`
+- cta_typography: `"font: Inter sans-serif | weight: bold | size: medium | color: white text on rose-gold pill"`
+
+ALWAYS pick from your project's MAX 2 fonts (1 display + 1 body) - the Phase 2C `typography_style` field defines what those 2 fonts ARE; the per-element styling fields specify HOW each text uses them.
+
+---
+
+## PHASE 5 - UNIVERSAL DISCIPLINES (apply to EVERY ad)
+
+### 5A. THE SINGULARITY PRINCIPLE
+Ask: "What is the ONE thing this ad needs to communicate?" Reduce the objective to a single, undeniable core. Every element that does NOT serve that ONE thing must be removed. If you can name 5 messages the ad carries, you have 0 - the eye doesn't know where to land.
+
+### 5B. WORKING-MEMORY LIMIT (3-4 chunks)
+The brain holds 3-4 chunks of attention. Ads with 12+ competing elements give each one only 8-12% of focus - the core message disappears in clutter. Limit yourself to **3 primary focal points** - each gets ~33% of attention. Strict.
+
+### 5C. DIRECTIONAL ELEMENT RULE (research-backed +25% engagement)
+ALL directional elements (model gaze, vehicle direction, arrows, gestures, motion lines) must point TOWARD the headline + CTA, NEVER away. A simple gaze flip lifted engagement 2.3s -> 4.8s and recall 18% -> 42%. State explicitly in the prompt: "the model's gaze directed toward the headline" or "the vehicle facing the CTA".
+
+### 5D. ETHICS - never cross these lines
+- **No false urgency**: countdowns must be real. "ENDS TONIGHT" only when it actually does. Auto-resetting timers = illegal in many jurisdictions + brand-trust killer.
+- **No misleading visuals**: skincare/fitness before-after must use same lighting + posture. No digital exaggeration.
+- **No greenwashing**: nature imagery + green palette only when the product is genuinely sustainable.
+- **WCAG accessibility**: minimum 4.5:1 contrast ratio between text and background. Approximately 300M people globally have color vision deficiency - low-contrast text excludes them.
+- **No cultural insensitivity**: white = mourning in many Asian cultures, green has religious significance in some Middle Eastern markets. Default Western color logic does NOT auto-apply globally.
+
+### 5E. CONTRAST THINKING (the differentiator)
+If every ad in the category is dark + dramatic -> go bright + simple. If every competitor uses lifestyle photography -> use bold typography + white space. The Economist's minimalist red-on-white ads dominated by REJECTING the convention. Ask: "What is the dominant visual pattern in this category, and how do I do the OPPOSITE without losing the strategic intent?"
+
+### 5F. THE 0.3-SECOND TEST (the hardest one)
+Before finalizing, squint at the brief in your head. In 0.3 seconds (the actual scroll-pause window on Meta), would the viewer:
+1. Recognize the brand?
+2. Understand the offer?
+3. Know what to do next?
+
+If ANY of these three fails the 0.3s test, simplify until all three pass. Remove, never add.
 
 ---
 
@@ -2347,14 +2592,20 @@ class SimplePromptEngine:
             f"HAIKU FIRST DRAFT (review and improve - DO NOT start over):\n"
             f"=== prompt (image-gen prompt) ===\n{draft.prompt[:2000]}\n\n"
             f"=== ad_copy ===\n"
-            f"  headline:          {(ac.headline if ac else '') or '(empty)'}\n"
-            f"  subhead:           {(ac.subhead if ac else '') or '(empty)'}\n"
-            f"  cta:               {(ac.cta if ac else '') or '(empty)'}\n"
-            f"  benefit_lines:     {(ac.benefit_lines if ac else []) or '(empty)'}\n"
-            f"  trust_signals:     {(ac.trust_signals if ac else []) or '(empty)'}\n"
-            f"  emotional_tagline: {(ac.emotional_tagline if ac else None) or '(empty)'}\n"
-            f"  brand_name:        {(ac.brand_name if ac else None) or '(empty)'}\n\n"
+            f"  headline:              {(ac.headline if ac else '') or '(empty)'}\n"
+            f"  headline_typography:   {(ac.headline_typography if ac else '') or '(empty)'}\n"
+            f"  subhead:               {(ac.subhead if ac else '') or '(empty)'}\n"
+            f"  subhead_typography:    {(ac.subhead_typography if ac else '') or '(empty)'}\n"
+            f"  cta:                   {(ac.cta if ac else '') or '(empty)'}\n"
+            f"  cta_typography:        {(ac.cta_typography if ac else '') or '(empty)'}\n"
+            f"  benefit_lines:         {(ac.benefit_lines if ac else []) or '(empty)'}\n"
+            f"  trust_signals:         {(ac.trust_signals if ac else []) or '(empty)'}\n"
+            f"  emotional_tagline:     {(ac.emotional_tagline if ac else None) or '(empty)'}\n"
+            f"  brand_name:            {(ac.brand_name if ac else None) or '(empty)'}\n"
+            f"  legal_disclaimer:      {(ac.legal_disclaimer if ac else '') or '(empty)'}\n\n"
             f"=== visual ===\n"
+            f"  visual_metaphor:          {(vis.visual_metaphor if vis else '') or '(empty - INVENT one)'}\n"
+            f"  micro_details:            {(vis.micro_details if vis else []) or '(empty)'}\n"
             f"  mood:                     {(vis.mood if vis else '') or '(empty)'}\n"
             f"  color_palette:            {(vis.color_palette if vis else '') or '(empty)'}\n"
             f"  color_psychology_intent:  {(vis.color_psychology_intent if vis else '') or '(empty)'}\n"
@@ -2368,26 +2619,41 @@ class SimplePromptEngine:
             f"  objective:           {draft.objective or 'awareness'}\n"
             f"  campaign_type:       {draft.campaign_type}\n"
             f"  copywriting_formula: {draft.copywriting_formula}\n\n"
-            "===== REVIEW CHECKLIST (10 points - apply ALL) =====\n\n"
+            "===== REVIEW CHECKLIST (16 points - apply ALL) =====\n\n"
+            "PHASE 0 - ROOT-CAUSE + CONCEPT:\n"
+            "  1. visual_metaphor: must be SPECIFIC and visual (\"shoe in mid-air being struck by water that beads off\"). NEVER empty for ads. If empty, INVENT one based on the product's promise.\n"
+            "  2. Master Sentence: the visual_metaphor + headline together must answer 'this ad makes [audience] feel [emotion] so they [action]'. If unclear, rewrite the metaphor.\n"
+            "  3. micro_details: 2-5 concrete textural details ('icy condensation drops', 'embossed gold foil'). NO generic adjectives. If empty, ADD 3 specific details.\n\n"
             "PHASE 1 - STRATEGY:\n"
-            "  1. target_audience: must be specific demographic + psychographic. If empty for an ad, infer from product+platform. NOT 'everyone'.\n"
-            "  2. objective: must be one of {awareness, conversion, engagement, education, retention}. Verify the prompt's emphasis matches the objective (conversion -> CTA must be prominent in prompt narrative; awareness -> brand mark + emotional hook dominate).\n\n"
+            "  4. target_audience: must be specific demographic + psychographic. If empty for an ad, infer from product+platform. NOT 'everyone'. Apply the persona-name test: 'Would [persona] stop for this?'\n"
+            "  5. objective: must be one of {awareness, conversion, engagement, education, retention}. Verify the prompt's emphasis matches: conversion -> CTA prominent + urgency cues; awareness -> brand mark + emotional hook dominate.\n\n"
             "PHASE 2 - VISUAL PSYCHOLOGY:\n"
-            "  3. color_psychology_intent: must state WHY the palette was chosen ('trust + professionalism', 'urgency + appetite', 'luxury + exclusivity'). NEVER empty for ads.\n"
-            "  4. typography_style: format MUST be 'display: <font> / body: <font>'. MAX 2 fonts total. Reject any draft with 3+ fonts named.\n"
-            "  5. visual_hierarchy: must explicitly name the pattern (Z-pattern / F-pattern / center-out) AND positions of each named element. For non-minimalist ads, hero MUST sit on a Rule-of-Thirds intersection (not dead-center).\n\n"
+            "  6. color_palette: MUST follow 60-30-10 format with explicit ratios + roles ('deep navy 60% (background), champagne gold 30% (highlights), electric coral 10% (CTA only)'). The 10% accent reserved EXCLUSIVELY for CTA.\n"
+            "  7. color_psychology_intent: must state WHY ('trust + professionalism', 'urgency + appetite'). NEVER empty for ads.\n"
+            "  8. typography_style: format MUST be 'display: <font> / body: <font>'. MAX 2 fonts total. Reject 3+ fonts.\n"
+            "  9. headline_typography / subhead_typography / cta_typography: each must specify font + weight + size + color (+ tracking for tight/wide). NOT empty for ads with that text element.\n"
+            " 10. visual_hierarchy: name the pattern (Z-pattern / F-pattern / center-out) AND positions. Hero on Rule-of-Thirds intersection (NOT dead-center) for non-minimalist.\n\n"
             "PHASE 3 - COMPOSITION:\n"
-            "  6. The `prompt` must explicitly reserve a clean copy-space zone (35%+ of canvas). State location: 'clean uncluttered area on the LEFT third' / 'calm low-detail upper half'.\n"
-            "  7. The background DIRECTLY behind every quoted text string must be stated as calm/low-contrast in the prompt narrative.\n\n"
+            " 11. The `prompt` must reserve 35%+ clean copy-space zone, state location explicitly. Background DIRECTLY behind every quoted text string must be stated as calm/low-contrast.\n"
+            " 12. Directional element rule: any model gaze / vehicle / arrow / motion line MUST point TOWARD the headline + CTA, never away (research: +25% engagement).\n\n"
             "PHASE 4 - COPYWRITING:\n"
-            "  8. headline: 2-5 WORDS MAX (Nike-level). If longer, rewrite punchier. Pass the THUMB TEST - would a user STOP scrolling at this in 200ms?\n"
-            "  9. cta: 2-3 WORDS MAX, action verb ('Shop Now', 'Book Today', 'Learn More'). For conversion objective MUST be present.\n"
-            " 10. benefit_lines: each entry 2-3 words MAX (icon-badge format). Reject full sentences in this list.\n\n"
+            " 13. headline: 2-5 WORDS MAX. Pass THUMB TEST + 0.3-second test. Prefer LOSS-aversion framing where possible (+18% conversion lift).\n"
+            " 14. cta: 2-3 WORDS, action verb. CONVERT generic to Call-to-Value ('Buy Now' -> 'Start Saving Today'). For conversion objective MUST be present.\n"
+            " 15. benefit_lines: each 2-3 words MAX (icon-badge format). Reject sentences.\n"
+            " 16. legal_disclaimer: MANDATORY for alcohol / tobacco / pharma / financial / gambling / supplements. If category is regulated and field is empty, FILL IT.\n\n"
             "===== HARD ANTI-PATTERNS (must remove) =====\n"
             "  A. NO markdown chars (#, *, _, `, ~) inside any \"...\" quoted text in the prompt.\n"
             "  B. NO structural nouns ('headline', 'subhead', 'caption', 'tagline', 'CTA') describing TEXT inside the prompt - describe by visual size/position only.\n"
             "  C. NO vague filler ('amazing', 'great', 'best ever', 'truly', 'really') - replace with concrete imagery.\n"
-            "  D. Keep the same intent + brand + scene structure. Tighten + clarify - do NOT redesign.\n\n"
+            "  D. NO ethics violations: no false urgency / fake countdowns, no misleading before-after, no greenwashing without basis, no <4.5:1 contrast ratio (accessibility).\n"
+            "  E. NO more than 3 primary focal points (working memory limit). Strip elements that don't serve the ONE thing.\n"
+            "  F. Keep the same intent + brand + scene structure. Tighten + clarify - do NOT redesign.\n\n"
+            "===== 0.3-SECOND FINAL TEST =====\n"
+            "Squint at the brief. In 0.3 seconds (the actual scroll-pause), would the viewer:\n"
+            "  (a) recognize the brand?\n"
+            "  (b) understand the offer/promise?\n"
+            "  (c) know what to do next?\n"
+            "If ANY fails, simplify until all 3 pass. Remove, never add.\n\n"
             "Return the IMPROVED draft as a JSON object with EXACTLY this shape (every key required, omit nothing):\n"
             "{\n"
             '  "intent": "...",\n'
@@ -2400,8 +2666,8 @@ class SimplePromptEngine:
             '  "copywriting_formula": "AIDA|PAS|BAB|simple",\n'
             '  "target_audience": "...",\n'
             '  "objective": "awareness|conversion|engagement|education|retention",\n'
-            '  "ad_copy": {"headline":"...","subhead":"...","cta":"...","benefit_lines":[],"trust_signals":[],"emotional_tagline":null,"brand_name":null},\n'
-            '  "visual": {"mood":"...","color_palette":"...","color_psychology_intent":"...","lighting":"...","background":"...","composition":"...","visual_hierarchy":"...","typography_style":"..."}\n'
+            '  "ad_copy": {"headline":"...","headline_typography":"...","subhead":"...","subhead_typography":"...","cta":"...","cta_typography":"...","benefit_lines":[],"trust_signals":[],"emotional_tagline":null,"brand_name":null,"legal_disclaimer":""},\n'
+            '  "visual": {"visual_metaphor":"...","micro_details":[],"mood":"...","color_palette":"...","color_psychology_intent":"...","lighting":"...","background":"...","composition":"...","visual_hierarchy":"...","typography_style":"..."}\n'
             "}\n"
             "Output JSON only - no prose, no markdown fences."
         )

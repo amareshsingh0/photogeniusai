@@ -32,6 +32,95 @@ _GOOGLE_MODELS  = {"gemini_3_imagen", "gemini_3_1_imagen", "imagen_4_base",
                    "imagen_4_ultra", "imagen_4_fast", "imagen_3"}
 _WAVESPEED_PASS = {"wan_2_7", "grok_2_imagine", "hunyuan_image"}
 
+
+# ----------------------------------------------------------------------
+# Category -> concrete product noun map
+# ----------------------------------------------------------------------
+# Imagen + Wan have NO inherent knowledge of category abstractions like
+# "alcohol_beverage" or "beauty_cosmetics". They render best when given a
+# concrete photograph-able noun (e.g. "premium spirit bottle", "cosmetic
+# compact"). Without this map, formatters fell back to "<category> product"
+# which Imagen interpreted as e.g. "alcohol_beverage food product" -> chocolate
+# dessert (May 4 2026 visual regression for Wan + both Imagen models).
+#
+# Keys match category_recipes_mined.json (Pitt taxonomy) + manual recipes.
+_CATEGORY_PRODUCT_NOUN: Dict[str, str] = {
+    # Pitt-mined categories
+    "restaurant_cafe":         "gourmet plated dish",
+    "chocolate_candy":         "premium chocolate piece",
+    "snacks_packaged":         "snack product packaging",
+    "seasoning_condiments":    "condiment bottle",
+    "pet_care":                "pet food package",
+    "alcohol_beverage":        "premium dark glass spirit bottle with elegant label",
+    "coffee_tea":              "specialty coffee cup",
+    "beverage_soft":           "soft drink bottle or can",
+    "automotive":              "premium vehicle",
+    "consumer_electronics":    "consumer electronic device",
+    "telecom_isp":             "smartphone with network UI",
+    "financial_services":      "credit card or banking app screen",
+    "education":               "graduation cap and books",
+    "security_safety":         "home security device",
+    "saas_software":           "laptop screen showing software UI",
+    "professional_services":   "professional service scene",
+    "beauty_cosmetics":        "luxury cosmetic compact or bottle",
+    "healthcare":              "wellness product packaging",
+    "fashion_apparel":         "designer clothing or accessory",
+    "baby_products":           "baby product package",
+    "games_toys":              "game console or toy product",
+    "cleaning_products":       "household cleaning bottle",
+    "home_improvement":        "modern interior detail",
+    "home_appliances":         "home appliance product",
+    "travel_hospitality":      "luxury hotel or travel scene",
+    "media_entertainment":     "cinematic scene with title treatment",
+    "sports_fitness":          "premium athletic gear",
+    "retail_shopping":         "shopping bags and product display",
+    "gambling_lottery":        "casino chips or lottery ticket",
+    "environment_eco":         "natural eco-friendly product",
+    "animal_welfare":          "rescued animal portrait",
+    "human_rights":            "symbolic human-rights imagery",
+    "safety_awareness":        "public safety scene",
+    "political_campaign":      "political campaign poster scene",
+    "charity_nonprofit":       "charity / nonprofit imagery",
+    # Manual recipes (category_recipes.json)
+    "medical_pharma":          "medical product packaging",
+    "ayurveda_herbal":         "ayurvedic herbal jar with botanicals",
+    "packaging_design":        "premium packaging design",
+    "religious_spiritual":     "spiritual scene with traditional motifs",
+    "books_publishing":        "book cover with title treatment",
+    "music_albums":            "music album cover",
+    "podcast_audio":           "podcast cover artwork",
+    "sports_team":             "sports team athletic gear",
+    "movies_streaming":        "movie poster scene",
+    "gaming_esports":          "esports scene with gaming gear",
+    "dating_app":              "smartphone with dating app UI",
+    "crypto_web3":             "crypto wallet or token visual",
+    "salon_spa":               "spa product with botanicals",
+    "dental_clinic":           "dental clinic product",
+    "optical_eyewear":         "premium eyewear product",
+    "school_k12":              "school supplies and books",
+    "coaching_test_prep":      "study materials with test books",
+    "wedding_services":        "wedding floral arrangement",
+    "florist_bouquet":         "fresh flower bouquet",
+    "bakery_cake":             "artisan cake or pastry",
+    "legal_services":          "legal documents and gavel",
+    "insurance_finance":       "insurance documents and security symbols",
+    "loans_credit":            "credit card or loan documentation",
+    "astrology_numerology":    "celestial chart with mystical motifs",
+    "yoga_meditation":         "yoga mat with serene scene",
+}
+
+
+def _product_noun(subject_category: str, brand: str = "") -> str:
+    """Return a concrete product noun for the category. Falls back to
+    'premium product' when the category isn't mapped."""
+    if not subject_category or subject_category == "general":
+        return "premium product"
+    noun = _CATEGORY_PRODUCT_NOUN.get(subject_category)
+    if noun:
+        return noun
+    # Soft fallback: humanize the key
+    return f"premium {subject_category.replace('_', ' ')} product"
+
 # Designer-brief words Flux renders literally or misinterprets as composition
 # instructions ("locked across the top third" -> Flux may tile the text).
 _FLUX_STRIP = re.compile(
@@ -304,6 +393,11 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     signals    = [s for s in (ad_copy.get("trust_signals") or []) if s]
     tagline    = (ad_copy.get("emotional_tagline") or "").strip()
     brand_name = (ad_copy.get("brand_name") or "").strip()
+    # Per-text typography (May 4 framework expansion)
+    headline_typo = (ad_copy.get("headline_typography") or "").strip()
+    subhead_typo  = (ad_copy.get("subhead_typography") or "").strip()
+    cta_typo      = (ad_copy.get("cta_typography") or "").strip()
+    legal_disclaimer = (ad_copy.get("legal_disclaimer") or "").strip()
 
     mood        = (visual.get("mood") or "").strip()
     palette     = (visual.get("color_palette") or "").strip()
@@ -313,6 +407,9 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     background  = (visual.get("background") or "").strip()
     typo        = (visual.get("typography_style") or "").strip()
     hierarchy   = (visual.get("visual_hierarchy") or "").strip()
+    # Phase-0 concept fields (May 4 framework expansion)
+    visual_metaphor = (visual.get("visual_metaphor") or "").strip()
+    micro_details   = [str(d).strip() for d in (visual.get("micro_details") or []) if str(d).strip()]
 
     persona_specialty = {
         "beauty":      "luxury beauty and cosmetics campaigns",
@@ -344,6 +441,17 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
         "Act as a world-class advertising art director specializing in "
         f"{persona_specialty}."
     )
+
+    # PHASE 0 - CONCEPT (visual metaphor + micro-details). The single biggest
+    # gap between AI slop and real ads. Surfaced FIRST so GPT internalizes the
+    # idea before any layout decision.
+    concept_bits: list[str] = []
+    if visual_metaphor:
+        concept_bits.append(f"- VISUAL METAPHOR (the CONCEPT): {visual_metaphor}")
+    if micro_details:
+        concept_bits.append("- MICRO-DETAILS to render: " + "; ".join(micro_details[:5]))
+    if concept_bits:
+        sections.append("CREATIVE CONCEPT:\n" + "\n".join(concept_bits))
 
     # PHASE 1 - STRATEGY brief (audience + objective)
     strategy_bits: list[str] = []
@@ -383,6 +491,8 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     if signals:
         trust_json = ", ".join(f'"{s}"' for s in signals[:5])
         text_lines.append(f"- TRUST_STRIP_ITEMS: [{trust_json}]")
+    if legal_disclaimer:
+        text_lines.append(f'- LEGAL_DISCLAIMER: "{legal_disclaimer}"')
 
     if text_lines:
         sections.append(
@@ -455,17 +565,21 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
         )
 
     if headline:
+        # Per-element typography (Phase 4E framework expansion). When Haiku
+        # provided headline_typography, use it verbatim; else fall back.
+        head_style = headline_typo or "large bold uppercase condensed sans-serif, pure white or brand accent color, tight tracking"
         layout_lines.append(
             "- HEADLINE PLACEMENT: Center the HERO_HEADLINE in the upper-middle text region, "
-            "in large bold uppercase condensed sans-serif. Dominant text element. "
+            f"styled as: {head_style}. Dominant text element. "
             "The background DIRECTLY behind these letters must be a clean uncluttered "
             "surface so every character is fully legible and crisp."
         )
 
     if subhead:
+        sub_style = subhead_typo or "clean sans-serif body weight, lighter color than headline, wide tracking, medium size"
         layout_lines.append(
-            "- SUBHEADLINE PLACEMENT: Place the SUBHEADLINE directly below the HERO_HEADLINE "
-            "in an elegant italic or script font for premium high-low contrast."
+            "- SUBHEADLINE PLACEMENT: Place the SUBHEADLINE directly below the HERO_HEADLINE, "
+            f"styled as: {sub_style}. High-low contrast with the headline."
         )
 
     if benefits and len(benefits) >= 2:
@@ -486,10 +600,12 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
         )
 
     if cta:
+        cta_style = cta_typo or "bold sans-serif white text on a prominent pill-shaped button in the 10% accent color"
         layout_lines.append(
-            "- CTA PLACEMENT: At the bottom-center, render the CALL_TO_ACTION as either an elegant "
-            "script-style line of text or a prominent pill-shaped button in the brand accent color. "
-            "Place it on a calm, contrasting surface so the words read instantly from a thumbnail."
+            "- CTA PLACEMENT: At the bottom-center (or per visual hierarchy), render the CALL_TO_ACTION "
+            f"styled as: {cta_style}. The button MUST be the highest-contrast element on the canvas - "
+            "use the 10% accent color from the palette. Place it on a calm surface so it reads "
+            "instantly from a thumbnail. The CTA is the conversion engine - make it impossible to miss."
         )
 
     if signals:
@@ -497,6 +613,14 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
             "- TRUST STRIP PLACEMENT: A thin full-width horizontal band at the very bottom of the "
             "image, containing the TRUST_STRIP_ITEMS separated by vertical pipes or thin dividers, "
             "in small-caps or tracked sans-serif."
+        )
+
+    # LEGAL DISCLAIMER (Phase 4D) - mandatory for regulated categories.
+    if legal_disclaimer:
+        layout_lines.append(
+            f'- LEGAL DISCLAIMER: At the very bottom edge, on a thin 10%-opacity dark gradient bar '
+            f'spanning the full width, render in tiny pure-white sans-serif: "{legal_disclaimer}". '
+            "Must be legible but unobtrusive. Required by platform compliance."
         )
 
     # TYPOGRAPHY (Phase 2B) - explicit max-2-fonts directive.
@@ -567,6 +691,9 @@ def _format_for_flux(base_prompt: str, payload: Dict[str, Any]) -> str:
     subhead  = (ad_copy.get("subhead") or "").strip()
     cta      = (ad_copy.get("cta") or "").strip()
     brand    = (ad_copy.get("brand_name") or "").strip()
+    legal_disclaimer = (ad_copy.get("legal_disclaimer") or "").strip()
+    visual_metaphor  = (visual.get("visual_metaphor") or "").strip()
+    micro_details    = [str(d).strip() for d in (visual.get("micro_details") or []) if str(d).strip()]
 
     mood       = (visual.get("mood") or "polished").split(",")[0].strip()
     palette    = (visual.get("color_palette") or "").strip()
@@ -580,14 +707,26 @@ def _format_for_flux(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     parts: list[str] = []
 
-    # Scene opener (photographic, not designer) + audience tone
-    cat_clean = subject_category.replace("_", " ") if subject_category != "general" else "product"
-    opener = f"A {mood} commercial photograph of the {brand} {cat_clean}" if brand else f"A {mood} commercial product photograph"
+    # Scene opener (photographic, not designer) + audience tone.
+    # Use _CATEGORY_PRODUCT_NOUN map for a concrete photograph-able subject
+    # (Flux locks onto whatever noun comes first; "alcohol_beverage" -> garbage).
+    product_noun = _product_noun(subject_category, brand)
+    opener = f"A {mood} commercial photograph of a {product_noun} for the brand {brand}" if brand else f"A {mood} commercial photograph of a {product_noun}"
     if target_audience:
         ta = target_audience.split(",")[0].split(";")[0].strip()
         if ta and len(ta) <= 80:
             opener += f" aimed at {ta}"
     parts.append(opener)
+
+    # VISUAL METAPHOR (Phase 0B) - core concept that elevates the ad
+    if visual_metaphor:
+        vm_clean = _FLUX_STRIP.sub("", visual_metaphor).strip().rstrip(",.;:")
+        if vm_clean:
+            parts.append(f"the scene shows {vm_clean}")
+
+    # MICRO-DETAILS (Phase 0C) - Flux excels at concrete texture rendering
+    if micro_details:
+        parts.append("with details: " + ", ".join(d.rstrip(".,;:") for d in micro_details[:5]))
 
     # Objective-specific emphasis
     if objective == "conversion":
@@ -635,6 +774,8 @@ def _format_for_flux(base_prompt: str, payload: Dict[str, Any]) -> str:
         text_bits.append(f'a smaller line beneath reading "{subhead}"')
     if cta:
         text_bits.append(f'a prominent button at the bottom reading "{cta}"')
+    if legal_disclaimer:
+        text_bits.append(f'tiny white text at the very bottom edge on a dark band reading "{legal_disclaimer}"')
 
     if text_bits:
         parts.append("Text on the image: " + "; ".join(text_bits) + ".")
@@ -815,10 +956,13 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
     signals       = [s for s in (ad_copy.get("trust_signals") or []) if s]
     tagline       = (ad_copy.get("emotional_tagline") or "").strip()
     brand         = (ad_copy.get("brand_name") or "").strip()
+    legal_disclaimer = (ad_copy.get("legal_disclaimer") or "").strip()
 
     mood          = (visual.get("mood") or "").strip()
     palette       = (visual.get("color_palette") or "").strip()
     psy_intent    = (visual.get("color_psychology_intent") or "").strip()
+    visual_metaphor = (visual.get("visual_metaphor") or "").strip()
+    micro_details   = [str(d).strip() for d in (visual.get("micro_details") or []) if str(d).strip()]
     lighting      = (visual.get("lighting") or "").strip()
     background    = (visual.get("background") or "").strip()
     hierarchy     = (visual.get("visual_hierarchy") or "").strip()
@@ -829,15 +973,17 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
     target_audience      = (payload.get("target_audience") or "").strip()
     objective            = (payload.get("objective") or "awareness").strip().lower()
 
-    # Subject  -  what the image is OF. Pull from category first (more concrete),
-    # then a clean intent if it's not a generic word like "ad"/"poster"/"general".
-    # Reject filler intents that produce garbage like "photograph of the ad".
+    # Subject - use the curated _CATEGORY_PRODUCT_NOUN map for a CONCRETE
+    # photograph-able noun (e.g. "premium spirit bottle"). Falls back to
+    # category-derived phrase, then to generic "premium product".
+    # Imagen + Wan rendered chocolate/dessert when given just "alcohol_beverage
+    # food product" (May 4 2026 visual regression) - the noun map fixes that.
     _GENERIC_INTENTS = {"ad", "advertisement", "poster", "banner", "creative",
                         "image", "graphic", "design", "general", "story", "post"}
-    if subject_category and subject_category not in ("", "general"):
-        cat_clean = subject_category.replace("_", " ")
-        # Avoid "beauty product" duplication when category already concrete
-        subject_phrase = cat_clean if cat_clean.endswith(("product", "good", "item", "service")) else f"{cat_clean} product"
+    subject_phrase = _product_noun(subject_category, brand)
+    # If user-provided intent is concrete (not generic), prefer it.
+    if intent and intent not in _GENERIC_INTENTS and subject_category in ("", "general"):
+        subject_phrase = intent.replace("_", " ")
     elif intent and intent not in _GENERIC_INTENTS:
         subject_phrase = intent.replace("_", " ")
     else:
@@ -872,6 +1018,22 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
         if ta and len(ta) <= 80:
             opener += f" aimed at {ta}"
     sentences.append(opener + ".")
+
+    # VISUAL METAPHOR (Phase 0B framework expansion) - the CONCEPT that makes
+    # the ad memorable. Imagen renders metaphor descriptions as scene direction
+    # quite well when stated as a concrete photograph-able sentence.
+    if visual_metaphor:
+        # Strip any structural-noun risks
+        vm_clean = _IMAGEN_DESIGNER_VOCAB.sub("", visual_metaphor).strip().rstrip(",.;:")
+        if vm_clean and len(vm_clean) <= 280:
+            sentences.append(f"The scene shows: {vm_clean}.")
+
+    # MICRO-DETAILS (Phase 0C) - concrete textural specifics that elevate
+    # generic AI imagery to real-feeling photography.
+    if micro_details:
+        # Cap at 5, join naturally
+        details_str = ", ".join(d.rstrip(".,;:") for d in micro_details[:5])
+        sentences.append(f"Visible details include {details_str}.")
 
     # Objective hint - tells Imagen what to emphasize without structural words.
     if objective == "conversion":
@@ -911,16 +1073,19 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
             f"Centered in the upper portion, a large bold line of text reads \"{headline}\"."
         )
 
-    # Just below headline: subheadline (italic/script described visually)
-    if subhead:
+    # Just below headline: subheadline (italic/script described visually).
+    # CAP at 4 words - Imagen mangles longer strings (May 4 2026: rendered
+    # "Premium Spirits, Uncompromising Taste" as "Unconsprioming"). Drop
+    # subhead if longer; the headline + tagline + CTA still carry the message.
+    if subhead and len(subhead.split()) <= 4:
         sentences.append(
             f"Just beneath it, in elegant italic script, a smaller line reads \"{subhead}\"."
         )
 
-    # Hero product on the right (only describe if we have a CONCRETE category;
-    # generic "product" / "ad" produces meaningless "photograph of the ad" text).
-    if subject_category in ("beauty", "food", "fashion", "tech", "health") and \
-       subject_phrase and subject_phrase.lower() not in ("product", "ad", "advertisement", "general"):
+    # Hero product - now uses _CATEGORY_PRODUCT_NOUN map so we always have
+    # a concrete photograph-able noun. Render for ANY non-generic category
+    # (was previously gated on hardcoded short list).
+    if subject_phrase and subject_phrase != "premium product":
         # Use brand-aware phrasing when brand exists, else just category subject.
         hero_subject = f"{brand} {subject_phrase}".strip() if brand else subject_phrase
         sentences.append(
@@ -956,6 +1121,13 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
         sentences.append(
             f"Just above it, a thin horizontal banner contains {len(signals[:4])} small icons "
             f"each labeled with one of: {signal_labels}."
+        )
+
+    # LEGAL DISCLAIMER (Phase 4D framework expansion) - mandatory for
+    # regulated categories. Imagen renders short bottom-edge text reasonably.
+    if legal_disclaimer and len(legal_disclaimer) <= 80:
+        sentences.append(
+            f'At the very bottom edge, a thin dark band contains tiny pure-white text reading "{legal_disclaimer}".'
         )
 
     # -- 4. Closing aesthetic anchor (palette + lighting + color psychology) -
@@ -1028,6 +1200,8 @@ def _format_for_wavespeed(base_prompt: str, payload: Dict[str, Any]) -> str:
     lighting   = (visual.get("lighting") or "").strip()
     background = (visual.get("background") or "").strip()
     hierarchy  = (visual.get("visual_hierarchy") or "").strip()
+    visual_metaphor = (visual.get("visual_metaphor") or "").strip()
+    micro_details   = [str(d).strip() for d in (visual.get("micro_details") or []) if str(d).strip()]
     subject_category = (payload.get("subject_category") or "general").strip()
     target_audience  = (payload.get("target_audience") or "").strip()
     objective        = (payload.get("objective") or "awareness").strip().lower()
@@ -1045,68 +1219,74 @@ def _format_for_wavespeed(base_prompt: str, payload: Dict[str, Any]) -> str:
         logger.info("[formatter][wavespeed/scene] %d->%d chars", len(base_prompt), len(scene))
         return scene
 
-    # AD MODE - construct a Wan-native scene narrative from structured data.
-    parts: list[str] = ["Highly detailed commercial photography style"]
+    # AD MODE - terse, product-noun-first prompt. Wan locks onto the FIRST
+    # concrete noun it sees; if you bury the product under "advertisement
+    # scene featuring the AlcShip alcohol_beverage" it will pick whatever
+    # noun catches its parser (chocolate balls, dessert, etc - May 4 2026
+    # regression). Lead with a concrete photograph-able product noun from
+    # _CATEGORY_PRODUCT_NOUN.
+    product_noun = _product_noun(subject_category, brand)
+    parts: list[str] = []
 
-    cat_clean = subject_category.replace("_", " ") if subject_category != "general" else "product"
-    opener = f"a {mood} advertisement scene featuring the {brand} {cat_clean}" if brand else f"a {mood} {cat_clean} advertisement scene"
-    if target_audience:
-        ta = target_audience.split(",")[0].split(";")[0].strip()
-        if ta and len(ta) <= 80:
-            opener += f" aimed at {ta}"
-    parts.append(opener)
+    # Opener: concrete subject FIRST, brand second, mood third.
+    if brand:
+        parts.append(f"Premium commercial photograph of a {product_noun} for the brand {brand}")
+    else:
+        parts.append(f"Premium commercial photograph of a {product_noun}")
 
-    # Objective-specific emphasis
-    if objective == "conversion":
-        parts.append("framed to make the brand call-to-action visually dominant")
-    elif objective == "awareness":
-        parts.append("framed around one bold iconic visual for brand recall")
-    elif objective == "engagement":
-        parts.append("framed as a single scroll-stopping shot")
+    # Mood as adjective (after the subject is anchored)
+    if mood and mood != "polished":
+        parts.append(mood)
 
+    # VISUAL METAPHOR - Wan respects short scene directives. Cap at 120 chars.
+    if visual_metaphor:
+        vm_clean = _IMAGEN_DESIGNER_VOCAB.sub("", visual_metaphor).strip().rstrip(",.;:")
+        if vm_clean and len(vm_clean) <= 120:
+            parts.append(vm_clean)
+
+    # MICRO-DETAILS - up to 3 most distinctive (Wan starts ignoring after 3-4 details)
+    if micro_details:
+        parts.append(", ".join(d.rstrip(".,;:") for d in micro_details[:3]))
+
+    # Background - keep terse
     if background:
-        bg_clean = _IMAGEN_DESIGNER_VOCAB.sub("", background).strip()
-        if bg_clean:
-            parts.append(f"set in {bg_clean}")
+        bg_clean = _IMAGEN_DESIGNER_VOCAB.sub("", background).strip().rstrip(",.;:")
+        if bg_clean and len(bg_clean) <= 120:
+            parts.append(bg_clean)
 
+    # Lighting - keep terse
     if lighting:
-        lt_clean = _IMAGEN_DESIGNER_VOCAB.sub("", lighting).strip()
-        if lt_clean:
+        lt_clean = _IMAGEN_DESIGNER_VOCAB.sub("", lighting).strip().rstrip(",.;:")
+        if lt_clean and len(lt_clean) <= 100:
             parts.append(lt_clean)
     else:
-        parts.append("dramatic studio lighting from upper-left with soft fill")
+        parts.append("dramatic studio lighting")
 
-    parts.append("captured with cinematic depth, ultra-sharp focus on the product, premium 8k commercial photography")
+    parts.append("ultra-sharp focus, cinematic depth, 8k photorealistic")
 
-    # Negative space directive in Wan-friendly natural language
-    parts.append("a generous clean uncluttered area on one side of the frame providing calm space for the brand text")
+    # Negative space - SHORT version (Wan ignores long directives)
+    parts.append("clean uncluttered area on one side for text")
 
-    # Visual hierarchy - Wan respects spatial cues
-    if hierarchy:
-        h_clean = _IMAGEN_DESIGNER_VOCAB.sub("", hierarchy).strip().rstrip(",.;:")
-        if h_clean and len(h_clean) <= 180:
-            parts.append(f"composition follows a {h_clean}")
+    # ONE short text string only - Wan max 1-3 words reliable
+    if headline and len(headline.split()) <= 4:
+        parts.append(f'with the words "{headline}" displayed prominently')
 
-    # ONE short text string only - Wan struggles with long text
-    if headline and len(headline.split()) <= 5:
-        parts.append(f'with the bold word "{headline}" displayed prominently against the clean area')
-    if cta and len(cta.split()) <= 3 and brand:
-        # Only add CTA if very short and we have brand context
-        parts.append(f'a small button below reads "{cta}"')
+    # Brand text only if brand exists and headline absent (avoid duplication)
+    if brand and not headline:
+        parts.append(f'with "{brand}" wordmark visible')
 
+    # Palette - keep brief
     if palette:
         pal_clean = re.sub(r"\s*\d{1,3}\s*%", "", palette).strip().rstrip(",.;:")
-        if pal_clean:
-            if psy_intent:
-                parts.append(f"warm color tones of {pal_clean} signaling {psy_intent}")
-            else:
-                parts.append(f"warm color tones of {pal_clean}")
+        if pal_clean and len(pal_clean) <= 80:
+            parts.append(f"{pal_clean} tones")
 
-    parts.append("photorealistic, single unified scene, no panels, no collage")
+    parts.append("single unified composition, no collage, no panels")
 
     result = ", ".join(p.rstrip(",.") for p in parts if p) + "."
     result = _IMAGEN_DESIGNER_VOCAB.sub("", result)
     result = re.sub(r"  +", " ", result).strip()
 
-    logger.info("[formatter][wavespeed/ad] %d->%d chars", len(base_prompt), len(result))
+    logger.info("[formatter][wavespeed/ad] %d->%d chars (product=%r)",
+                len(base_prompt), len(result), product_noun[:40])
     return result

@@ -252,7 +252,63 @@ Five gap-closing improvements deployed together to narrow the gap with ChatGPT/G
 
 **E. Background-behind-text clauses** - Each text-element bullet in GPT formatter now ends with "background DIRECTLY behind these letters must be a clean uncluttered surface". Same idea woven into Imagen's negative-space sentence.
 
-**C. Stage-2.5 critique pass (now via GEMINI)** - Per project rule: Haiku owns prompt enrichment, Gemini owns ALL other LLM steps. The critique pass calls Gemini 2.5 Flash with a 10-point checklist covering all 4 phases of the ad-creator framework. Only fires when `classification.is_ad == True`. Flag: `USE_SELF_CRITIQUE` (default `true`). +$0.0001 / +~1.5s per ad generation. Failure non-fatal (keeps draft).
+**C. Stage-2.5 critique pass (now via GEMINI)** - Per project rule: Haiku owns prompt enrichment, Gemini owns ALL other LLM steps. The critique pass calls Gemini 2.5 Flash with a 16-point checklist (May 4 expansion) covering all 5 phases of the ad-creator framework + 6 hard anti-patterns + 0.3-second test. Only fires when `classification.is_ad == True`. Flag: `USE_SELF_CRITIQUE` (default `true`). +$0.0001 / +~1.5s per ad generation. Failure non-fatal (keeps draft).
+
+---
+
+## 5-PHASE AD CREATOR BRAIN v2 (May 4 2026 - full research-backed expansion)
+
+Expanded from May 3's 4-phase framework after deep dive into 4 new research docs. Added a brand-new **Phase 0** + expanded Phase 2 + new Phase 5. Now 5 phases:
+
+**PHASE 0 - ROOT-CAUSE + CONCEPT** (the FIRST thing the model does)
+- **Master Sentence**: "This ad makes [audience] feel [emotion] so they [action]" - filled BEFORE any visual decision.
+- **5 Whys** root-cause analysis - drill past surface request to find real strategic need.
+- **Visual Metaphor** (`visual.visual_metaphor` new field) - the CONCEPT that makes the ad memorable. Examples: "shoe in mid-air being struck by water that beads off cleanly" / "bottle on weathered ship deck, sunset over deep navy ocean". Single biggest gap between AI slop and real ads.
+- **Micro-Details** (`visual.micro_details` new list field) - 0-5 concrete textural specifics ("icy condensation drops", "embossed gold foil", "wet wood grain"). Replace generic adjectives.
+- **Pain vs Desire** mapping - sells the solution to a pain OR the promise of a desired state, NEVER the product.
+- **Buyer Behavior Type** - impulse / research / habit / aspirational - calibrates ad structure.
+- **Audience Persona Library** - Gen Z / Millennial / Gen X / Boomer hardwired visual languages.
+
+**PHASE 1 - STRATEGY** (audience + objective + platform - existing, retained)
+
+**PHASE 2 - VISUAL PSYCHOLOGY** (expanded May 4)
+- **Atmospheric Mood Map** - 6+ strategic moods (Luxury, Urgency, Minimalism, Futuristic, Warmth, Corporate Authority, Raw Excitement, Aggressive Marketing, Dark Aesthetic, Emotional Storytelling) each with industries + core trigger + visual cues.
+- **60-30-10 RULE** explicit format: dominant 60% + secondary 30% + accent 10% (CTA only). The 10% is the highest-contrast hue.
+- **Industry Chromatic Logic** - hardwired per-industry color conventions (food fast = ketchup-mustard, finance = blue, luxury = matte black + champagne gold).
+- **Color Psychology Map** - 11 base colors with emotion + example brands.
+- **Typography MAX 2 fonts rule** + font personality map (serif=heritage, sans=modern, slab=editorial, script=elegant, mono=technical).
+- **Per-element typography** (NEW: `ad_copy.headline_typography` / `subhead_typography` / `cta_typography`) - explicit `font: <family> | weight: ... | size: ... | color: ... | tracking: ...` format.
+- **Visual Hierarchy** (Z-pattern / F-pattern / center-out) + Rule of Thirds intersection.
+
+**PHASE 3 - COMPOSITION** (existing - 35%+ negative space, clean bg behind text, Rule of Thirds)
+
+**PHASE 4 - COPYWRITING & ACTION** (expanded May 4)
+- **Hook architecture** + Rule of Three + THUMB TEST.
+- **CTA as Call-to-Value** (research-backed +32% CTR) - "Buy Now" -> "Start Saving Today".
+- **Loss aversion headline** (+18% conversion lift) - "Don't miss" beats "Save".
+- **Persuasion Bias Library** - bake ONE bias into the visual: Scarcity / Social Proof / Authority / Anchoring / Reciprocity.
+- **Legal Disclaimer** (NEW: `ad_copy.legal_disclaimer`) - mandatory for alcohol/tobacco/pharma/financial/gambling. Renders on a thin dark band at bottom edge.
+
+**PHASE 5 - UNIVERSAL DISCIPLINES** (NEW May 4)
+- **Singularity Principle** - what is the ONE thing this ad communicates?
+- **Working memory limit** - max 3 primary focal points (each gets ~33% attention).
+- **Directional Element Rule** (research-backed +25% engagement) - all gazes/arrows/motion point TOWARD headline+CTA.
+- **Ethics**: no false urgency, no misleading visuals, no greenwashing, WCAG 4.5:1 contrast, cultural sensitivity.
+- **Contrast Thinking** - if every category competitor does X, do the OPPOSITE (Economist red-on-white).
+- **0.3-second test** - in 0.3s would viewer recognize brand + understand offer + know next step?
+
+## SCHEMA fields added May 4
+
+| Field | Type | Purpose |
+|---|---|---|
+| `visual.visual_metaphor` | str (≤300) | The CONCEPT - what makes this ad memorable |
+| `visual.micro_details` | list[str] (0-5) | Concrete textural specifics |
+| `ad_copy.headline_typography` | str (≤200) | Per-element font/weight/size/color/tracking |
+| `ad_copy.subhead_typography` | str (≤200) | Per-element styling |
+| `ad_copy.cta_typography` | str (≤200) | Per-element styling |
+| `ad_copy.legal_disclaimer` | str (≤200) | Regulated industry compliance text |
+
+All threaded through GPT, Imagen, Flux, Wan formatters in `model_prompt_formatter.py`.
 
 ---
 
@@ -291,6 +347,26 @@ The full ad-creator mental model now baked into the system prompt + schema + for
 | 3. Per-model formatting | (deterministic Python) | model dialect translation |
 
 Rule: Haiku owns prompt enrichment ONLY. Every other LLM step (classification, critique, future review/judging tasks) uses Gemini.
+
+---
+
+## CATEGORY -> PRODUCT NOUN MAP (May 4 2026 visual regression fix)
+
+`model_prompt_formatter.py:_CATEGORY_PRODUCT_NOUN` translates abstract category keys to concrete photograph-able nouns. Used by Imagen, Flux, Wan formatters to lead the prompt with a noun the diffusion model can lock onto.
+
+**Why this exists**: Imagen + Wan have no inherent knowledge of "alcohol_beverage" or "beauty_cosmetics". The earlier formatters fed `f"{cat_clean} product"` → models rendered chocolate balls instead of alcohol bottles (May 4 visual regression).
+
+**Fix**: 60+ entry map covering Pitt-mined + manual recipe categories. Examples:
+- `alcohol_beverage` -> "premium dark glass spirit bottle with elegant label"
+- `beauty_cosmetics` -> "luxury cosmetic compact or bottle"
+- `pet_care` -> "pet food package"
+- `medical_pharma` -> "medical product packaging"
+
+Helper: `_product_noun(subject_category, brand)` returns the curated noun, falls back to `f"premium {category} product"` for unmapped keys.
+
+**Imagen subhead cap (May 4)**: `_format_for_imagen` now drops subhead when >4 words — Imagen mangled "Premium Spirits, Uncompromising Taste" as "Unconsprioming" because of length-mangled spelling. Headline + tagline + CTA still carry the message.
+
+**Wan formatter (May 4 regression fix)**: Reverted from 1100-char narrative back to TERSE product-noun-first prompt (Wan parser locks on first concrete noun; long narrative buried the product noun and triggered wrong-subject generation).
 
 **Regenerate mined data** (run on server where datasets live):
 ```bash
