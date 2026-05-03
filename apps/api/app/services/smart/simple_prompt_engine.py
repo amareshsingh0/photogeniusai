@@ -251,14 +251,27 @@ async def _classify_intent_gemini(user_prompt: str) -> Dict[str, Any]:
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
             config=types.GenerateContentConfig(
                 temperature=0.1,
-                max_output_tokens=200,
+                max_output_tokens=400,
                 response_mime_type="application/json",
             ),
         )
         raw = (resp.text or "").strip()
+        if not raw:
+            # Empty body - likely safety blocked or model didn't comply.
+            finish = resp.candidates[0].finish_reason if resp.candidates else "UNKNOWN"
+            logger.warning("[classifier] empty Gemini response (finish_reason=%s) -- using fallback", finish)
+            return dict(_CLASSIFICATION_FALLBACK)
+        # Strip any stray markdown fences just in case.
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*|\s*```\s*$", "", raw, flags=re.MULTILINE).strip()
+        # Slice to outermost {...} so trailing prose doesn't break json.loads.
+        first, last = raw.find("{"), raw.rfind("}")
+        if first != -1 and last != -1 and last > first:
+            raw = raw[first:last + 1]
         data = json.loads(raw)
     except Exception as e:
-        logger.warning("[classifier] gemini call failed: %s -- using fallback", e)
+        logger.warning("[classifier] gemini call failed: %s -- raw=%r -- using fallback",
+                       e, (raw[:200] if 'raw' in locals() else "<no response>"))
         return dict(_CLASSIFICATION_FALLBACK)
 
     # Validate + sanitize output

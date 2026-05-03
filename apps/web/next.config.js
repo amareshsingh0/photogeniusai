@@ -28,22 +28,22 @@ const nextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 60,
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**.s3.amazonaws.com",
-      },
-      {
-        protocol: "https",
-        hostname: "**.r2.cloudflarestorage.com",
-      },
-      {
-        protocol: "https",
-        hostname: "**.supabase.co",
-      },
-      {
-        protocol: "https",
-        hostname: "picsum.photos",
-      },
+      // S3 generic + regional path-style endpoints (ap-south-1 etc).
+      { protocol: "https", hostname: "**.s3.amazonaws.com" },
+      { protocol: "https", hostname: "**.s3.*.amazonaws.com" },
+      { protocol: "https", hostname: "**.amazonaws.com" },
+      { protocol: "https", hostname: "**.r2.cloudflarestorage.com" },
+      { protocol: "https", hostname: "**.supabase.co" },
+      // fal.ai delivery (used for non-S3 fallback)
+      { protocol: "https", hostname: "**.fal.media" },
+      { protocol: "https", hostname: "v3.fal.media" },
+      { protocol: "https", hostname: "fal.media" },
+      // WaveSpeed CDN (returned when wan_2_7 / hunyuan finish)
+      { protocol: "https", hostname: "**.cloudfront.net" },
+      // Google generated content (Imagen sometimes returns gstatic)
+      { protocol: "https", hostname: "**.googleusercontent.com" },
+      { protocol: "https", hostname: "**.gstatic.com" },
+      { protocol: "https", hostname: "picsum.photos" },
     ],
   },
   // Optimize bundle
