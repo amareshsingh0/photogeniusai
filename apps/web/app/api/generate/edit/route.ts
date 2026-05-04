@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import axios from "axios";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+// Bumped May 5 2026 from 120s -> 300s. GPT Image 2 edit takes ~72s for
+// text_replace + ~30s overhead (image upload, storage URL fetch, response).
+// Plus the cross-model fallback path (Gemini 503 -> retry on GPT) can stack
+// up to ~150s total. 300s gives comfortable headroom; user sees progress
+// in the UI rather than HTML 504 timeout pages.
+export const maxDuration = 300;
 
 const LEGACY_QUALITY_MAP: Record<string, string> = {
   fast: "1k",
@@ -104,7 +109,7 @@ export async function POST(req: Request) {
         edit_mode: safeMode,
         extra_image_urls: resolvedExtras,
       },
-      { timeout: 120_000, headers: { "Content-Type": "application/json" }, validateStatus: null }
+      { timeout: 280_000, headers: { "Content-Type": "application/json" }, validateStatus: null }
     );
 
     if (res.status >= 400) {
@@ -119,6 +124,17 @@ export async function POST(req: Request) {
     return NextResponse.json(safeData);
   } catch (err) {
     console.error("[edit/route] error:", err);
-    return NextResponse.json({ success: false, error: "Edit service unavailable" }, { status: 503 });
+    // Differentiate timeout vs other errors so frontend shows useful message
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const isTimeout = /timeout|ETIMEDOUT|ECONNABORTED|socket hang up/i.test(errMsg);
+    return NextResponse.json(
+      {
+        success: false,
+        error: isTimeout
+          ? "Edit took too long and timed out. The model is under heavy demand - please try again in a moment."
+          : "Edit service unavailable",
+      },
+      { status: isTimeout ? 504 : 503 }
+    );
   }
 }

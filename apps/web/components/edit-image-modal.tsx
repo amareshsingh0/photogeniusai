@@ -467,11 +467,26 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
-      const data = await res.json()
+      // Defensive parse - if upstream proxy/timeout returns HTML error page,
+      // res.json() throws "Unexpected token '<'". Read as text first, attempt
+      // JSON parse, fall back to user-friendly timeout message.
+      const rawText = await res.text()
+      let data: { success?: boolean; image_url?: string; error?: string } = {}
+      try {
+        data = JSON.parse(rawText)
+      } catch {
+        // Not JSON - probably HTML 504/error page from proxy
+        const looksLikeTimeout = rawText.includes("<html") || rawText.includes("504") || rawText.includes("timeout")
+        throw new Error(
+          looksLikeTimeout
+            ? "Edit took too long and timed out. The model may still be processing - try again in a moment, or use a simpler instruction."
+            : `Edit failed (HTTP ${res.status})`
+        )
+      }
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Edit failed (${res.status})`)
       }
-      onResult(data.image_url)
+      onResult(data.image_url!)
       onClose()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Edit failed. Please try again.")
@@ -498,11 +513,23 @@ export default function EditImageModal({ imageUrl, onClose, onResult }: Props) {
           edit_mode: qa.mode,
         }),
       })
-      const data = await res.json()
+      // Same defensive parse as above
+      const rawText = await res.text()
+      let data: { success?: boolean; image_url?: string; error?: string } = {}
+      try {
+        data = JSON.parse(rawText)
+      } catch {
+        const looksLikeTimeout = rawText.includes("<html") || rawText.includes("504") || rawText.includes("timeout")
+        throw new Error(
+          looksLikeTimeout
+            ? "Quick action took too long. Try again in a moment."
+            : `Quick action failed (HTTP ${res.status})`
+        )
+      }
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Quick action failed (${res.status})`)
       }
-      onResult(data.image_url)
+      onResult(data.image_url!)
       onClose()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Quick action failed.")

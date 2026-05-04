@@ -373,6 +373,10 @@ export default function GeneratePage() {
   const editFileInputRef = useRef<HTMLInputElement>(null)
   // Advanced edit modal + logo overlay modal + pack modal
   const [showEditModal, setShowEditModal]       = useState(false)
+  // Tracks whether the current `result` was staged from a user upload via
+  // "Edit existing" (not a real generation). Used to clean up if the modal
+  // is closed without applying any edit.
+  const [editedFromUpload, setEditedFromUpload] = useState(false)
   const [showLogoModal, setShowLogoModal]       = useState(false)
   const [showPackModal, setShowPackModal]       = useState(false)
   // Poster inline editor state (updated image replaces result.image_url)
@@ -454,13 +458,30 @@ export default function GeneratePage() {
   }, [])
 
   // ── Edit-existing-image upload (inline in Image/Poster mode) ─────────────────
+  // After file selected, immediately open the full EditImageModal with this
+  // image as the source - users want the rich edit UI (Add Object, Add Text,
+  // Background swap, etc.) not just the inline upload + prompt-bar workflow.
   const handleEditImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      setEditSourceImage(ev.target?.result as string)
-      setEditSourceUrl(ev.target?.result as string)
+      const dataUrl = ev.target?.result as string
+      setEditSourceImage(dataUrl)
+      setEditSourceUrl(dataUrl)
+      // Stage the uploaded image as a "result" so EditImageModal can target it,
+      // then open the modal. The modal handles upload-to-storage + edits via
+      // /api/generate/edit. When user closes/applies, result.image_url updates.
+      // The "uploaded" model_used marker lets us detect this is an edit-existing
+      // flow (not a real generation) - if user closes the modal without editing,
+      // we clear the staged result so the page doesn't show a fake result.
+      setResult({
+        success: true,
+        image_url: dataUrl,
+        model_used: "uploaded",
+      })
+      setEditedFromUpload(true)
+      setShowEditModal(true)
     }
     reader.readAsDataURL(file)
     e.target.value = ""
@@ -1348,10 +1369,21 @@ export default function GeneratePage() {
         {showEditModal && result?.image_url && (
           <EditImageModal
             imageUrl={result.image_url}
-            onClose={() => setShowEditModal(false)}
+            onClose={() => {
+              setShowEditModal(false)
+              // If user closed without editing AND the result was just a
+              // staged upload (no real generation behind it), clear the
+              // result so the page doesn't show a fake "edit-existing" image.
+              if (editedFromUpload) {
+                setResult(null)
+                setEditedFromUpload(false)
+              }
+            }}
             onResult={(newUrl) => {
               setResult(prev => prev ? { ...prev, image_url: newUrl } : prev)
               setShowEditModal(false)
+              // Once edited, treat result as a real generation going forward
+              setEditedFromUpload(false)
             }}
           />
         )}
@@ -1637,13 +1669,19 @@ export default function GeneratePage() {
                 <input ref={editFileInputRef} type="file" accept="image/*" onChange={handleEditImageSelect} className="hidden" />
                 <button
                   type="button"
-                  onClick={() => { setEditMode(!editMode); if (editMode) clearEditSource() }}
+                  onClick={() => {
+                    // Direct-to-modal flow (May 5 2026): clicking "Edit existing"
+                    // opens the file picker immediately. Once user selects an
+                    // image, handleEditImageSelect opens the full EditImageModal
+                    // with all edit modes (Add Object, Add Text, Background, etc).
+                    // The legacy inline-upload flow (editMode toggle) is bypassed
+                    // because users want the rich edit UI, not the prompt-bar workflow.
+                    editFileInputRef.current?.click()
+                  }}
                   disabled={isGenerating}
                   className={cn(
                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all",
-                    editMode
-                      ? "border-primary/50 bg-primary/15 text-primary"
-                      : "border-white/[0.08] bg-white/[0.04] text-muted-foreground hover:text-foreground hover:border-white/15 hover:bg-white/[0.06]"
+                    "border-white/[0.08] bg-white/[0.04] text-muted-foreground hover:text-foreground hover:border-white/15 hover:bg-white/[0.06]"
                   )}
                 >
                   <Scissors className="h-3 w-3" />
