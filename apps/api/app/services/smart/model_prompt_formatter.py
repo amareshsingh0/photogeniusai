@@ -1092,11 +1092,23 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
     elif objective == "education":
         sentences.append("The composition presents clear supporting information arranged hierarchically with trust signals visible.")
 
-    # -- 2. Background / scene base ----------------------------------------------------------------------
+    # -- 2. HERO PRODUCT (moved up, May 5 2026) -----------------------------
+    # CRITICAL: hero product MUST come before background. Imagen's distiller
+    # caps prompts at 100 words sentence-aware. Earlier order put product
+    # sentence at position 9+ - regularly cut off, leaving Imagen with only
+    # background description -> renders the background AS the main subject
+    # (e.g. "stained plate" became the visual hero instead of detergent bottle).
+    # Now product sentence lands within first 60 words, always survives.
+    if subject_phrase and subject_phrase != "premium product":
+        sentences.append(
+            f"The main visual subject is a high-resolution photograph of {subject_phrase}, occupying the right two-thirds of the image."
+        )
+
+    # -- 3. Background / scene base -----------------------------------------
     if background:
         bg_clean = _IMAGEN_DESIGNER_VOCAB.sub("", background).strip()
         if bg_clean:
-            sentences.append(f"The background is {bg_clean}.")
+            sentences.append(f"The setting around the product is {bg_clean}.")
 
     # NEGATIVE SPACE: explicit copy-space sentence so Imagen reserves a clean
     # zone for the headline. Wording carefully avoids structural nouns like
@@ -1134,15 +1146,8 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
             f"contains the text \"{cta}\"."
         )
 
-    # Hero product - lead with depicted_subject (Haiku-extracted concrete noun).
-    # NEVER prepend brand to the visual hero - the brand goes in the wordmark
-    # text slot only, and the disambiguation sentence above already told Imagen
-    # the brand is text-only. This way "Cake detergent" -> hero is the
-    # detergent bottle, not "Cake bottle" which Imagen would render as cake.
-    if subject_phrase and subject_phrase != "premium product":
-        sentences.append(
-            f"On the right side of the image is a high-resolution photograph of {subject_phrase}."
-        )
+    # Hero product sentence MOVED to position 2 (before background) - see
+    # comment block earlier in this function. Don't re-add here.
 
     # Below product / mid-band: benefit row (max 4 - Imagen complexity ceiling)
     if benefits and len(benefits) >= 2:
