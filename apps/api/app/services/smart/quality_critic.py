@@ -499,12 +499,31 @@ class QualityCritic:
                 "\"all_rendered\":true}.\n\n"
                 f"Expected strings: {json.dumps(expected, ensure_ascii=True)}"
             )
-            raw_text = await self._call_vision_model(
-                system_prompt,
-                user_prompt,
-                image_b64,
-                max_tokens=1200,
-            )
+            # Retry with exponential backoff on 503 UNAVAILABLE - common when
+            # 4 parallel admin-mode validations fire within 1 second and exceed
+            # Gemini Vision's per-minute quota. 3 attempts: 0s, 4s, 10s waits.
+            raw_text = None
+            for attempt in range(3):
+                try:
+                    raw_text = await self._call_vision_model(
+                        system_prompt,
+                        user_prompt,
+                        image_b64,
+                        max_tokens=1200,
+                    )
+                    break
+                except Exception as call_err:
+                    msg = str(call_err)
+                    is_throttle = ("503" in msg or "UNAVAILABLE" in msg
+                                   or "429" in msg or "RESOURCE_EXHAUSTED" in msg)
+                    if not is_throttle or attempt == 2:
+                        raise
+                    wait_s = 4 if attempt == 0 else 10
+                    logger.info(
+                        "[text-validation] trace=%s model=%s throttled (attempt %d), retrying in %ds",
+                        trace_id, model_key, attempt + 1, wait_s,
+                    )
+                    await asyncio.sleep(wait_s)
             parsed = self._extract_json(raw_text)
             raw_items = parsed.get("items") if isinstance(parsed, dict) else []
             if not isinstance(raw_items, list):
