@@ -1011,6 +1011,18 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     sentences: list[str] = []
 
+    # -- 0. BRAND/PRODUCT disambiguation (GPT-style separation) -------------
+    # Imagen confuses brand-noun homonyms with the depicted object ("Cake"
+    # detergent -> rendered actual cake). Borrow GPT formatter's explicit
+    # BRAND_NAME vs PRODUCT separation: state the brand role + product role
+    # as 2 distinct facts UPFRONT so Imagen's text encoder treats them as
+    # different things.
+    if brand and subject_phrase and subject_phrase != "premium product":
+        sentences.append(
+            f'The brand name is "{brand}" - this is a wordmark printed on the product label only. '
+            f'The actual product depicted in the photograph is a {subject_phrase}.'
+        )
+
     # -- 1. Opening framing (mood + category + subject + audience tone) -----
     mood_word = mood.split(",")[0].strip() if mood else "polished"
     # Pick correct article (a/an) based on first vowel of mood_word.
@@ -1023,11 +1035,25 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
     # Append brand and subject only when meaningful and non-duplicative.
     sp_lower = subject_phrase.lower().strip()
     brand_lower = brand.lower().strip()
+    # Brand-noun homonym list - common English nouns used as brand names.
+    # Imagen confuses these with the literal object (e.g. "Cake" detergent
+    # → renders an actual cake; "Apple" tech → renders fruit). When brand
+    # matches one, force the product_noun to dominate the visual anchor.
+    _BRAND_NOUN_HOMONYMS = {
+        "cake", "apple", "sun", "moon", "bird", "fox", "crown", "tiger",
+        "lion", "eagle", "shell", "dove", "swan", "stone", "rose", "lotus",
+        "diamond", "pearl", "leaf", "tree", "river", "ocean", "mountain",
+        "fire", "ice", "cloud", "star", "bolt", "wave", "storm", "cobra",
+    }
+    is_homonym_brand = brand_lower in _BRAND_NOUN_HOMONYMS
     if brand:
-        opener += f" for {brand}"
-        # Add subject only if it adds info (not "product", not the brand name).
-        if sp_lower and sp_lower != "product" and sp_lower not in brand_lower and brand_lower not in sp_lower:
-            opener += f" {subject_phrase}"
+        if is_homonym_brand and sp_lower and sp_lower != "product":
+            # Lead with product, push brand to text-only slot
+            opener += f" for a {subject_phrase}"
+        else:
+            opener += f" for {brand}"
+            if sp_lower and sp_lower != "product" and sp_lower not in brand_lower and brand_lower not in sp_lower:
+                opener += f" {subject_phrase}"
     elif subject_phrase and sp_lower != "product":
         opener += f" for {subject_phrase}"
 
@@ -1101,11 +1127,23 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     # Hero product - now uses _CATEGORY_PRODUCT_NOUN map so we always have
     # a concrete photograph-able noun. Render for ANY non-generic category.
+    # When brand is a homonym (e.g. "Cake" detergent), DO NOT prepend brand
+    # to the visual subject - Imagen will render the brand-noun literally.
     if subject_phrase and subject_phrase != "premium product":
-        hero_subject = f"{brand} {subject_phrase}".strip() if brand else subject_phrase
+        if brand and not is_homonym_brand:
+            hero_subject = f"{brand} {subject_phrase}".strip()
+        else:
+            hero_subject = subject_phrase
         sentences.append(
             f"On the right side of the image is a high-resolution photograph of the {hero_subject}."
         )
+        # Add explicit disambiguation for homonym brands so Imagen knows the
+        # word-mark on the bottle is text, not the depicted subject.
+        if is_homonym_brand and brand:
+            sentences.append(
+                f'Note: "{brand}" is the brand name printed as a wordmark on the product label only - '
+                f'the photograph depicts a {subject_phrase}, not the literal object "{brand}".'
+            )
 
     # Below product / mid-band: benefit row (max 4 - Imagen complexity ceiling)
     if benefits and len(benefits) >= 2:
@@ -1239,8 +1277,22 @@ def _format_for_wavespeed(base_prompt: str, payload: Dict[str, Any]) -> str:
     parts: list[str] = []
 
     # Opener: concrete subject FIRST, brand second, mood third.
-    if brand:
+    # Skip brand mention in opener when brand is a homonym noun (e.g. "Cake"
+    # detergent) - Wan would lock onto the food noun "Cake" before reaching
+    # the actual product. Brand still appears as wordmark text later.
+    _BRAND_NOUN_HOMONYMS_W = {
+        "cake", "apple", "sun", "moon", "bird", "fox", "crown", "tiger",
+        "lion", "eagle", "shell", "dove", "swan", "stone", "rose", "lotus",
+        "diamond", "pearl", "leaf", "tree", "river", "ocean", "mountain",
+        "fire", "ice", "cloud", "star", "bolt", "wave", "storm", "cobra",
+    }
+    is_homonym_brand_w = brand.lower().strip() in _BRAND_NOUN_HOMONYMS_W
+    if brand and not is_homonym_brand_w:
         parts.append(f"Premium commercial photograph of a {product_noun} for the brand {brand}")
+    elif is_homonym_brand_w and brand:
+        # Homonym brand: lead with product, mention brand as wordmark only.
+        # Wan locks onto first concrete noun - keep it the product, not "Cake".
+        parts.append(f'Premium commercial photograph of a {product_noun} with "{brand}" wordmark printed on the label')
     else:
         parts.append(f"Premium commercial photograph of a {product_noun}")
 

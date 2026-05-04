@@ -355,11 +355,14 @@ async def _validate_rendered_text_log_only(
     bucket: str,
     model_key: str,
     trace_id: str,
+    is_ad: bool = False,
+    has_text: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """Run text-render validation telemetry without retrying generation."""
     if os.getenv("ENABLE_TEXT_VALIDATION", "true").strip().lower() == "false":
         return None
-    if bucket not in ("typography", "ad_creative"):
+    # Run validation for typography bucket OR any prompt with text/ad intent
+    if bucket not in ("typography", "ad_creative") and not is_ad and not has_text:
         return None
 
     expected = _extract_text_validation_expected(ad_copy)
@@ -1281,6 +1284,8 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             bucket=bucket,
             model_key=fal_model_key,
             trace_id=trace_id,
+            is_ad=_classification.get("is_ad", False) if isinstance(locals().get("_classification"), dict) else False,
+            has_text=_classification.get("has_text", False) if isinstance(locals().get("_classification"), dict) else False,
         )
 
         total_time = time.time() - start
@@ -1669,8 +1674,10 @@ async def _generate_with_model(
         # Use RAW user prompt for classification (req.prompt may be enriched).
         _classify_input = getattr(req, "_raw_user_prompt", None) or req.prompt
         try:
-            bucket = (await classify_intent(_classify_input)).get("bucket") or detect_capability_bucket(_classify_input)
+            _par_classification = await classify_intent(_classify_input)
+            bucket = _par_classification.get("bucket") or detect_capability_bucket(_classify_input)
         except Exception:
+            _par_classification = {}
             bucket = detect_capability_bucket(_classify_input)
         prompt_for_model = req.prompt
         simple_payload = getattr(req, "_simple_payload", None)
@@ -1710,6 +1717,8 @@ async def _generate_with_model(
             bucket=bucket,
             model_key=model_id,
             trace_id=trace_id,
+            is_ad=_par_classification.get("is_ad", False),
+            has_text=_par_classification.get("has_text", False),
         )
 
         # Save to database (Generation model)
