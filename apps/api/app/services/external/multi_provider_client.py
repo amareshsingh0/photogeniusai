@@ -581,11 +581,18 @@ MODEL_PROVIDER_CHAIN: Dict[str, List[tuple]] = {
         ("openai",   "gpt-image-2",                                  0.053),  # medium; 4K high = $0.211
     ],
     # ── Edit-specific models (google_edit / openai_edit providers) ────────────
+    # Cross-model fallback added May 5 2026: when Google's gemini-2.5-flash-image
+    # returns 503 UNAVAILABLE (frequent during high-demand windows), automatically
+    # fall back to GPT Image 2 edit. Same edit operation, slightly higher cost.
+    # Without this, frontend got raw 503 HTML and threw "Unexpected token '<'"
+    # JSON parse error on /api/v1/edit endpoint.
     "gemini_flash_edit": [
         ("google_edit", "gemini_flash_edit",                         0.040),
+        ("openai_edit", "gpt_image_2_edit",                          0.050),
     ],
     "gpt_image_2_edit": [
         ("openai_edit", "gpt_image_2_edit",                          0.050),
+        ("google_edit", "gemini_flash_edit",                         0.040),
     ],
     "recraft_v4_pro": [
         ("fal",      "fal-ai/recraft/v4/pro/text-to-image",         0.030),
