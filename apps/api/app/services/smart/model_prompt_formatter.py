@@ -1039,21 +1039,13 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
             opener += f" aimed at {ta}"
     sentences.append(opener + ".")
 
-    # VISUAL METAPHOR (Phase 0B framework expansion) - the CONCEPT that makes
-    # the ad memorable. Imagen renders metaphor descriptions as scene direction
-    # quite well when stated as a concrete photograph-able sentence.
-    if visual_metaphor:
-        # Strip any structural-noun risks
-        vm_clean = _IMAGEN_DESIGNER_VOCAB.sub("", visual_metaphor).strip().rstrip(",.;:")
-        if vm_clean and len(vm_clean) <= 280:
-            sentences.append(f"The scene shows: {vm_clean}.")
-
-    # MICRO-DETAILS (Phase 0C) - concrete textural specifics that elevate
-    # generic AI imagery to real-feeling photography.
-    if micro_details:
-        # Cap at 5, join naturally
-        details_str = ", ".join(d.rstrip(".,;:") for d in micro_details[:5])
-        sentences.append(f"Visible details include {details_str}.")
+    # NOTE (May 4 2026 fix): visual_metaphor + micro_details are INTENTIONALLY
+    # SKIPPED for Imagen. Reason: Imagen has a weak text encoder and confuses
+    # narrative scene words with text-to-render. Long descriptions like
+    # "scene shows bottle on weathered ship deck..." caused Imagen to render
+    # garbled text ("BolAbd Frogs", "Lab Testor", "Prestriction" in the
+    # DiaCare test). Imagen does best with terse opener + 3 quoted strings.
+    # The metaphor + details still flow to GPT/Flux/Wan formatters.
 
     # Objective hint - tells Imagen what to emphasize without structural words.
     if objective == "conversion":
@@ -1081,38 +1073,41 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
     )
 
     # -- 3. Top-down spatial walk-through ----------------------------------------------------------------------
-    # Top-left: brand mark (if brand exists)
+    # PRIORITY ORDER for Imagen: brand -> headline -> CTA. Distiller caps at
+    # 3 literals (May 4 2026 - Imagen mangles 4+ strings). Subhead + tagline
+    # SKIPPED for Imagen because they were rendering garbled
+    # ("Pharmacist Recommended" -> "Prestriction"). Headline + CTA carry the
+    # full message; the visual metaphor + product photo carry the rest.
+
+    # Top-left: brand mark (if brand exists) - LITERAL 1
     if brand:
         sentences.append(
             f"At the very top-left, a small clean rectangle contains the text \"{brand}\"."
         )
 
-    # Upper-center: headline
+    # Upper-center: headline - LITERAL 2
     if headline:
         sentences.append(
             f"Centered in the upper portion, a large bold line of text reads \"{headline}\"."
         )
 
-    # Just below headline: subheadline (italic/script described visually).
-    # CAP at 4 words - Imagen mangles longer strings (May 4 2026: rendered
-    # "Premium Spirits, Uncompromising Taste" as "Unconsprioming"). Drop
-    # subhead if longer; the headline + tagline + CTA still carry the message.
-    if subhead and len(subhead.split()) <= 4:
+    # Bottom-center: CTA (rectangle, not "button") - LITERAL 3 (mandatory)
+    # Moved BEFORE subhead/tagline so it survives the 3-literal cap.
+    if cta:
         sentences.append(
-            f"Just beneath it, in elegant italic script, a smaller line reads \"{subhead}\"."
+            f"At the very bottom, centered and prominent, a small solid-colored rectangle "
+            f"contains the text \"{cta}\"."
         )
 
     # Hero product - now uses _CATEGORY_PRODUCT_NOUN map so we always have
-    # a concrete photograph-able noun. Render for ANY non-generic category
-    # (was previously gated on hardcoded short list).
+    # a concrete photograph-able noun. Render for ANY non-generic category.
     if subject_phrase and subject_phrase != "premium product":
-        # Use brand-aware phrasing when brand exists, else just category subject.
         hero_subject = f"{brand} {subject_phrase}".strip() if brand else subject_phrase
         sentences.append(
             f"On the right side of the image is a high-resolution photograph of the {hero_subject}."
         )
 
-    # Below product / mid-band: benefit row (max 4  -  Imagen complexity ceiling)
+    # Below product / mid-band: benefit row (max 4 - Imagen complexity ceiling)
     if benefits and len(benefits) >= 2:
         labels = ", ".join(f'"{b}"' for b in benefits[:4])
         sentences.append(
@@ -1120,20 +1115,12 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
             f"each containing a simple line drawing and a label: {labels}."
         )
 
-    # Tagline: small line of text (single sentence, no functional label)
-    if tagline:
-        # Truncate if extremely long  -  Imagen renders clearer with terse strings
-        tagline_short = tagline[:120].rstrip(",.;: ")
-        sentences.append(
-            f"Beneath that, a small line of text reads \"{tagline_short}\"."
-        )
-
-    # Bottom-center: CTA (rectangle, not "button")
-    if cta:
-        sentences.append(
-            f"At the very bottom, centered and prominent, a small solid-colored rectangle "
-            f"contains the text \"{cta}\"."
-        )
+    # SUBHEAD + TAGLINE INTENTIONALLY OMITTED for Imagen.
+    # Reason: Imagen distiller takes first 3 quoted literals. We need brand +
+    # headline + CTA in those 3 slots. Including subhead/tagline pushed CTA
+    # to slot 4+, which got dropped, AND subhead got mangled into garbage
+    # ("BolAbd Frogs"). Headline + CTA carry the message; subhead removal is
+    # net positive for visual quality.
 
     # Above bottom: trust banner (max 4 items)
     if signals:

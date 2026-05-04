@@ -310,10 +310,12 @@ def _distill_for_imagen(prompt: str) -> str:
             continue
         seen.add(text.lower())
         literals.append(text)
-        # Bumped from 3 -> 4 (May 4 2026) so brand + headline + subhead + CTA
-        # all survive distillation. Imagen handles 4 short text strings reliably;
-        # 5+ degrades quality.
-        if len(literals) >= 4:
+        # Cap at 3 literals (May 4 2026 reverted from 4). Imagen mangles
+        # spelling on 4+ strings: "Pharmacist Recommended" became "Prestriction",
+        # "Lab Tested" became "Lab Testor", "Controlled" became "Controled" -
+        # all observed in DiaCare diabetes test. 3 strings = brand + headline +
+        # CTA reliably renders; subhead dropped (was the worst-mangled).
+        if len(literals) >= 3:
             break
 
     # 2) Clean-strip-safe noise: bracketed placeholders, hashtags, markdown.
@@ -432,24 +434,25 @@ def _distill_for_imagen(prompt: str) -> str:
         if cleaned:
             parts.append(cleaned)
         if literals:
-            # Use only size/position descriptors - no structural words.
-            # 4-string layout (May 4 2026): brand at top, headline center,
-            # subhead below, CTA on a contrasting button at the bottom.
+            # 3-string layout (May 4 2026): brand top -> headline center ->
+            # CTA on contrasting button at bottom. Imagen formatter now
+            # outputs literals in this priority order so the first 3 grabbed
+            # by this distiller match this rendering layout.
             text_parts = []
             n = len(literals)
             for i, t in enumerate(literals):
                 if i == 0:
+                    # Brand: prominent at top
                     text_parts.append(f'the text "{t}" displayed prominently in very large bold letters at the top')
                 elif i == 1:
-                    text_parts.append(f'and the text "{t}" displayed in smaller letters below')
+                    # Headline: large bold, central
+                    text_parts.append(f'and the text "{t}" displayed in large bold letters below')
                 elif i == 2:
-                    text_parts.append(f'and the text "{t}" displayed in even smaller letters beneath')
-                elif i == 3 and n >= 4:
-                    # Last literal is typically the CTA - render on a prominent
-                    # contrasting bottom button so it's not lost.
+                    # CTA (or 3rd most-important text): contrasting bottom button
                     text_parts.append(f'and the text "{t}" displayed inside a prominent solid-colored button at the bottom of the image')
                 else:
-                    text_parts.append(f'and the text "{t}" displayed in even smaller letters')
+                    # 4th+ literal (rare - distiller caps at 3 anyway)
+                    text_parts.append(f'and the text "{t}" displayed in smaller letters')
             parts.append("The image shows " + ", ".join(text_parts) + ".")
     else:
         # Non-ad scene (portrait, photoreal, anime, etc) — leave alone.
