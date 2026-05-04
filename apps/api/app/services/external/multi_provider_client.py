@@ -269,8 +269,10 @@ _IMAGEN_DESIGN_PERCENT = re.compile(
     re.IGNORECASE,
 )
 
-# Markdown-ish leftovers
-_IMAGEN_MD = re.compile(r"[#*`_]{1,3}")
+# Markdown-ish leftovers - any run of #, *, `, _, or ~. Standalone "#" too.
+# Also strip trailing/leading "[" and "]" since Imagen renders them as visible
+# UI brackets when adjacent to text (e.g. "[Shop Now]" -> renders brackets).
+_IMAGEN_MD = re.compile(r"[#*`_~]+")
 
 # "reads 'X'" / "reading 'X'" / "text 'X'" — extract the quoted X but drop the framing words later
 _IMAGEN_QUOTED = re.compile(r"['\"‘’“”]([^'\"‘’“”\n]{2,80})['\"‘’“”]")
@@ -324,6 +326,11 @@ def _distill_for_imagen(prompt: str) -> str:
     cleaned = _IMAGEN_BRACES.sub("", cleaned)
     cleaned = _IMAGEN_HASHTAGS.sub("", cleaned)
     cleaned = _IMAGEN_MD.sub("", cleaned)
+    # 2a) Strip any stray standalone bracket characters [ or ] that survived
+    #     (e.g. unmatched "Shop Now]" left from earlier strips). Imagen renders
+    #     these as visible UI bracket marks adjacent to text. Also strip stray
+    #     "<" and ">" used as placeholder markers.
+    cleaned = re.sub(r"[\[\]<>]", "", cleaned)
 
     # 2b) Hard-strip designer-brief enumerator phrases that Imagen renders
     #     literally on the image even when they appear inside ordinary
@@ -438,22 +445,31 @@ def _distill_for_imagen(prompt: str) -> str:
             # CTA on contrasting button at bottom. Imagen formatter now
             # outputs literals in this priority order so the first 3 grabbed
             # by this distiller match this rendering layout.
+            #
+            # CRITICAL (May 5 2026): Imagen's text encoder hallucinates markdown
+            # markers from styling-adjacent words. Earlier framing used:
+            #   - "displayed prominently in very large bold letters at the top"
+            #     -> Imagen prefixed text with "#" (read as social-post header)
+            #   - "displayed inside a prominent solid-colored button"
+            #     -> Imagen wrapped CTA text in [brackets] (read as UI element)
+            # Fix: use plain spatial words only. No "prominently", "bold",
+            # "button", "displayed inside" - just position + size.
             text_parts = []
             n = len(literals)
             for i, t in enumerate(literals):
                 if i == 0:
-                    # Brand: prominent at top
-                    text_parts.append(f'the text "{t}" displayed prominently in very large bold letters at the top')
+                    # Brand: top of image, large
+                    text_parts.append(f'large clean lettering reading "{t}" near the top of the image')
                 elif i == 1:
-                    # Headline: large bold, central
-                    text_parts.append(f'and the text "{t}" displayed in large bold letters below')
+                    # Headline: middle, larger
+                    text_parts.append(f'and very large clean lettering reading "{t}" in the middle of the image')
                 elif i == 2:
-                    # CTA (or 3rd most-important text): contrasting bottom button
-                    text_parts.append(f'and the text "{t}" displayed inside a prominent solid-colored button at the bottom of the image')
+                    # CTA: bottom on solid shape (NOT "button" - triggers brackets)
+                    text_parts.append(f'and clean lettering reading "{t}" centered on a solid colored horizontal shape near the bottom of the image')
                 else:
                     # 4th+ literal (rare - distiller caps at 3 anyway)
-                    text_parts.append(f'and the text "{t}" displayed in smaller letters')
-            parts.append("The image shows " + ", ".join(text_parts) + ".")
+                    text_parts.append(f'and small clean lettering reading "{t}"')
+            parts.append("The image contains " + ", ".join(text_parts) + ".")
     else:
         # Non-ad scene (portrait, photoreal, anime, etc) — leave alone.
         if cleaned:

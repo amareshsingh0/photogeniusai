@@ -740,13 +740,15 @@ def _format_for_flux(base_prompt: str, payload: Dict[str, Any]) -> str:
         product_noun = depicted_subject
     else:
         product_noun = _product_noun(subject_category, brand, recipe_key)
+    # Strip leading article ("a/an/the") - opener adds its own
+    product_noun = re.sub(r"^(?:a|an|the)\s+", "", product_noun, flags=re.IGNORECASE).strip()
     # Always lead with the concrete depicted subject; brand goes in text slot
     # only (handled later in text_bits). Avoids "for brand Cake" -> Flux
     # rendering an actual cake.
     if brand:
-        opener = f'A {mood} commercial photograph of {product_noun} with "{brand}" wordmark on the product label'
+        opener = f'A {mood} commercial photograph of a {product_noun} with "{brand}" wordmark on the product label'
     else:
-        opener = f"A {mood} commercial photograph of {product_noun}"
+        opener = f"A {mood} commercial photograph of a {product_noun}"
     if target_audience:
         ta = target_audience.split(",")[0].split(";")[0].strip()
         if ta and len(ta) <= 80:
@@ -1025,6 +1027,10 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
         subject_phrase = _product_noun(subject_category, brand, recipe_key)
         if not subject_phrase or subject_phrase.strip() in ("", "product"):
             subject_phrase = "premium product"
+    # Strip any leading article from depicted_subject - downstream sentences
+    # add their own article ("for a {subject}", "depicted is a {subject}").
+    # Without this strip we get "a a glossy bottle..." double-article (May 4 fix).
+    subject_phrase = re.sub(r"^(?:a|an|the)\s+", "", subject_phrase, flags=re.IGNORECASE).strip()
 
     sentences: list[str] = []
 
@@ -1198,6 +1204,12 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
     result = " ".join(s for s in sentences if s).strip()
     # Final scrub  -  guarantee no functional vocab leaked through.
     result = _IMAGEN_DESIGNER_VOCAB.sub("", result)
+    # Strip markdown chars + stray brackets BEFORE distill picks up literals.
+    # Imagen renders #, *, _, `, ~, [, ], <, > LITERALLY when adjacent to text.
+    # The "#" and "[Shop Now]" leak (May 5 2026 bug) was Imagen interpreting
+    # styling words; this is a defense-in-depth strip in case any of these
+    # chars made it from ad_copy fields into the formatted sentences.
+    result = re.sub(r"[#*`_~\[\]<>]+", "", result)
     result = re.sub(r"  +", " ", result).strip()
 
     logger.info(
@@ -1273,6 +1285,8 @@ def _format_for_wavespeed(base_prompt: str, payload: Dict[str, Any]) -> str:
         product_noun = depicted_subject
     else:
         product_noun = _product_noun(subject_category, brand, recipe_key)
+    # Strip leading article so opener "of a {noun}" doesn't become "of a a..."
+    product_noun = re.sub(r"^(?:a|an|the)\s+", "", product_noun, flags=re.IGNORECASE).strip()
     parts: list[str] = []
 
     # Opener: ALWAYS lead with the concrete depicted subject. Wan's parser
