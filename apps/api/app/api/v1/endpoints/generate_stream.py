@@ -369,7 +369,13 @@ async def _validate_rendered_text_log_only(
     if not expected:
         return None
 
-    timeout = float(os.getenv("TEXT_VALIDATION_TIMEOUT_SEC", "20.0"))
+    # Default 60s (was 20s). Validators are now serialized via module-level
+    # semaphore in quality_critic.py to avoid Gemini Vision quota bursts; this
+    # means each validation waits for the previous to finish. With 4 admin-mode
+    # validations and ~5s per call + retry waits on 503, 60s is the realistic
+    # ceiling. Validation is non-fatal anyway - timeout just means missing
+    # telemetry for that one model, not a failed image.
+    timeout = float(os.getenv("TEXT_VALIDATION_TIMEOUT_SEC", "60.0"))
     try:
         from app.services.smart.quality_critic import QualityCritic
 

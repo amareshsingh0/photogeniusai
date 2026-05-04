@@ -20,6 +20,14 @@ from app.config.loader import config as beast_config
 
 logger = logging.getLogger(__name__)
 
+# Module-level semaphore for Gemini Vision API serialization. Admin parallel
+# mode fires 4 validate_rendered_text() calls simultaneously, each hitting
+# Gemini Vision API. The combined burst exceeds the per-minute quota and
+# returns 503 UNAVAILABLE for 2-3 of 4. Limiting concurrency to 1 staggers
+# the calls so each gets fresh quota. Total wall time increases by ~10-15s
+# in admin mode but ALL 4 validations now succeed.
+_GEMINI_VISION_SEMAPHORE = asyncio.Semaphore(1)
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Quality Dimensions Loading (from BeastConfig or legacy fallback)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -464,7 +472,27 @@ class QualityCritic:
 
         This method never retries generation and never changes the returned
         image. It exists only to produce telemetry for typography/ad prompts.
+
+        SERIALIZED: uses a module-level semaphore (concurrency=1) to prevent
+        the Gemini Vision API quota-burst that happens when 4 admin-mode
+        parallel validations fire within 1 second. Effect is equivalent to
+        batching - 4 calls happen back-to-back instead of all-at-once, so
+        each gets fresh quota. Adds ~5-10s to total wall time but eliminates
+        503 UNAVAILABLE errors that previously failed 2-3 of 4 validations.
         """
+        async with _GEMINI_VISION_SEMAPHORE:
+            return await self._validate_rendered_text_inner(
+                image_url, expected_texts, model_key, trace_id,
+            )
+
+    async def _validate_rendered_text_inner(
+        self,
+        image_url: str,
+        expected_texts: List[str],
+        model_key: str = "",
+        trace_id: str = "",
+    ) -> Dict[str, Any]:
+        """Inner validation logic (was the body of validate_rendered_text)."""
         expected: List[str] = []
         for item in expected_texts or []:
             text = str(item or "").strip()
@@ -518,7 +546,9 @@ class QualityCritic:
                                    or "429" in msg or "RESOURCE_EXHAUSTED" in msg)
                     if not is_throttle or attempt == 2:
                         raise
-                    wait_s = 4 if attempt == 0 else 10
+                    # Semaphore now serializes calls so 503 should be rare.
+                    # Short waits suffice when it does happen.
+                    wait_s = 2 if attempt == 0 else 5
                     logger.info(
                         "[text-validation] trace=%s model=%s throttled (attempt %d), retrying in %ds",
                         trace_id, model_key, attempt + 1, wait_s,
