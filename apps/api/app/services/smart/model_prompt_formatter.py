@@ -562,11 +562,16 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     elif palette:
         layout_lines.append(f"- COLOR PALETTE: {palette}")
 
+    # PRODUCT line - prefer Haiku's depicted_subject (concrete noun from user
+    # prompt) over the generic intent_phrase. Eliminates "a sale ad" type
+    # nonsense reaching the model.
+    depicted_subject = (visual.get("depicted_subject") or "").strip()
+    product_anchor = depicted_subject or intent_phrase
     if background:
-        layout_lines.append(f"- PRODUCT: A high-resolution product photograph. {background}")
+        layout_lines.append(f"- PRODUCT: A high-resolution product photograph of {product_anchor}. {background}")
     else:
         layout_lines.append(
-            f"- PRODUCT: A high-resolution product photograph of the {intent_phrase} "
+            f"- PRODUCT: A high-resolution product photograph of {product_anchor} "
             "with premium commercial-photography lighting."
         )
 
@@ -726,11 +731,22 @@ def _format_for_flux(base_prompt: str, payload: Dict[str, Any]) -> str:
     parts: list[str] = []
 
     # Scene opener (photographic, not designer) + audience tone.
-    # Use _CATEGORY_PRODUCT_NOUN map for a concrete photograph-able subject
-    # (Flux locks onto whatever noun comes first; "alcohol_beverage" -> garbage).
+    # PRIMARY: Haiku's visual.depicted_subject - the concrete noun extracted
+    # from user's prompt. Falls back to _product_noun() lookup only if Haiku
+    # didn't fill the field (e.g. for non-ad content).
     recipe_key = (payload.get("_recipe_key") or "").strip()
-    product_noun = _product_noun(subject_category, brand, recipe_key)
-    opener = f"A {mood} commercial photograph of a {product_noun} for the brand {brand}" if brand else f"A {mood} commercial photograph of a {product_noun}"
+    depicted_subject = (visual.get("depicted_subject") or "").strip()
+    if depicted_subject:
+        product_noun = depicted_subject
+    else:
+        product_noun = _product_noun(subject_category, brand, recipe_key)
+    # Always lead with the concrete depicted subject; brand goes in text slot
+    # only (handled later in text_bits). Avoids "for brand Cake" -> Flux
+    # rendering an actual cake.
+    if brand:
+        opener = f'A {mood} commercial photograph of {product_noun} with "{brand}" wordmark on the product label'
+    else:
+        opener = f"A {mood} commercial photograph of {product_noun}"
     if target_audience:
         ta = target_audience.split(",")[0].split(";")[0].strip()
         if ta and len(ta) <= 80:
@@ -997,17 +1013,18 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
     # category-derived phrase, then to generic "premium product".
     # Imagen + Wan rendered chocolate/dessert when given just "alcohol_beverage
     # food product" (May 4 2026 visual regression) - the noun map fixes that.
-    _GENERIC_INTENTS = {"ad", "advertisement", "poster", "banner", "creative",
-                        "image", "graphic", "design", "general", "story", "post"}
+    # PRIMARY source for the depicted subject is Haiku's visual.depicted_subject
+    # field - extracted from the user's actual prompt nouns. This is scalable
+    # across any brand x product combo without hardcoded maps.
+    # FALLBACK chain: depicted_subject -> _product_noun(recipe_key) -> _product_noun(subject_category) -> "premium product"
+    depicted_subject = (visual.get("depicted_subject") or "").strip()
     recipe_key = (payload.get("_recipe_key") or "").strip()
-    subject_phrase = _product_noun(subject_category, brand, recipe_key)
-    # If user-provided intent is concrete (not generic), prefer it.
-    if intent and intent not in _GENERIC_INTENTS and subject_category in ("", "general"):
-        subject_phrase = intent.replace("_", " ")
-    elif intent and intent not in _GENERIC_INTENTS:
-        subject_phrase = intent.replace("_", " ")
+    if depicted_subject:
+        subject_phrase = depicted_subject
     else:
-        subject_phrase = "product"
+        subject_phrase = _product_noun(subject_category, brand, recipe_key)
+        if not subject_phrase or subject_phrase.strip() in ("", "product"):
+            subject_phrase = "premium product"
 
     sentences: list[str] = []
 
@@ -1032,30 +1049,16 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
         opener = f"{article.capitalize()} {mood_word} {camp} advertisement"
     else:
         opener = f"{article.capitalize()} {mood_word} commercial advertisement"
-    # Append brand and subject only when meaningful and non-duplicative.
+    # Build opener: depicted subject is the visual anchor, brand is text-only.
+    # Since depicted_subject already contains the concrete noun (extracted by
+    # Haiku from user prompt), we always lead with the subject. Brand goes in
+    # a separate disambiguation sentence below + the wordmark text slot. This
+    # works for ANY brand/product combo without hardcoded homonym lists.
     sp_lower = subject_phrase.lower().strip()
-    brand_lower = brand.lower().strip()
-    # Brand-noun homonym list - common English nouns used as brand names.
-    # Imagen confuses these with the literal object (e.g. "Cake" detergent
-    # → renders an actual cake; "Apple" tech → renders fruit). When brand
-    # matches one, force the product_noun to dominate the visual anchor.
-    _BRAND_NOUN_HOMONYMS = {
-        "cake", "apple", "sun", "moon", "bird", "fox", "crown", "tiger",
-        "lion", "eagle", "shell", "dove", "swan", "stone", "rose", "lotus",
-        "diamond", "pearl", "leaf", "tree", "river", "ocean", "mountain",
-        "fire", "ice", "cloud", "star", "bolt", "wave", "storm", "cobra",
-    }
-    is_homonym_brand = brand_lower in _BRAND_NOUN_HOMONYMS
-    if brand:
-        if is_homonym_brand and sp_lower and sp_lower != "product":
-            # Lead with product, push brand to text-only slot
-            opener += f" for a {subject_phrase}"
-        else:
-            opener += f" for {brand}"
-            if sp_lower and sp_lower != "product" and sp_lower not in brand_lower and brand_lower not in sp_lower:
-                opener += f" {subject_phrase}"
-    elif subject_phrase and sp_lower != "product":
-        opener += f" for {subject_phrase}"
+    if subject_phrase and sp_lower not in ("", "product", "premium product"):
+        opener += f" featuring {subject_phrase}"
+    elif brand:
+        opener += f" for {brand}"
 
     # Audience tone - woven in as adjective phrase, not as a separate sentence
     # (keeps Imagen narrative natural). Truncate long audience to first phrase.
@@ -1125,25 +1128,15 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
             f"contains the text \"{cta}\"."
         )
 
-    # Hero product - now uses _CATEGORY_PRODUCT_NOUN map so we always have
-    # a concrete photograph-able noun. Render for ANY non-generic category.
-    # When brand is a homonym (e.g. "Cake" detergent), DO NOT prepend brand
-    # to the visual subject - Imagen will render the brand-noun literally.
+    # Hero product - lead with depicted_subject (Haiku-extracted concrete noun).
+    # NEVER prepend brand to the visual hero - the brand goes in the wordmark
+    # text slot only, and the disambiguation sentence above already told Imagen
+    # the brand is text-only. This way "Cake detergent" -> hero is the
+    # detergent bottle, not "Cake bottle" which Imagen would render as cake.
     if subject_phrase and subject_phrase != "premium product":
-        if brand and not is_homonym_brand:
-            hero_subject = f"{brand} {subject_phrase}".strip()
-        else:
-            hero_subject = subject_phrase
         sentences.append(
-            f"On the right side of the image is a high-resolution photograph of the {hero_subject}."
+            f"On the right side of the image is a high-resolution photograph of {subject_phrase}."
         )
-        # Add explicit disambiguation for homonym brands so Imagen knows the
-        # word-mark on the bottle is text, not the depicted subject.
-        if is_homonym_brand and brand:
-            sentences.append(
-                f'Note: "{brand}" is the brand name printed as a wordmark on the product label only - '
-                f'the photograph depicts a {subject_phrase}, not the literal object "{brand}".'
-            )
 
     # Below product / mid-band: benefit row (max 4 - Imagen complexity ceiling)
     if benefits and len(benefits) >= 2:
@@ -1273,28 +1266,22 @@ def _format_for_wavespeed(base_prompt: str, payload: Dict[str, Any]) -> str:
     # Prefer Gemini classifier's recipe_key over Haiku's subject_category
     # (classifier is more accurate - sees full prompt including platform/brand).
     recipe_key = (payload.get("_recipe_key") or "").strip()
-    product_noun = _product_noun(subject_category, brand, recipe_key)
+    # PRIMARY: Haiku's visual.depicted_subject - extracted from user's actual
+    # prompt nouns, scalable to any brand/product combo without hardcoded maps.
+    depicted_subject = (visual.get("depicted_subject") or "").strip()
+    if depicted_subject:
+        product_noun = depicted_subject
+    else:
+        product_noun = _product_noun(subject_category, brand, recipe_key)
     parts: list[str] = []
 
-    # Opener: concrete subject FIRST, brand second, mood third.
-    # Skip brand mention in opener when brand is a homonym noun (e.g. "Cake"
-    # detergent) - Wan would lock onto the food noun "Cake" before reaching
-    # the actual product. Brand still appears as wordmark text later.
-    _BRAND_NOUN_HOMONYMS_W = {
-        "cake", "apple", "sun", "moon", "bird", "fox", "crown", "tiger",
-        "lion", "eagle", "shell", "dove", "swan", "stone", "rose", "lotus",
-        "diamond", "pearl", "leaf", "tree", "river", "ocean", "mountain",
-        "fire", "ice", "cloud", "star", "bolt", "wave", "storm", "cobra",
-    }
-    is_homonym_brand_w = brand.lower().strip() in _BRAND_NOUN_HOMONYMS_W
-    if brand and not is_homonym_brand_w:
-        parts.append(f"Premium commercial photograph of a {product_noun} for the brand {brand}")
-    elif is_homonym_brand_w and brand:
-        # Homonym brand: lead with product, mention brand as wordmark only.
-        # Wan locks onto first concrete noun - keep it the product, not "Cake".
-        parts.append(f'Premium commercial photograph of a {product_noun} with "{brand}" wordmark printed on the label')
+    # Opener: ALWAYS lead with the concrete depicted subject. Wan's parser
+    # locks onto the first concrete noun it sees, so we make sure that's the
+    # product, not the brand name. Brand appears as wordmark text only.
+    if brand:
+        parts.append(f'Premium commercial photograph of {product_noun} with "{brand}" wordmark printed on the label')
     else:
-        parts.append(f"Premium commercial photograph of a {product_noun}")
+        parts.append(f"Premium commercial photograph of {product_noun}")
 
     # Mood as adjective (after the subject is anchored)
     if mood and mood != "polished":

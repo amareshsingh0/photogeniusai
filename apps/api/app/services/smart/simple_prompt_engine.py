@@ -508,6 +508,20 @@ class VisualDirection(BaseModel):
         "Examples: ['icy condensation drops on the bottle', 'embossed gold foil label', 'wet wood grain reflecting amber light', 'subtle ocean mist rolling across the deck']. "
         "Each entry 3-8 words, photographable specificity. Skip generic adjectives ('beautiful', 'premium')."
     ))
+    depicted_subject: str = Field(default="", max_length=200, description=(
+        "MANDATORY for ads - the CONCRETE photographable noun phrase you'd describe to a photographer. "
+        "Extract from the user's words. Rules: "
+        "(1) MUST be a physical thing (bottle, can, box, garment, device, food item, person, room). "
+        "(2) NEVER use campaign words ('ad', 'poster', 'sale', 'campaign', 'promotion'). "
+        "(3) NEVER use the brand name as the subject (brand goes in ad_copy.brand_name). "
+        "Examples: "
+        "user='detergent Cake' -> 'a glossy detergent bottle with brand label' | "
+        "user='shampoo Tiger' -> 'a sleek shampoo bottle with brand label' | "
+        "user='energy drink Bolt' -> 'a chilled aluminum energy drink can with condensation' | "
+        "user='diabetes medicine' -> 'a clean white-and-blue pharmaceutical box with dosage label' | "
+        "user='Nike running shoes' -> 'a pair of athletic running shoes mid-stride'. "
+        "If brand is a homonym noun (Cake/Apple/Tiger), the brand name is text-only - the depicted subject is the PRODUCT TYPE, not the brand-noun."
+    ))
 
     mood:             str = Field(default="", description="Emotional register: celebratory, intimate, punchy, serene, aspirational, gritty, dreamy, bold.")
     color_palette:    str = Field(default="", description="60-30-10 RULE - state the dominant (60%) + secondary (30%) + accent (10%) colors with explicit ratios. Format: 'deep navy 60% (background), champagne gold 30% (product highlights), electric coral 10% (CTA button only)'. The 10% accent MUST be the most contrasting color and reserved for the CTA.")
@@ -727,6 +741,24 @@ Pattern: take the product's PROMISE and turn it into a photographable image:
 - fintech card -> "card slicing through a stack of hundred bills like a hot knife through butter"
 
 Fill `visual.visual_metaphor` with ONE specific concept. If the user gave you a generic brief, INVENT the metaphor. This is non-negotiable for ads.
+
+### 0B-2. DEPICTED SUBJECT — the literal photographable noun (mandatory for ads)
+
+`visual.depicted_subject` is the CONCRETE thing the camera will photograph. Not a concept, not a campaign type — a physical noun phrase.
+
+EXTRACT THIS FROM THE USER'S WORDS:
+- user wrote "detergent Cake" -> depicted_subject = "a glossy detergent bottle with brand label"
+- user wrote "shampoo Tiger" -> depicted_subject = "a sleek shampoo bottle"
+- user wrote "energy drink Bolt" -> depicted_subject = "a chilled aluminum energy drink can"
+- user wrote "iPhone case" -> depicted_subject = "a premium phone case product shot"
+- user wrote "wedding invite for Riya & Arjun" -> depicted_subject = "an elegant wedding invitation card"
+
+NEVER write any of these as depicted_subject:
+- "a sale ad" / "an advertisement" / "a poster" / "a campaign" — these are not things, they are CATEGORIES of media
+- "Cake" / "Apple" / "Tiger" / any brand name — the brand is TEXT on the product, not the product itself
+- "product" / "item" / "thing" — too generic, photographer can't shoot "a product"
+
+BRAND-NOUN HOMONYM RULE: If the brand name is also a common English noun (Cake = dessert, Apple = fruit, Tiger = animal, Bolt = fastener, Crown = headwear), the brand stays in `ad_copy.brand_name` as TEXT ONLY. The `depicted_subject` is the actual PRODUCT TYPE the user named (detergent bottle, smartphone, energy can). The image model will render the depicted_subject as the visual hero and the brand_name as a wordmark on the label.
 
 ### 0C. AUDIENCE PERSONA LIBRARY
 Generational cohorts have hardwired visual languages. Match yours:

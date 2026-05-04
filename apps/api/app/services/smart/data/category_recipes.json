@@ -351,6 +351,21 @@
     "aspect_default": "square_hd"
   },
 
+  "cleaning_products": {
+    "aliases": ["detergent", "laundry", "dishwash", "soap", "cleaner", "stain remover", "fabric care", "washing powder", "liquid detergent", "bleach", "disinfectant", "floor cleaner", "household cleaning"],
+    "hero_patterns": ["STAINS. GONE.", "TOUGH ON STAINS", "DEEP CLEAN", "SPOTLESS EVERY TIME", "FIGHT THE STAIN"],
+    "subhead_style": "punchy efficacy claim, 5-10 words, concrete result-focused",
+    "benefit_labels": ["Tough on Stains", "Gentle on Fabrics", "Quick Action", "Deep Clean", "Fresh Scent", "Eco-Friendly", "Concentrated"],
+    "trust_signals": ["Dermatologist Tested", "Tested on 50+ Stains", "Safe for Septic Tanks", "Phosphate-Free", "Plant-Based"],
+    "cta_patterns": ["Shop Now", "Get Yours", "Try It Today", "Buy Online", "Add to Cart"],
+    "tagline_style": "confident efficacy promise",
+    "photography": "Hero detergent bottle with cap visible and brand label readable, clean fabric or sparkling-clean surface beside it, water splash or foam suds for energy, before-and-after stain comparison optional",
+    "color_palette": "Crisp white + ocean blue + bright accent (orange/red for urgency, green for eco, gold for premium)",
+    "lighting": "Bright high-key studio with strong fill, energetic clean atmosphere, no harsh shadows",
+    "composition": "Hero bottle dominating right two-thirds, clean copy space on left for headline+CTA, optional fabric swatch or splash element framing the product",
+    "aspect_default": "portrait_4_3"
+  },
+
   "bakery_cake": {
     "aliases": ["bakery", "cake shop", "cupcake", "wedding cake", "birthday cake", "patisserie", "cookie", "macaron", "donut", "fresh bread"],
     "hero_patterns": ["FRESH-BAKED LOVE", "EVERY OCCASION, ICED", "OVEN TO YOU", "CAKES THAT SAY MORE"],
