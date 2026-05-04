@@ -298,6 +298,11 @@ def _distill_for_imagen(prompt: str) -> str:
         return prompt
 
     # 1) Extract literal text-to-render BEFORE stripping anything.
+    # ADAPTIVE CAP (May 5 2026): allow up to 4 literals IF the additional
+    # strings are short (<=30 chars). Imagen mangles long 4th strings -
+    # "Pharmacist Recommended" became "Prestriction", "Controlled" became
+    # "Controled" in DiaCare test - but renders short strings (<=30 chars)
+    # like "Tough on Stains" or "Free Shipping" reliably. Hard cap stays at 4.
     seen = set()
     literals: list[str] = []
     for match in _IMAGEN_QUOTED.finditer(prompt):
@@ -310,14 +315,13 @@ def _distill_for_imagen(prompt: str) -> str:
             continue
         if text.lower() in {"option 1", "option 2", "option 3", "body", "cta", "headline"}:
             continue
+        # 4th literal must be short to avoid spelling mangling
+        if len(literals) >= 3 and len(text) > 30:
+            continue
         seen.add(text.lower())
         literals.append(text)
-        # Cap at 3 literals (May 4 2026 reverted from 4). Imagen mangles
-        # spelling on 4+ strings: "Pharmacist Recommended" became "Prestriction",
-        # "Lab Tested" became "Lab Testor", "Controlled" became "Controled" -
-        # all observed in DiaCare diabetes test. 3 strings = brand + headline +
-        # CTA reliably renders; subhead dropped (was the worst-mangled).
-        if len(literals) >= 3:
+        # Hard cap at 4 - 5+ literals consistently mangle.
+        if len(literals) >= 4:
             break
 
     # 2) Clean-strip-safe noise: bracketed placeholders, hashtags, markdown.
@@ -454,20 +458,30 @@ def _distill_for_imagen(prompt: str) -> str:
             #     -> Imagen wrapped CTA text in [brackets] (read as UI element)
             # Fix: use plain spatial words only. No "prominently", "bold",
             # "button", "displayed inside" - just position + size.
+            # 4-literal layout (May 5 2026): brand top -> headline mid-upper
+            # -> subhead just below headline -> CTA bottom-on-shape.
+            # When only 3 literals present, falls back gracefully (no subhead
+            # = pos 2 used for CTA; distiller adaptive cap drops long subheads).
             text_parts = []
             n = len(literals)
+            has_subhead = (n == 4)
             for i, t in enumerate(literals):
                 if i == 0:
-                    # Brand: top of image, large
+                    # Brand: top
                     text_parts.append(f'large clean lettering reading "{t}" near the top of the image')
                 elif i == 1:
-                    # Headline: middle, larger
-                    text_parts.append(f'and very large clean lettering reading "{t}" in the middle of the image')
-                elif i == 2:
-                    # CTA: bottom on solid shape (NOT "button" - triggers brackets)
+                    # Headline: mid-upper, largest
+                    text_parts.append(f'and very large clean lettering reading "{t}" in the middle-upper area of the image')
+                elif i == 2 and has_subhead:
+                    # Subhead: small, just below headline
+                    text_parts.append(f'and smaller clean lettering reading "{t}" just below the headline')
+                elif i == 2 and not has_subhead:
+                    # CTA in 3-literal mode: bottom on shape
+                    text_parts.append(f'and clean lettering reading "{t}" centered on a solid colored horizontal shape near the bottom of the image')
+                elif i == 3:
+                    # CTA in 4-literal mode: bottom on shape
                     text_parts.append(f'and clean lettering reading "{t}" centered on a solid colored horizontal shape near the bottom of the image')
                 else:
-                    # 4th+ literal (rare - distiller caps at 3 anyway)
                     text_parts.append(f'and small clean lettering reading "{t}"')
             parts.append("The image contains " + ", ".join(text_parts) + ".")
     else:

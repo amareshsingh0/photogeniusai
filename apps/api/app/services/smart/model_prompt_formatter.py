@@ -1138,8 +1138,15 @@ def _format_for_imagen(base_prompt: str, payload: Dict[str, Any]) -> str:
             f"Centered in the upper portion, a large bold line of text reads \"{headline}\"."
         )
 
-    # Bottom-center: CTA (rectangle, not "button") - LITERAL 3 (mandatory)
-    # Moved BEFORE subhead/tagline so it survives the 3-literal cap.
+    # Below headline: SHORT subhead - LITERAL 3 (May 5 2026: distiller cap
+    # bumped to 4 with adaptive guard - subheads <=30 chars survive, longer
+    # ones still get dropped to avoid spelling mangling).
+    if subhead and len(subhead) <= 30:
+        sentences.append(
+            f"Just below the headline, a smaller line of text reads \"{subhead}\"."
+        )
+
+    # Bottom-center: CTA (rectangle, not "button") - LITERAL 4 (mandatory)
     if cta:
         sentences.append(
             f"At the very bottom, centered and prominent, a small solid-colored rectangle "
@@ -1335,13 +1342,27 @@ def _format_for_wavespeed(base_prompt: str, payload: Dict[str, Any]) -> str:
     # Negative space - SHORT version (Wan ignores long directives)
     parts.append("clean uncluttered area on one side for text")
 
-    # ONE short text string only - Wan max 1-3 words reliable
-    if headline and len(headline.split()) <= 4:
+    # Text strings - Wan can render up to 2 short strings (1-4 words each)
+    # if explicitly framed as separate visual regions. May 5 2026 fix: was
+    # only rendering 1 string (headline), CTA was dropped. Now: headline at
+    # top, CTA at bottom, framed as 2 distinct text regions.
+    headline_short = headline and len(headline.split()) <= 4
+    cta_short = cta and len(cta.split()) <= 3
+    if headline_short and cta_short:
+        # Both fit - render as 2 text regions
+        parts.append(
+            f'with the text "{headline}" appearing prominently in the upper text area '
+            f'and the text "{cta}" appearing on a colored bar in the lower text area'
+        )
+    elif headline_short:
         parts.append(f'with the words "{headline}" displayed prominently')
+    elif cta_short:
+        # Headline too long - just render CTA
+        parts.append(f'with the words "{cta}" displayed prominently')
 
     # Brand text only if brand exists and headline absent (avoid duplication)
-    if brand and not headline:
-        parts.append(f'with "{brand}" wordmark visible')
+    if brand and not headline_short:
+        parts.append(f'with "{brand}" wordmark visible on the product')
 
     # Palette - keep brief
     if palette:
