@@ -397,6 +397,26 @@ python3 scripts/mine_category_recipes.py   # writes category_recipes_mined.json
 
 ---
 
+## LOGO COGNITIVE FRAMEWORK (May 6 2026)
+
+`_BUCKET_HINTS["vector"]` in `simple_prompt_engine.py` is now a 7-phase cognitive framework based on `Research/Logo Design Process and Trends.docx`:
+
+1. **Strategic Diagnosis** — pick a Jungian brand archetype (Caregiver, Ruler, Hero, Explorer, Lover, Outlaw) BEFORE any visual decision
+2. **Cognitive-Ease Processing Order** — brain processes color → form → motion → meaning (50ms judgment); 2026 has moved away from washed-out beige toward confident high-contrast
+3. **Shape Psychology** — 6 shape families with inherent meanings + tactile materiality (controlled imperfections to escape AI-default polish)
+4. **Mark Type Decision** — wordmark / lettermark / pictorial / abstract / combination / emblem-stamp, each with real-world examples
+5. **Hyper-Expressive Typography** — explicit anti-blanding mandate, 7 typeface personalities, micro-detail anchors (ink traps, missing notches) as ownership signals
+6. **Technical + Accessibility** — 16px → billboard scalability, B&W-first silhouette, ≥25% negative space, WCAG 4.5:1 contrast
+7. **Anti-Patterns** — explicit `negative_prompt` directives including "AI-default geometric P/A/B in cyan-and-black", "blanded safe sans-serif", "friction-free synthetic AI polish"
+
+**Anti-Defaults rule**: when brand name suggests literal interpretation (Pixium → pixels), Haiku must push to second/third interpretation. Strong logos earn meaning through unexpected association.
+
+**2026 Trend Checklist**: tactile materiality, stamp/seal, storybook gothic, strategic saturation, micro-detail anchors, retro-futurism, atmospheric gradient — cap at 2 trends to preserve cognitive ease.
+
+Other buckets (photorealism, photorealism_portrait/humans, photorealism_product, artistic, anime) received parallel discipline-rich blocks on May 5 2026 — see Multi-Reference section below.
+
+---
+
 ## MULTI-REFERENCE + GPT IMAGE 2 EDIT (May 5 2026)
 
 Generate page now supports up to **5 reference images** (was 1). UI: `+` button with badge showing count, gallery thumbnails, individual X-to-remove + "Clear all".
