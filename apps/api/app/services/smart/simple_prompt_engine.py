@@ -177,10 +177,12 @@ Return JSON ONLY (no prose, no markdown fences):
 }}
 
 RULES:
-- "post for instagram", "ad", "poster", "launch", "promo", "campaign" -> bucket=typography, has_text=true
+- "logo", "brand mark", "wordmark", "monogram", "icon for app", "favicon", "emblem", "badge" -> bucket=vector. is_ad=false. has_text=true ONLY if it's a wordmark/combination (brand name visible); has_text=false for pure symbol/pictorial mark.
+- "post for instagram", "ad", "poster", "launch", "promo", "campaign" -> bucket=typography, has_text=true, is_ad=true. BUT if the prompt describes a LOGO and just lists "campaign / ad / poster" as features of a product/website (e.g. "logo for an app that creates ads, posters, campaigns"), DO NOT confuse those feature words with the deliverable — the deliverable is the LOGO, so route bucket=vector.
 - A product launch ad with brand name -> typography even if user calls it a "photo"
 - Pure scene description ("car on mars", "anime girl in forest") -> appropriate non-typography bucket, has_text=false
 - If unsure between typography and photorealism: prefer typography when prompt mentions a brand, CTA, sale, headline, or platform.
+- Distinguishing logo vs. ad: a LOGO is the standalone brand identifier (small mark, scalable, no scene). An AD is a marketing layout (product + headline + scene + CTA). If the request says "create a logo / mark / icon" -> vector. If it says "create an ad / poster / banner / social post" -> typography.
 """
 
 
@@ -1913,12 +1915,139 @@ Never wrap JSON in code fences. Never add commentary. JSON only."""
 # what kind of image is being generated. This stays small (one line).
 _BUCKET_HINTS = {
     "typography":            "Output is text-heavy (poster/wishes/banner). Prioritize legible copy + supportive imagery.",
-    "photorealism":          "Output is a photoreal image. Emphasize lens, lighting, camera angle, realism.",
-    "photorealism_portrait": "Output is a photoreal portrait. Specify pose, expression, wardrobe, lens, lighting style.",
-    "photorealism_product":  "Output is a product shot. Specify backdrop, lighting setup, hero angle, surface.",
-    "artistic":              "Output is artistic/stylized. Specify medium, brushwork, palette, mood.",
-    "anime":                 "Output is anime/illustration. Specify line style, shading, character design, scene.",
-    "vector":                "Output is vector/flat design. Specify shapes, palette, geometry, no photo realism.",
+    "photorealism": (
+        "Output is a PHOTOREAL image. Apply CINEMATIC PHOTOGRAPHY DISCIPLINE (not optional):\n"
+        "  1. CAMERA — name a real lens (24mm/35mm/50mm/85mm/100mm macro), aperture (f/1.4 - f/16), "
+        "shutter feel (frozen/motion-blur), and ISO mood (clean/grainy). Match focal length to "
+        "subject distance: 24-35mm wide environmental, 50mm natural, 85-100mm flattering compression.\n"
+        "  2. LIGHTING — specify direction (key + fill + rim), quality (hard/soft/diffused/golden-hour/"
+        "overcast), and color temperature (warm 3200K / neutral 5600K / cool 7500K). Avoid flat "
+        "ambient unless the look demands it.\n"
+        "  3. COMPOSITION — Rule of Thirds intersection for the subject, leading lines, foreground-"
+        "midground-background depth, intentional negative space. Mention crop (full / medium / close-up).\n"
+        "  4. ATMOSPHERE — micro-details that sell realism: skin pores, fabric weave, dust motes in "
+        "light shafts, moisture, surface imperfections, subsurface scattering on translucent objects.\n"
+        "  5. ANTI-PATTERNS — explicitly negate in `negative_prompt`: 'illustrated, cartoon, "
+        "painterly, plastic skin, waxy texture, over-smoothed, AI-rendered look, extra fingers, "
+        "fused limbs, text artifacts, watermark, low-res, blurry except where intentional'.\n"
+        "Output `prompt` must read like a photographer's brief — concrete and physical, not abstract."
+    ),
+    "photorealism_portrait": (
+        "Output is a PHOTOREAL PORTRAIT of a HUMAN. Apply PORTRAIT-PHOTOGRAPHY DISCIPLINE:\n"
+        "  1. SUBJECT IDENTITY — describe the person specifically: age range, gender presentation, "
+        "ethnicity (when relevant + respectful), distinguishing features, hair (length/color/style), "
+        "wardrobe (era + texture). Avoid generic 'beautiful woman / handsome man' — be concrete.\n"
+        "  2. EXPRESSION + POSE — name the emotion (contemplative, joyful, defiant, serene), "
+        "eye direction (camera / off-frame / down), micro-expression (slight smile, parted lips, "
+        "raised brow), body language (shoulders square / turned 3/4, hands placement).\n"
+        "  3. CAMERA — 85mm or 100mm prime preferred for flattering compression, f/1.8 - f/2.8 for "
+        "creamy bokeh, shallow DOF with eyes tack-sharp. Eye-level for connection; slight low-angle "
+        "for power; high-angle for vulnerability.\n"
+        "  4. LIGHTING — name a setup: Rembrandt (45° key, triangle on cheek), loop (slight nose "
+        "shadow), butterfly (centered key, beauty light), split (half-face shadow), clamshell "
+        "(top + bottom diffused). Specify quality (soft / hard / window / golden hour) and ratio.\n"
+        "  5. ANATOMICAL CORRECTNESS — explicitly require 'two eyes symmetric, five fingers per "
+        "hand, natural teeth, realistic skin texture with pores'. In negative_prompt: 'extra "
+        "fingers, mangled hands, asymmetric eyes, plastic skin, doll-like, waxy, uncanny valley, "
+        "deformed, missing limbs, fused features, blurry face'.\n"
+        "  6. WARDROBE + BACKGROUND — describe fabric (linen / wool / silk / leather), color "
+        "harmony with skin tone, background bokeh (urban out-of-focus / studio gradient / nature). "
+        "Background should support, not compete.\n"
+        "Treat this like a real photo brief — the model needs physical specifics, not adjectives."
+    ),
+    "photorealism_product": (
+        "Output is a COMMERCIAL PRODUCT SHOT. Apply PACKSHOT DISCIPLINE:\n"
+        "  1. PRODUCT FIDELITY — describe the exact product (shape, label, material, dimensions). "
+        "If the user named a brand, the label/text must be spelled correctly. Hero angle: 3/4 view "
+        "preferred for dimensionality; flat-lay for cosmetics/food; eye-level for bottles.\n"
+        "  2. SURFACE + BACKDROP — surface material (marble / wood / linen / acrylic / seamless "
+        "paper), color story that complements the product, optional props that suggest use-context "
+        "(no clutter — max 2-3 supporting elements).\n"
+        "  3. LIGHTING — softbox key + fill + rim is the studio default. For glass/liquid: backlight "
+        "for translucency. For metal: large diffused source to wrap highlights. Mention specular "
+        "highlights and shadow density.\n"
+        "  4. CAMERA — 50-100mm to avoid distortion, f/8-f/11 for full product sharpness, eye-level "
+        "or slight elevation. Shallow DOF only when isolating one item among props.\n"
+        "  5. MICRO-DETAILS — condensation droplets on cold drinks, steam from hot food, embossed "
+        "label texture, wood grain, fabric weave. These sell premium-ness.\n"
+        "  6. ANTI-PATTERNS in negative_prompt: 'distorted product shape, misspelled label, "
+        "wrong logo, plastic-looking food, fake-looking glass, harsh flat flash, busy background, "
+        "competing brands visible, dust/scratches unless intentional'."
+    ),
+    "artistic": (
+        "Output is ARTISTIC / STYLIZED illustration. Apply FINE-ART DISCIPLINE:\n"
+        "  1. NAME THE MEDIUM — be specific: oil paint, gouache, watercolor wash, ink + ink wash, "
+        "digital painting (mention software feel: Procreate / Photoshop), charcoal, pastel, mixed "
+        "media, woodblock print, screen print, etching. NEVER just say 'painted'.\n"
+        "  2. ARTIST / MOVEMENT REFERENCE (when appropriate) — anchor the style: 'in the spirit "
+        "of Mucha (Art Nouveau)', 'reminiscent of Studio Ghibli backgrounds', 'Beksinski "
+        "dystopian surreal', 'Hopper urban solitude'. ONE reference, not a soup of names. Avoid "
+        "living artists by name when possible (use movement/era instead).\n"
+        "  3. BRUSHWORK / LINE QUALITY — describe the marks: visible impasto strokes, fine "
+        "stippling, wet-on-wet bleeds, hard-edged ink linework, scratchy charcoal hatching, "
+        "smooth airbrush gradient. The texture of the medium must be readable.\n"
+        "  4. COLOR PALETTE — specify a constrained palette (3-5 named colors / value range / "
+        "temperature bias). Mention the relationship: complementary, analogous, monochrome with "
+        "pop, muted earth + one saturated accent. Avoid 'colorful' or 'vibrant' alone.\n"
+        "  5. MOOD + COMPOSITION — atmospheric mood (melancholy, reverent, whimsical, ominous), "
+        "compositional device (golden spiral, triangular, frame-within-frame, rule of thirds), "
+        "depth via atmospheric perspective.\n"
+        "  6. ANTI-PATTERNS in negative_prompt: 'photorealistic, 3D render, photograph, plastic "
+        "look, AI-default soft glow, generic concept art, oversaturated, smooth gradient where "
+        "brushwork is wanted, watermark, signature unless requested'."
+    ),
+    "anime": (
+        "Output is ANIME / MANGA / JAPANESE ILLUSTRATION. Apply ANIME-PRODUCTION DISCIPLINE:\n"
+        "  1. STYLE ERA / STUDIO HINT — name the visual lineage: '90s cel anime (visible cel "
+        "shading, hand-painted backgrounds)', 'modern digital anime (clean vector lines, gradient "
+        "shading)', 'Studio Ghibli watercolor backgrounds + hand-drawn characters', 'shōnen action "
+        "(bold inks, speed lines)', 'shōjo (soft pastels, sparkles, large eyes)', 'seinen "
+        "(realistic proportions, muted palette)'. Pick ONE.\n"
+        "  2. LINEWORK — describe ink quality: clean tapered lines, varied weight (heavier on "
+        "shadow side), no outline (paint-only), thick-thin manga ink. Specify whether outlines "
+        "are black or colored-into-shading.\n"
+        "  3. SHADING — cel-shaded (2-3 hard tone steps), soft anime gradient, painterly, "
+        "screentone (manga dots/hatching). Skin: name the tone-step count. Hair: shine band "
+        "placement.\n"
+        "  4. CHARACTER DESIGN — specifics: hair (color / cut / movement), eye shape and color, "
+        "face proportions (chibi / standard / realistic), outfit construction (school uniform / "
+        "fantasy armor / streetwear with named pieces), expression archetype.\n"
+        "  5. BACKGROUND TREATMENT — Ghibli-style detailed painted, simple gradient, photographic "
+        "blur with cel character on top, pure white with speed lines, abstract geometric. Background "
+        "and character must visually agree (don't mix photoreal bg + chibi character unless intentional).\n"
+        "  6. ANTI-PATTERNS in negative_prompt: 'photorealistic skin texture, 3D render, "
+        "western cartoon (Disney/Pixar) proportions unless requested, AI-default anime girl face, "
+        "bad anatomy, broken hands, extra fingers, fused limbs, watermark, low quality, blurry'."
+    ),
+    "vector": (
+        "Output is a vector/flat-design asset. If the user is asking for a LOGO, BRAND MARK, "
+        "ICON, MONOGRAM, EMBLEM, BADGE, or APP ICON, treat it as brand-identity work and apply "
+        "these CARDINAL LOGO RULES (not optional):\n"
+        "  1. DECIDE MARK TYPE first — wordmark (letters only), lettermark/monogram (1-3 letters "
+        "stylized), pictorial/symbol (recognizable object), abstract mark (geometric shape), or "
+        "combination (symbol + wordmark). State this explicitly in the prompt.\n"
+        "  2. SCALABILITY — must read clearly from 16px favicon to 2000px billboard. NO fine "
+        "details, NO photoreal shading, NO drop shadows, NO complex gradients (flat color or "
+        "max one subtle 2-stop gradient).\n"
+        "  3. NEGATIVE SPACE — generous breathing room around the mark (≥25% padding on all "
+        "sides). Mark sits centered on a clean solid background (white or single brand color).\n"
+        "  4. SINGLE-COLOR TEST — the mark must work as solid black-on-white AND white-on-black. "
+        "Avoid multi-color compositions where color carries the meaning.\n"
+        "  5. TEXT CORRECTNESS — if a wordmark/combination, the EXACT brand name spelled correctly "
+        "is non-negotiable. State the literal text in quotes. Specify a single typeface family "
+        "(geometric sans for tech, serif for heritage, etc). NEVER pixelate or distort letterforms.\n"
+        "  6. GEOMETRIC HARMONY — describe construction (circles, squares, golden ratio, grid). "
+        "Mention optical adjustments if relevant (diagonals appear thinner, curves overshoot).\n"
+        "  7. ANTI-PATTERNS — explicitly negate: 'no photo background, no 3D rendering, no "
+        "pixelated/8-bit unless requested, no busy ornaments, no realistic textures, no fake "
+        "letterforms, no spelling errors, no extra glyphs'.\n"
+        "Output `prompt` should describe the mark's CONSTRUCTION (shapes, proportions, palette, "
+        "typeface) — not a scene. `ad_copy` should be EMPTY for pure symbols; for wordmarks set "
+        "`ad_copy.headline` to the literal brand text. `negative_prompt` must list the anti-patterns "
+        "above plus 'wrong letters, misspelled brand name, extra characters, distorted typography'.\n"
+        "If the request is NOT a logo (e.g. flat illustration, sticker, infographic) ignore rules "
+        "1/4/5 and just specify shapes, palette, geometry, no photo realism."
+    ),
     "fast":                  "Output is a quick general image. Cover subject + scene + lighting + style succinctly.",
 }
 
