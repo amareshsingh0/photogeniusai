@@ -232,7 +232,7 @@ DEFAULT_MODELS = [
         "modelId": "gpt_image_2",
         "provider": "openai.com",
         "displayName": "GPT Image 2",
-        "buckets": ["photorealism", "artistic", "fast", "typography"],
+        "buckets": ["photorealism", "artistic", "fast", "typography", "vector"],
         "costPerImage": 0.053,
         "isActive": True,
         "isTestingEnabled": True,

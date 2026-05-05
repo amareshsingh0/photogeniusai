@@ -74,6 +74,7 @@
 | artistic | grok_2_imagine | gemini_3_1_imagen | imagen_4_ultra |
 | anime | wan_2_7 | gemini_3_1_imagen | imagen_4_ultra |
 | vector | recraft_v4_pro | recraft_v4_pro | imagen_4_ultra |
+| vector (admin testing) | recraft_v4_pro + recraft_v4_svg + gpt_image_2 | recraft_v4_pro + gpt_image_2 | gpt_image_2 |
 | fast | seedream_4_5 | gemini_3_imagen | imagen_4_ultra |
 
 **Reference-image / edit path**: ALL edit modes (instruction_edit, compose, style_remix, inpaint_mask, object_add/remove, background_swap, text_replace) prefer `gpt_image_2_edit` first. Tier hard-clamped to 1K when reference image present.
@@ -162,6 +163,18 @@ USE_LLMLINGUA_COMPRESSION=true   — Prompt compression
 `Overview` | `Users` | `Generations` | `Models` | `Feature Config (16 flags)` | `Settings (auto-restart)`
 
 **Parallel Testing Mode**: Admin user sees multi-model results grid. Normal users see single result. Zero UI changes for normal users.
+
+### Admin Model Control Flow (canonical)
+1. **Source of truth**: `apps/api/app/api/v1/endpoints/admin_models.py` → `DEFAULT_MODELS` list. Each entry has `modelId`, `buckets[]`, `isActive`, `isTestingEnabled`, `costPerImage`.
+2. **Seed DB**: `POST /api/v1/admin/models/seed` reads DEFAULT_MODELS and upserts into Prisma `ModelConfig` table.
+3. **Runtime override**: Admin Panel → Models tab can flip `isActive`/`isTestingEnabled` per model live (no redeploy).
+4. **Generate-time routing**:
+   - Bucket detected via `classify_intent()` (Gemini 2.5 Flash).
+   - DB query: `isActive=true AND isTestingEnabled=true AND bucket IN buckets[]`.
+   - **Admin (`testing_mode=true`)**: all matched models run in parallel → results grid.
+   - **Normal user**: picker chooses one (cheapest matched) → single result.
+   - **DB-empty fallback**: when query returns 0, build synthetic ModelConfig entries from DEFAULT_MODELS for that bucket so parallel still works (added May 5 2026).
+5. **Adding a model to a bucket**: edit `DEFAULT_MODELS[i]["buckets"]` list, redeploy, run seed endpoint OR toggle in Models tab. Both paths converge on the same DB row.
 
 ---
 
