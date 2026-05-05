@@ -1348,8 +1348,14 @@ class MultiProviderClient:
                                 reference_image_url: Optional[str] = None,
                                 mask_url: Optional[str] = None,
                                 image_size: str = "square_hd",
+                                extra_image_urls: Optional[List[str]] = None,
                                 **kwargs) -> Dict:
-        """gpt-image-2 /v1/images/edits — best for text replacement on images."""
+        """gpt-image-2 /v1/images/edits — best for text replacement on images.
+
+        Supports multi-image compose: extra_image_urls (up to 15 total per OpenAI
+        spec) are sent as additional `image[]` parts. GPT Image 2 will compose
+        them into a single output guided by the prompt.
+        """
         start = time.time()
         api_key = self._keys.get("openai", "")
         if not api_key:
@@ -1370,7 +1376,16 @@ class MultiProviderClient:
             img_bytes, img_mime = await self._fetch_image_bytes(reference_image_url)
             ext = "png" if "png" in img_mime else "jpg"
 
-            files = [("image", (f"image.{ext}", img_bytes, img_mime))]
+            # OpenAI /v1/images/edits accepts multiple images via repeated
+            # `image[]` form parts. Primary first, then extras (cap at 15 total).
+            files = [("image[]", (f"image.{ext}", img_bytes, img_mime))]
+            for idx, extra_url in enumerate((extra_image_urls or [])[:14]):
+                try:
+                    eb, em = await self._fetch_image_bytes(extra_url)
+                    eext = "png" if "png" in em else "jpg"
+                    files.append(("image[]", (f"image_{idx+1}.{eext}", eb, em)))
+                except Exception as fetch_exc:
+                    logger.warning("[openai_edit] skip extra %d (%s): %s", idx, extra_url[:80], fetch_exc)
             if mask_url:
                 mb, mm = await self._fetch_image_bytes(mask_url)
                 files.append(("mask", ("mask.png", mb, mm or "image/png")))
@@ -1384,8 +1399,8 @@ class MultiProviderClient:
             }
             headers = {"Authorization": f"Bearer {api_key}"}
 
-            logger.info("[PAYLOAD][openai_edit] model=gpt-image-2 size=%s mask=%s",
-                        size, bool(mask_url))
+            logger.info("[PAYLOAD][openai_edit] model=gpt-image-2 size=%s mask=%s extras=%d",
+                        size, bool(mask_url), len(extra_image_urls or []))
             async with httpx.AsyncClient(timeout=300.0) as client:
                 resp = await client.post(
                     "https://api.openai.com/v1/images/edits",

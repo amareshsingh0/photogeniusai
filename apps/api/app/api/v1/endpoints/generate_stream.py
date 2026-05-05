@@ -1025,6 +1025,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             num_inference_steps=inference_steps,
             guidance_scale=guidance_scale,
             reference_image_url=req.reference_image_url,
+            extra_image_urls=req.extra_image_urls or None,
             rendering_speed=model_cfg.get("rendering_speed", "BALANCED"),
         )
         gen_task = asyncio.create_task(multi_client.generate(**_gen_kwargs))
@@ -1224,6 +1225,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                         num_inference_steps=inference_steps,
                         guidance_scale=guidance_scale,
                         reference_image_url=req.reference_image_url,
+                        extra_image_urls=req.extra_image_urls or None,
                         rendering_speed=model_cfg.get("rendering_speed", "BALANCED"),
                     )
 
@@ -1736,6 +1738,7 @@ async def _generate_with_model(
             guidance_scale=_MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
             negative_prompt=req.negative_prompt or "",
             reference_image_url=req.reference_image_url,
+            extra_image_urls=req.extra_image_urls or None,
         )
 
         latency = time.time() - start
