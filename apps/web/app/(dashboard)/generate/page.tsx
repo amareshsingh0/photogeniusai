@@ -346,7 +346,12 @@ export default function GeneratePage() {
   const [customHeight, setCustomHeight] = useState<number>(1024)
   const [qualityTier, setQualityTier] = useState<string>("1k")
   const [selectedStyle, setSelectedStyle] = useState<string>("Auto")
-  const [referenceImage, setReferenceImage] = useState<string | null>(null)
+  // Reference images - up to 5 (May 5 2026: was single image, now array).
+  // First image is the primary reference; additional images guide style/composition.
+  // Backend uses referenceImages[0] as the primary reference_image, and the rest
+  // get sent as extra_image_urls for compose-style multi-reference generation.
+  const [referenceImages, setReferenceImages] = useState<string[]>([])
+  const MAX_REFERENCE_IMAGES = 5
   const [generationDimension, setGenerationDimension] = useState<DimensionPreset>(DIMENSION_PRESETS[0])
   const [showStyleMore, setShowStyleMore] = useState(false)
   const [generateShimmer, setGenerateShimmer] = useState(false)
@@ -588,7 +593,8 @@ export default function GeneratePage() {
           height: genDims.height,
           quality: qualityTier,
           style: selectedStyle !== "Auto" ? selectedStyle : undefined,
-          reference_image: referenceImage || undefined,
+          reference_image: referenceImages[0] || undefined,
+          extra_reference_images: referenceImages.length > 1 ? referenceImages.slice(1) : undefined,
           negative_prompt: negativePrompt.trim() || undefined,
           testing_mode: isAdmin, // Enable parallel testing for admin
         }),
@@ -758,7 +764,7 @@ export default function GeneratePage() {
       setIsGenerating(false)
       if (stageTimerRef.current) clearTimeout(stageTimerRef.current)
     }
-  }, [prompt, isGenerating, selectedDimension, sizeMode, customWidth, customHeight, qualityTier, selectedStyle, referenceImage, negativePrompt, buildFinalPrompt, toast, editMode, editSourceUrl, isAdmin])
+  }, [prompt, isGenerating, selectedDimension, sizeMode, customWidth, customHeight, qualityTier, selectedStyle, referenceImages, negativePrompt, buildFinalPrompt, toast, editMode, editSourceUrl, isAdmin])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey && canGenerate) {
@@ -772,26 +778,69 @@ export default function GeneratePage() {
     setResult(null)
     setError(null)
     setUserPrompt("")
-    setReferenceImage(null)
+    setReferenceImages([])
     setPosterImageUrl(null)
     setFeedbackGiven(null)
   }
 
+  // Multi-image reference selection (May 5 2026): supports up to MAX_REFERENCE_IMAGES.
+  // Files are queued via reader.onload to handle async parsing without races.
   const handleReferenceImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file?.type.startsWith("image/")) return
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "Image too large", description: "Reference image must be under 5 MB.", variant: "destructive" })
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    // Cap at MAX_REFERENCE_IMAGES total. Skip oversized.
+    const slotsRemaining = MAX_REFERENCE_IMAGES - referenceImages.length
+    if (slotsRemaining <= 0) {
+      toast({
+        title: "Reference limit reached",
+        description: `Maximum ${MAX_REFERENCE_IMAGES} reference images. Remove one to add another.`,
+        variant: "destructive",
+      })
       e.target.value = ""
       return
     }
-    const reader = new FileReader()
-    reader.onload = () => setReferenceImage(reader.result as string)
-    reader.readAsDataURL(file)
+
+    const accepted = files
+      .filter(f => f.type.startsWith("image/"))
+      .slice(0, slotsRemaining)
+      .filter(f => {
+        if (f.size > 5 * 1024 * 1024) {
+          toast({
+            title: "Image too large",
+            description: `${f.name} exceeds 5 MB and was skipped.`,
+            variant: "destructive",
+          })
+          return false
+        }
+        return true
+      })
+
+    if (accepted.length === 0) {
+      e.target.value = ""
+      return
+    }
+
+    // Read all in parallel, then commit in original order.
+    Promise.all(
+      accepted.map(file => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = () => reject(new Error("Read failed"))
+        reader.readAsDataURL(file)
+      }))
+    ).then(dataUrls => {
+      setReferenceImages(prev => [...prev, ...dataUrls].slice(0, MAX_REFERENCE_IMAGES))
+    }).catch(() => {
+      toast({ title: "Failed to load reference image", variant: "destructive" })
+    })
     e.target.value = ""
   }
 
-  const removeReferenceImage = () => setReferenceImage(null)
+  const removeReferenceImageAt = (idx: number) => {
+    setReferenceImages(prev => prev.filter((_, i) => i !== idx))
+  }
+  const clearAllReferenceImages = () => setReferenceImages([])
 
   // Voice input (Web Speech API)
   const toggleVoice = useCallback(() => {
@@ -1598,18 +1647,26 @@ export default function GeneratePage() {
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
+                    multiple
                     onChange={handleReferenceImageSelect}
                     className="hidden"
-                    aria-label="Add reference image"
+                    aria-label="Add reference images"
                   />
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isGenerating}
-                    className="btn-press mt-1.5 h-10 w-10 rounded-[13px] flex items-center justify-center shrink-0 bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 hover:scale-105 disabled:opacity-50 transition-all"
-                    title="Add reference image"
+                    disabled={isGenerating || referenceImages.length >= MAX_REFERENCE_IMAGES}
+                    className="btn-press mt-1.5 h-10 w-10 rounded-[13px] flex items-center justify-center shrink-0 bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 hover:scale-105 disabled:opacity-50 transition-all relative"
+                    title={referenceImages.length >= MAX_REFERENCE_IMAGES
+                      ? `Maximum ${MAX_REFERENCE_IMAGES} reference images reached`
+                      : `Add reference images (${referenceImages.length}/${MAX_REFERENCE_IMAGES})`}
                   >
                     <Plus className="h-4.5 w-4.5" />
+                    {referenceImages.length > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-[10px] font-bold text-primary-foreground flex items-center justify-center">
+                        {referenceImages.length}
+                      </span>
+                    )}
                   </button>
                   <textarea
                     ref={textareaRef}
@@ -1643,22 +1700,50 @@ export default function GeneratePage() {
                   </button>
                 </div>
 
-                {/* Reference image preview */}
-                {referenceImage && (
-                  <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-white/[0.06]">
-                    <div className="relative h-12 w-12 rounded-lg overflow-hidden border border-white/10 shrink-0">
-                      <Image src={referenceImage} alt="Reference" fill className="object-cover" unoptimized />
-                      <button
-                        type="button"
-                        onClick={removeReferenceImage}
-                        className="absolute -top-1 -right-1 h-4.5 w-4.5 rounded-full bg-destructive flex items-center justify-center"
-                      >
-                        <X className="h-3 w-3 text-white" />
-                      </button>
+                {/* Reference images preview - thumbnail gallery (May 5 2026: was single image, now up to MAX_REFERENCE_IMAGES) */}
+                {referenceImages.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-white/[0.06]">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-xs font-medium text-foreground/80">
+                          {referenceImages.length === 1 ? "Reference attached" : `${referenceImages.length} references attached`}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground/60">
+                          {referenceImages.length === 1
+                            ? "AI will use this as style guide"
+                            : "AI will blend these as style + composition guides"}
+                        </p>
+                      </div>
+                      {referenceImages.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={clearAllReferenceImages}
+                          className="text-[10px] text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-white/[0.05]"
+                          title="Remove all reference images"
+                        >
+                          Clear all
+                        </button>
+                      )}
                     </div>
-                    <div>
-                      <p className="text-xs font-medium text-foreground/80">Reference attached</p>
-                      <p className="text-[10px] text-muted-foreground/60">AI will use this as style guide</p>
+                    <div className="flex flex-wrap gap-2">
+                      {referenceImages.map((src, idx) => (
+                        <div key={idx} className="relative h-14 w-14 rounded-lg overflow-hidden border border-white/10 shrink-0 group">
+                          <Image src={src} alt={`Reference ${idx + 1}`} fill className="object-cover" unoptimized />
+                          {idx === 0 && referenceImages.length > 1 && (
+                            <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-[8px] font-bold text-white text-center py-0.5">
+                              PRIMARY
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeReferenceImageAt(idx)}
+                            className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive hover:bg-red-600 flex items-center justify-center shadow-md"
+                            title="Remove this reference image"
+                          >
+                            <X className="h-3 w-3 text-white" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

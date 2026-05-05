@@ -53,6 +53,7 @@ export async function POST(req: Request) {
     width?: number;
     height?: number;
     reference_image?: string;
+    extra_reference_images?: string[];
     negative_prompt?: string;
     brand_kit?: Record<string, string>;
     testing_mode?: boolean;
@@ -65,6 +66,7 @@ export async function POST(req: Request) {
     width = 1024,
     height = 1024,
     reference_image,
+    extra_reference_images,
     negative_prompt,
     brand_kit,
     testing_mode = false,
@@ -124,6 +126,12 @@ export async function POST(req: Request) {
         width,
         height,
         reference_image_url: reference_image,
+        // Multi-reference support (May 5 2026): up to 4 extra images sent
+        // alongside the primary reference. Backend uses these as compose-style
+        // additional context. Backend gracefully ignores if array empty.
+        extra_image_urls: extra_reference_images && extra_reference_images.length > 0
+          ? extra_reference_images
+          : undefined,
         negative_prompt,
         brand_kit: resolvedBrandKit || undefined,
         prompt_dna: resolvedPromptDna || undefined,

@@ -338,9 +338,9 @@ BUCKET_MODEL_MAP = {
     # Note: 1K normally goes through TYPOGRAPHY_1K_MODELS parallel selection; this
     # is the static fallback when parallel path is skipped (no hero_headline).
     "typography": {
-        QualityTier.RES_1K: "imagen_4_base",
-        QualityTier.RES_2K: "imagen_4_base",
-        QualityTier.RES_4K: "imagen_4_base",
+        QualityTier.RES_1K: "gpt_image_2",
+        QualityTier.RES_2K: "gpt_image_2",
+        QualityTier.RES_4K: "gpt_image_2",
     },
 
     # Photorealism → Flux 2 Flex + Imagen 4

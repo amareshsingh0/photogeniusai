@@ -18,7 +18,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Any, AsyncIterator, Dict, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 import httpx
 from fastapi import APIRouter, Request
@@ -249,18 +249,17 @@ _IMG2IMG_CAPABLE_MODELS = {
     # Endpoint-swap models (typography heavyweights — text rendering kings)
     "seedream_4_5",   # → fal-ai/bytedance/seedream/v4/edit
     "ideogram_v3",    # → fal-ai/ideogram/v3/remix
+    "gpt_image_2_edit",  # OpenAI GPT Image 2 edit endpoint (1K only)
 }
 
 
 def _pick_img2img_model(quality: str) -> str:
-    """Choose the best reference-aware model for a given quality tier.
+    """Edit/reference path is capped at 1K and always uses GPT Image 2 edit.
 
-    Kontext is purpose-built for instruction/guided edits and is the only
-    model across our 3 providers with verified reference-image plumbing.
+    Higher tiers (2K/4K) silently downscale to 1K — GPT Image 2 edit gives the
+    strongest instruction-following + on-image text edits across our providers.
     """
-    if quality in (QualityTier.RES_2K.value, QualityTier.RES_4K.value):
-        return "flux_kontext_max"
-    return "flux_kontext"
+    return "gpt_image_2_edit"
 
 
 def _parse_bool_env(name: str, default: bool = True) -> bool:
@@ -278,6 +277,12 @@ class StreamRequest(BaseModel):
     width: int = Field(default=1024, ge=256, le=4096)
     height: int = Field(default=1024, ge=256, le=4096)
     reference_image_url: Optional[str] = Field(default=None)
+    # Up to 4 additional reference images for multi-image compose-style guidance
+    # (May 5 2026). Frontend sends as data: URLs; same models that honor primary
+    # reference (Flux Kontext family) consume these via extra_image_url params
+    # when the underlying provider supports them. Models that don't support
+    # multi-reference silently ignore this field.
+    extra_image_urls: Optional[List[str]] = Field(default=None)
     negative_prompt: Optional[str] = Field(default=None)
     brand_kit: Optional[dict] = Field(default=None)
     prompt_dna: Optional[dict] = Field(default=None)   # User.preferences.prompt_dna from Next.js
@@ -459,6 +464,12 @@ def _build_design_brief(
 async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[str]:
     start = time.time()
     quality = req.quality  # already validated by Pydantic
+
+    # Edit/reference path is hard-capped at 1K (GPT Image 2 edit only supports 1K).
+    if req.reference_image_url and quality != QualityTier.RES_1K.value:
+        logger.info("[stream][%s] reference image present → clamping tier %s → 1k", trace_id, quality)
+        quality = QualityTier.RES_1K.value
+        req.quality = quality
 
     # ── Stage -2: Smart Cache Check ────────────────────────────────────────
     cache_result = None
