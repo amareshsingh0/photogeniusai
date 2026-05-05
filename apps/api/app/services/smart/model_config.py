@@ -504,7 +504,8 @@ MODEL_EDIT_CAPABILITIES: Dict[str, List[str]] = {
     # GPT Image 2 edit — strongest at on-image text replacement / typography.
     "gpt_image_2_edit": [
         "text_replace", "instruction_edit", "object_add",
-        "object_remove", "background_swap",
+        "object_remove", "background_swap", "compose",
+        "style_remix", "inpaint_mask",
     ],
 }
 
@@ -513,13 +514,13 @@ MODEL_EDIT_CAPABILITIES: Dict[str, List[str]] = {
 # May 1, 2026: shifted off fal/Kontext per ops decision. Google nano-banana
 # handles general edits; GPT Image 2 owns text replacement.
 _EDIT_MODE_PREFERENCE: Dict[str, List[str]] = {
-    "instruction_edit": ["gemini_flash_edit", "gpt_image_2_edit", "flux_kontext"],
-    "inpaint_mask":     ["flux_fill", "gemini_flash_edit"],
-    "style_remix":      ["gemini_flash_edit", "gpt_image_2_edit", "ideogram_v3"],
-    "compose":          ["gemini_flash_edit", "seedream_4_5"],
-    "object_add":       ["gemini_flash_edit", "gpt_image_2_edit", "flux_kontext"],
-    "object_remove":    ["gemini_flash_edit", "gpt_image_2_edit", "flux_kontext"],
-    "background_swap":  ["gemini_flash_edit", "gpt_image_2_edit", "flux_kontext"],
+    "instruction_edit": ["gpt_image_2_edit", "gemini_flash_edit", "flux_kontext"],
+    "inpaint_mask":     ["gpt_image_2_edit", "flux_fill", "gemini_flash_edit"],
+    "style_remix":      ["gpt_image_2_edit", "gemini_flash_edit", "ideogram_v3"],
+    "compose":          ["gpt_image_2_edit", "gemini_flash_edit", "seedream_4_5"],
+    "object_add":       ["gpt_image_2_edit", "gemini_flash_edit", "flux_kontext"],
+    "object_remove":    ["gpt_image_2_edit", "gemini_flash_edit", "flux_kontext"],
+    "background_swap":  ["gpt_image_2_edit", "gemini_flash_edit", "flux_kontext"],
     "text_replace":     ["gpt_image_2_edit", "ideogram_v3", "flux_kontext_max"],
 }
 

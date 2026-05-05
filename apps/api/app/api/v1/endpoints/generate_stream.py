@@ -1491,7 +1491,26 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
                     "bucket": bucket, "total": 1, "models": [fallback_key],
                     "trace_id": trace_id, "img2img_fallback": True,
                 })
-                result = await _generate_with_model(req, fallback_key, trace_id, quality_override=req.quality)
+                # Wrap in heartbeat loop — GPT Image 2 edit can take 60s+ and
+                # nginx default proxy_read_timeout=60s would drop the connection.
+                _fb_task = asyncio.create_task(
+                    _generate_with_model(req, fallback_key, trace_id, quality_override=req.quality)
+                )
+                _fb_started = time.time()
+                while not _fb_task.done():
+                    try:
+                        result = await asyncio.wait_for(asyncio.shield(_fb_task), timeout=15.0)
+                        break
+                    except asyncio.TimeoutError:
+                        yield _sse("heartbeat", {
+                            "t":         int(time.time()),
+                            "elapsed":   int(time.time() - _fb_started),
+                            "completed": 0,
+                            "total":     1,
+                            "trace_id":  trace_id,
+                        })
+                else:
+                    result = _fb_task.result()
                 if result:
                     yield _sse("model_result", {
                         "generationId": result.get("generation_id"),
