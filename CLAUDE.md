@@ -69,12 +69,14 @@
 ### Resolution Routing (BUCKET_MODEL_MAP in model_config.py)
 | Bucket | 1K | 2K | 4K |
 |--------|----|----|-----|
-| typography | seedream_4_5 | ideogram_v3 | imagen_4_ultra |
-| photorealism | flux_2_flex | gemini_3_imagen | imagen_4_ultra |
-| artistic | wan_2_7 | grok_2_imagine | imagen_4_ultra |
-| anime | wan_2_7 | wan_2_7 | gemini_3_1_imagen |
-| vector | recraft_v4_pro | recraft_v4_pro | recraft_v4_pro |
-| fast | seedream_4_5 | flux_2_flex | imagen_4_base |
+| typography | gpt_image_2 | gpt_image_2 | gpt_image_2 |
+| photorealism | flux_2_flex | imagen_4_base | imagen_4_ultra |
+| artistic | grok_2_imagine | gemini_3_1_imagen | imagen_4_ultra |
+| anime | wan_2_7 | gemini_3_1_imagen | imagen_4_ultra |
+| vector | recraft_v4_pro | recraft_v4_pro | imagen_4_ultra |
+| fast | seedream_4_5 | gemini_3_imagen | imagen_4_ultra |
+
+**Reference-image / edit path**: ALL edit modes (instruction_edit, compose, style_remix, inpaint_mask, object_add/remove, background_swap, text_replace) prefer `gpt_image_2_edit` first. Tier hard-clamped to 1K when reference image present.
 
 ---
 
@@ -379,6 +381,26 @@ python3 scripts/mine_category_recipes.py   # writes category_recipes_mined.json
 - `pitt-ads-text/image/` — Pitt annotations (Topics, Slogans, QA_Action, Sentiments, Strategies)
 - `ad-copy/` — PeterBrendan/Ads_Creative_Ad_Copy_Programmatic CSV
 - `marketing-social/` — RafaM97 marketing brief examples
+
+---
+
+## MULTI-REFERENCE + GPT IMAGE 2 EDIT (May 5 2026)
+
+Generate page now supports up to **5 reference images** (was 1). UI: `+` button with badge showing count, gallery thumbnails, individual X-to-remove + "Clear all".
+
+**Wire path**: `referenceImages[0]` → `reference_image` (primary) | `referenceImages.slice(1)` → `extra_reference_images` → backend `extra_image_urls`.
+
+**GPT Image 2 owns reference-image generation:**
+- `_pick_img2img_model` returns `gpt_image_2_edit` unconditionally — Flux Kontext deprecated for refs.
+- `_EDIT_MODE_PREFERENCE` (model_config.py) lists `gpt_image_2_edit` FIRST for every edit mode (instruction_edit, compose, style_remix, inpaint_mask, object_add/remove, background_swap, text_replace).
+- `_call_openai_edit` sends repeated `image[]` form parts (primary + up to 14 extras) per OpenAI `/v1/images/edits` spec — multi-image compose now works.
+- `extra_image_urls` plumbed through 3 generate paths that were silently dropping it (main, quality-retry, parallel `_generate_with_model`).
+
+**Tier auto-clamp**: when `req.reference_image_url` set, tier is hard-clamped to 1K (GPT Image 2 edit only supports 1K reliably).
+
+**SSE heartbeats**: img2img single-model fallback path wraps `_generate_with_model` in 15s heartbeat loop. GPT Image 2 edit takes 60s+ and nginx `proxy_read_timeout=60s` was killing connections silently → "network error" toast.
+
+**Bucket DB-empty fallback** (`_parallel_model_stream`): when admin DB has no models tagged for a bucket (e.g. fresh deploy + vector bucket), build synthetic ModelConfig entries from `admin_models.DEFAULT_MODELS` for that bucket so parallel testing still works (preserves admin's multi-model grid UX). Single-model fallback was the wrong approach. Run `POST /api/v1/admin/models/seed` to seed DB and skip fallback.
 
 ---
 

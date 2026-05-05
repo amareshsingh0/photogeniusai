@@ -1462,59 +1462,34 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
         ]
 
         if not bucket_models:
-            # No admin-tagged models for this bucket — fall back to the static
-            # BUCKET_MODEL_MAP single-model path so the request doesn't fail.
-            from app.services.smart.model_config import BUCKET_MODEL_MAP, normalize_quality_tier
-            from app.services.smart.model_config import QualityTier as _QT
-            try:
-                _tier_enum = _QT(normalize_quality_tier(req.quality))
-            except Exception:
-                _tier_enum = _QT.RES_1K
-            fallback_key = (
-                BUCKET_MODEL_MAP.get(bucket, {}).get(_tier_enum)
-                or BUCKET_MODEL_MAP.get(bucket, {}).get(_QT.RES_1K)
-                or "flux_2_flex"
-            )
+            # No admin-tagged models for this bucket in DB — fall back to the
+            # canonical bucket→models mapping from admin_models.DEFAULT_MODELS
+            # so parallel testing still works (the DB just isn't seeded for
+            # this bucket yet). Build a synthetic ModelConfig-like list from
+            # DEFAULT_MODELS so the rest of the parallel pipeline runs as-is.
+            from app.api.v1.endpoints.admin_models import DEFAULT_MODELS
+
+            class _SyntheticModel:
+                __slots__ = ("modelId", "buckets", "isActive", "isTestingEnabled")
+                def __init__(self, modelId, buckets):
+                    self.modelId = modelId
+                    self.buckets = buckets
+                    self.isActive = True
+                    self.isTestingEnabled = True
+
+            fallback_models = [
+                _SyntheticModel(m["modelId"], m["buckets"])
+                for m in DEFAULT_MODELS
+                if bucket in m["buckets"] or db_bucket in m["buckets"]
+            ]
+            if not fallback_models:
+                yield _sse("error", {"message": f"No models registered for bucket: {bucket}"})
+                return
             logger.warning(
-                "[parallel][%s] No DB models for bucket=%s — falling back to single %s",
-                trace_id, bucket, fallback_key,
+                "[parallel][%s] DB had no models for bucket=%s — using DEFAULT_MODELS fallback (%d models)",
+                trace_id, bucket, len(fallback_models),
             )
-            yield _sse("testing_started", {
-                "bucket": bucket, "total": 1, "models": [fallback_key],
-                "trace_id": trace_id, "bucket_fallback": True,
-            })
-            _fb_task = asyncio.create_task(
-                _generate_with_model(req, fallback_key, trace_id, quality_override=req.quality)
-            )
-            _fb_started = time.time()
-            while not _fb_task.done():
-                try:
-                    result = await asyncio.wait_for(asyncio.shield(_fb_task), timeout=15.0)
-                    break
-                except asyncio.TimeoutError:
-                    yield _sse("heartbeat", {
-                        "t": int(time.time()),
-                        "elapsed": int(time.time() - _fb_started),
-                        "completed": 0, "total": 1, "trace_id": trace_id,
-                    })
-            else:
-                result = _fb_task.result()
-            if result:
-                yield _sse("model_result", {
-                    "generationId": result.get("generation_id"),
-                    "imageUrl":     result.get("image_url"),
-                    "modelId":      result.get("model_id"),
-                    "tier":         result.get("tier"),
-                    "latency":      result.get("latency"),
-                    "cost":         result.get("cost"),
-                    "textValidation": result.get("text_validation"),
-                    "completed": 1, "total": 1, "trace_id": trace_id,
-                })
-            yield _sse("testing_complete", {
-                "total": 1, "completed": 1 if result else 0,
-                "bucket": bucket, "trace_id": trace_id,
-            })
-            return
+            bucket_models = fallback_models
 
         # Img2Img filter — when a reference image is provided, only run models
         # that actually wire `image_url` through to the provider. Everything
