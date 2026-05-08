@@ -572,7 +572,7 @@ class VisualDirection(BaseModel):
         "Examples: ['icy condensation drops on the bottle', 'embossed gold foil label', 'wet wood grain reflecting amber light', 'subtle ocean mist rolling across the deck']. "
         "Each entry 3-8 words, photographable specificity. Skip generic adjectives ('beautiful', 'premium')."
     ))
-    depicted_subject: str = Field(default="", max_length=200, description=(
+    depicted_subject: str = Field(default="", max_length=400, description=(
         "MANDATORY for ads - the CONCRETE photographable noun phrase you'd describe to a photographer. "
         "Extract from the user's words. Rules: "
         "(1) MUST be a physical thing (bottle, can, box, garment, device, food item, person, room). "
