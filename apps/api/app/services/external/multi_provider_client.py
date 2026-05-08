@@ -83,9 +83,12 @@ _VALID_IMAGE_SIZES = frozenset({
     "landscape_16_9",
 })
 
-# Conservative byte budgets — keep all providers happy.
-# fal.ai / WaveSpeed / Imagen all accept up to ~4000 chars in practice.
-_MAX_PROMPT_CHARS = int(os.getenv("MAX_PROMPT_CHARS", "3800"))
+# Byte budgets per provider (May 8 2026 — bumped from 3800 to 6500).
+# GPT Image 2 supports 32000 chars per OpenAI docs; Imagen 4 / Flux Pro accept ~8000;
+# Recraft / WaveSpeed silently truncate or ignore overflow. 6500 keeps the rich
+# multi-section prompts (concept + strategy + text elements + layout + footer)
+# intact for the providers that benefit from them.
+_MAX_PROMPT_CHARS = int(os.getenv("MAX_PROMPT_CHARS", "6500"))
 _MAX_NEGATIVE_PROMPT_CHARS = int(os.getenv("MAX_NEGATIVE_PROMPT_CHARS", "1500"))
 
 
@@ -952,7 +955,11 @@ class MultiProviderClient:
                 if resp.status_code >= 400:
                     return False, f"HTTP {resp.status_code}"
                 ctype = resp.headers.get("content-type", "").lower()
-                if ctype and not ctype.startswith("image/"):
+                # Accept image/* MIME types AND SVG/octet-stream (Recraft v4 SVG
+                # endpoint returns application/octet-stream for .svg files).
+                _ok_ctypes = ("image/", "application/octet-stream", "application/svg")
+                _is_svg_url = image_url.lower().split("?", 1)[0].endswith(".svg")
+                if ctype and not ctype.startswith(_ok_ctypes) and not _is_svg_url:
                     return False, f"content-type not image: {ctype}"
                 clen = resp.headers.get("content-length")
                 if clen and clen.isdigit() and int(clen) < 512:

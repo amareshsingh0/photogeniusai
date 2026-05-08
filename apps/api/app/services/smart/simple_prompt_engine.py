@@ -503,15 +503,22 @@ class AdCopy(BaseModel):
         "Empty for tech/SaaS/minimal brands where wordmark alone is enough. Renders in the layout TOP-CENTER above the headline OR top-left as a corner mark."
     ))
     website_url: Optional[str] = Field(default=None, max_length=120, description=(
-        "Website URL to render in the ad footer/CTA strip if appropriate (e.g. 'www.glamour.in', 'shop.example.com'). "
-        "Empty if user did not provide a domain — do NOT invent fake URLs that hallucinate a real registered domain. "
-        "If user mentioned 'D2C' / 'website' / 'online store' but no URL, you MAY use 'www.{brand_name_lowercased}.in' as a plausible placeholder. "
-        "Renders as small text near the CTA in the bottom strip."
+        "Website URL to render in the ad footer/CTA strip. POPULATE for D2C / brand / event / "
+        "service ads — these all carry a website on real-world posters and feel unfinished without one. "
+        "If the user provided a URL, use it verbatim. If not, generate a plausible placeholder of the form "
+        "'www.{brand_or_event_slug}.com' or '.in' (e.g. 'www.bhajansandhya.com', 'www.glamour.in', "
+        "'www.spiritualharmony.org'). Use '.org' for non-profits/spiritual, '.in' for India D2C, "
+        "'.com' for global brands. Empty ONLY for personal-use posts (wishes, greetings, family events) "
+        "where a website is genuinely not expected."
     ))
     contact_info: Optional[str] = Field(default=None, max_length=200, description=(
-        "Phone, address, social handle, or location footer text — ONLY when user explicitly provides one or context clearly demands it (restaurant ads, real estate, local services). "
-        "Examples: '+91 98765 43210 | Connaught Place, Delhi', '@glamour.official', 'Available pan India'. "
-        "Empty for brands without a stated location. Do NOT invent random phone numbers."
+        "Phone, address, social handle, or location footer — POPULATE for events / restaurants / "
+        "real estate / local services / D2C brands where a venue or contact is expected by genre convention. "
+        "If user provided specifics, use verbatim. If not, generate plausible placeholders that make the poster "
+        "feel finished: phone in correct country format ('+91 98765 43210' for India, '+1 (212) 555-0182' for US), "
+        "address with city/state/PIN ('Shree Ram Bhajan Hall, 123 Bhakti Path, Vrindavan, UP – 281121', "
+        "'42 Anna Salai, Chennai – 600002'), social handle ('@brandname.official'). "
+        "Use multi-line format separated by ' | '. Empty ONLY for personal posts where contact isn't expected."
     ))
     footer_strip: list[str] = Field(default_factory=list, description=(
         "0–4 short footer-strip badges that anchor the bottom of the ad — these are the 'credibility close' line typical of D2C / e-commerce / festival ads. "
@@ -519,6 +526,29 @@ class AdCopy(BaseModel):
         "['DINE-IN • TAKEAWAY • DELIVERY', 'OPEN 11 AM – 11 PM'] for restaurants; "
         "['EARLY-BIRD ENDS THURSDAY', 'GROUP DISCOUNTS'] for events. "
         "MAX 2-4 words each. Each renders as a separate icon+label pair in a horizontal strip at the bottom of the ad. Empty for minimalist/luxury ads where extra info dilutes the mood."
+    ))
+
+    # Event/lineup schedule (May 6 2026 — for multi-act event posters: bhajan series,
+    # concerts, festivals, conferences, sermon series, workshops, training cohorts)
+    lineup_items: list[str] = Field(default_factory=list, description=(
+        "0–8 schedule entries for event/lineup posters. Each entry is ONE SHORT STRING combining "
+        "date + name/title + time + (optional) location. The renderer parses these into row-pills "
+        "stacked vertically in the layout center. "
+        "Format: '<DATE> | <NAME or TITLE> | <TIME> | <LOCATION optional>'. "
+        "Examples for a bhajan series: ['04 MAY SUN | PANDIT JASRAJ JI | 6:30 PM ONWARDS', "
+        "'11 MAY SUN | ANUP JALOTA JI | 6:30 PM ONWARDS', '18 MAY SUN | SADHVI POORNIMA JI | "
+        "6:30 PM ONWARDS', '25 MAY SUN | DEVKINANDAN THAKUR JI | 6:30 PM ONWARDS', "
+        "'31 MAY SAT | BHAJAN SANDHYA SPECIAL | 6:30 PM ONWARDS']. "
+        "Examples for a concert: ['Fri Mar 15 | The Beatles Tribute | 8 PM | Hard Rock Cafe', "
+        "'Sat Mar 22 | Jazz Quartet Night | 9 PM | Hard Rock Cafe']. "
+        "Examples for a workshop series: ['Mon Apr 1 | React Fundamentals | 10 AM-4 PM', "
+        "'Tue Apr 2 | Advanced Hooks | 10 AM-4 PM', 'Wed Apr 3 | Performance Tuning | 10 AM-4 PM']. "
+        "POPULATE WHENEVER the user describes a multi-act event ('lineup', 'series', 'schedule', "
+        "'sessions', 'speakers', 'workshops', 'days', 'sermons', 'concerts'). If the user lists "
+        "names/dates explicitly, use those VERBATIM. If the user only says 'lineup of 5 bhajan "
+        "singers' without naming them, INVENT 5 plausible names (e.g. famous Indian bhajan artists "
+        "for that genre) and assign sequential weekly dates in the requested month. Empty for "
+        "single-product or single-event ads."
     ))
 
 
@@ -1862,6 +1892,8 @@ When the output needs words on the image:
 - **PRESERVE user-quoted strings VERBATIM and put OFFERS in HEADLINE.** If the user wrote text inside quotes (`"..."`, `'...'`) OR named a specific offer/discount/percentage/price/date (e.g. `upto 30% off`, `Buy 1 Get 1`, `Sale ends Sunday`, `₹999 only`, `flat 50% off`), that EXACT text MUST appear in `ad_copy.headline` — NOT subhead, NOT tagline. The offer IS the primary message; it MUST be the loudest text on the canvas. Image models render only 3 strings reliably (brand + headline + CTA), so if the offer is buried in subhead it gets DROPPED. Patterns triggering this rule: any of `%`, `off`, `free`, `save`, `buy N get M`, `flat`, `₹`, `$`, `from ₹X`, `starting at`, `limited time`, `sale`, `discount` → headline. Use the brand voice for subhead (`"Tough on stains."`), not the offer.
 
 - **DO NOT HALLUCINATE OFFERS / DISCOUNTS / DEADLINES / PRICES THE USER DID NOT MENTION.** This is the #1 cause of fake-feeling ad output. If the user says "create an Instagram post for a saree brand" without mentioning a sale, percentage, deadline, or price — DO NOT invent "20% OFF", "LIMITED TIME", "Sale ends Sunday", "Flat 50% Off", "Early Bird ₹999". The user did not authorize a discount; inventing one is a fabrication that hurts trust and could mislead real customers. Default behavior when user doesn't mention an offer: build the ad around emotional positioning + trust signals + product story, NOT around a fake promo. Banned hallucinations unless user explicitly mentioned them: "%", "off", "limited time", "ends today/tonight/Friday", any price ("₹X", "$X", "from ₹X"), "early bird", "flash sale", "clearance", "exclusive deal". If the prompt is positioning-focused (heritage, craftsmanship, lifestyle, brand intro), the ad has NO promo — just the brand story.
+
+- **EVENT / LINEUP / SERIES POSTERS USE `lineup_items`, NOT `benefit_lines`.** When the user prompt contains "lineup", "series", "schedule", "sessions", "speakers", "concerts", "performances", "workshops", "sermons", "festival days", "monthly calendar", or describes a multi-act / multi-date event — the schedule entries belong in `ad_copy.lineup_items` as one string per entry (format: '<DATE> | <NAME or TITLE> | <TIME> | <LOCATION optional>'), NOT collapsed into 3 generic benefit pills like "Live Performances / Community Gathering / Evening Sessions". Generic pills are a SIGN THE LINEUP DATA WAS LOST. If the user said "lineup" but didn't list specific names, INVENT 4-6 plausible names (genuine artists/speakers from the genre — for bhajan: Pandit Jasraj, Anup Jalota, Sadhvi Poornima, Devkinandan Thakur etc; for tech: real conference speakers from that domain) with sequential weekly dates in the requested month and a consistent time. The `benefit_lines` field is for product features (Pure Silk / Lightweight / Made With Love), NEVER for collapsing schedule data. If user said "lineup", you MUST output a populated `lineup_items` array — empty `lineup_items` for a lineup prompt is a critical failure.
 
 - **USER-STATED COLORS / FONTS / LANGUAGE / VISUAL DIRECTIONS ARE LAW — NEVER OVERRIDE.** When the user explicitly states a color ("use white orange color", "in blue and gold", "pastel pink palette"), a font ("in serif", "use script lettering"), a language ("Hindi", "Hinglish", "include English and Tamil"), an aspect ratio, or any concrete visual direction — that instruction is NON-NEGOTIABLE and overrides all default industry-color logic, archetype defaults, and atmospheric mood mappings. The 60-30-10 ratio, color psychology guides, and industry-chromatic-logic exist to fill the GAPS when the user is silent — they NEVER override an explicit user instruction. If the user said "white and orange" for a devotional poster, the palette is "warm cream/off-white 60% (background), saffron orange 30% (accent panels), deep marigold orange 10% (CTA/dates)" — NOT maroon, NOT red, NOT gold-on-burgundy even if "devotional/temple" archetype suggests those. If the user says "Hindi welcome line included", at least one prominent Hindi line MUST appear on canvas verbatim. If the user names specific people/dates/times ("Pandit X on May 4 at 6:30 PM"), every name/date/time renders verbatim in the layout — no swapping for fictional alternatives, no dropping the time. Direct user words are the floor; archetype guidance only applies above that floor.
 

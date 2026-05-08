@@ -421,6 +421,7 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     website_url  = (ad_copy.get("website_url") or "").strip()
     contact_info = (ad_copy.get("contact_info") or "").strip()
     footer_strip = [str(f).strip() for f in (ad_copy.get("footer_strip") or []) if str(f).strip()]
+    lineup_items = [str(l).strip() for l in (ad_copy.get("lineup_items") or []) if str(l).strip()]
 
     mood        = (visual.get("mood") or "").strip()
     palette     = (visual.get("color_palette") or "").strip()
@@ -527,6 +528,15 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
         text_lines.append(
             f"- FOOTER_BADGE_STRIP (horizontal row of small icon+label pairs at the very bottom): [{footer_json}]. "
             "Each renders as a small icon followed by the label text in a tinted footer band spanning the full width."
+        )
+    if lineup_items:
+        lineup_json = "; ".join(f'"{l}"' for l in lineup_items[:8])
+        text_lines.append(
+            f"- LINEUP_SCHEDULE (vertically stacked row pills, ONE row per entry, in the central content area): [{lineup_json}]. "
+            "Render each as a horizontal pill with the date in a small accent box on the LEFT, the name/title as bold text in the MIDDLE, "
+            "and the time on the RIGHT. Use a small icon at the far right of each row matching the event type "
+            "(praying-hands, harmonium, diya, flute, temple, mic, etc). EACH ROW IS A SEPARATE LINE — do not merge rows. "
+            "ALL DATES, NAMES, AND TIMES MUST RENDER VERBATIM AS GIVEN — do not invent, drop, or substitute."
         )
 
     if text_lines:
