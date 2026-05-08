@@ -492,6 +492,35 @@ class AdCopy(BaseModel):
     brand_name: Optional[str] = Field(default=None, max_length=100,
         description="Exact brand name to render in the image, if provided by the user.")
 
+    # Brand identity layer (May 6 2026 — close gap with ChatGPT/Midjourney ad outputs)
+    brand_emblem_description: Optional[str] = Field(default=None, max_length=300, description=(
+        "Description of a SMALL decorative brand mark / emblem / monogram to render alongside the wordmark. "
+        "Real ads pair the brand name with a tiny crest/mandala/diamond/circle-emblem to feel finished and credible "
+        "(luxury, fashion, food, hospitality, D2C heritage brands all do this). "
+        "Example: 'small ornate gold diamond emblem with stylized G initial in the center, lotus motif accents' for a luxury fashion brand. "
+        "'minimalist circular badge with leaf icon' for an organic brand. "
+        "'shield with crossed forks' for a steakhouse. "
+        "Empty for tech/SaaS/minimal brands where wordmark alone is enough. Renders in the layout TOP-CENTER above the headline OR top-left as a corner mark."
+    ))
+    website_url: Optional[str] = Field(default=None, max_length=120, description=(
+        "Website URL to render in the ad footer/CTA strip if appropriate (e.g. 'www.glamour.in', 'shop.example.com'). "
+        "Empty if user did not provide a domain — do NOT invent fake URLs that hallucinate a real registered domain. "
+        "If user mentioned 'D2C' / 'website' / 'online store' but no URL, you MAY use 'www.{brand_name_lowercased}.in' as a plausible placeholder. "
+        "Renders as small text near the CTA in the bottom strip."
+    ))
+    contact_info: Optional[str] = Field(default=None, max_length=200, description=(
+        "Phone, address, social handle, or location footer text — ONLY when user explicitly provides one or context clearly demands it (restaurant ads, real estate, local services). "
+        "Examples: '+91 98765 43210 | Connaught Place, Delhi', '@glamour.official', 'Available pan India'. "
+        "Empty for brands without a stated location. Do NOT invent random phone numbers."
+    ))
+    footer_strip: list[str] = Field(default_factory=list, description=(
+        "0–4 short footer-strip badges that anchor the bottom of the ad — these are the 'credibility close' line typical of D2C / e-commerce / festival ads. "
+        "Examples: ['FREE SHIPPING PAN INDIA', 'COD AVAILABLE', '7-DAY RETURNS', 'DIRECTLY FROM WEAVERS'] for D2C apparel; "
+        "['DINE-IN • TAKEAWAY • DELIVERY', 'OPEN 11 AM – 11 PM'] for restaurants; "
+        "['EARLY-BIRD ENDS THURSDAY', 'GROUP DISCOUNTS'] for events. "
+        "MAX 2-4 words each. Each renders as a separate icon+label pair in a horizontal strip at the bottom of the ad. Empty for minimalist/luxury ads where extra info dilutes the mood."
+    ))
+
 
 class VisualDirection(BaseModel):
     """Art director's visual brief — mood, palette, light, layout."""
@@ -1831,6 +1860,10 @@ When the output needs words on the image:
 - ALWAYS write the actual line. Never leave "a headline about X". Invent it.
 - **PRESERVE the user's exact terminology.** If the user says "song", write "song" — DO NOT substitute "single" / "track" / "tune". If they say "shop", don't write "store". If they say "discount", don't write "sale". Use *their* word — even if industry jargon would sound more polished. The image must match what the user typed in spirit and vocabulary.
 - **PRESERVE user-quoted strings VERBATIM and put OFFERS in HEADLINE.** If the user wrote text inside quotes (`"..."`, `'...'`) OR named a specific offer/discount/percentage/price/date (e.g. `upto 30% off`, `Buy 1 Get 1`, `Sale ends Sunday`, `₹999 only`, `flat 50% off`), that EXACT text MUST appear in `ad_copy.headline` — NOT subhead, NOT tagline. The offer IS the primary message; it MUST be the loudest text on the canvas. Image models render only 3 strings reliably (brand + headline + CTA), so if the offer is buried in subhead it gets DROPPED. Patterns triggering this rule: any of `%`, `off`, `free`, `save`, `buy N get M`, `flat`, `₹`, `$`, `from ₹X`, `starting at`, `limited time`, `sale`, `discount` → headline. Use the brand voice for subhead (`"Tough on stains."`), not the offer.
+
+- **DO NOT HALLUCINATE OFFERS / DISCOUNTS / DEADLINES / PRICES THE USER DID NOT MENTION.** This is the #1 cause of fake-feeling ad output. If the user says "create an Instagram post for a saree brand" without mentioning a sale, percentage, deadline, or price — DO NOT invent "20% OFF", "LIMITED TIME", "Sale ends Sunday", "Flat 50% Off", "Early Bird ₹999". The user did not authorize a discount; inventing one is a fabrication that hurts trust and could mislead real customers. Default behavior when user doesn't mention an offer: build the ad around emotional positioning + trust signals + product story, NOT around a fake promo. Banned hallucinations unless user explicitly mentioned them: "%", "off", "limited time", "ends today/tonight/Friday", any price ("₹X", "$X", "from ₹X"), "early bird", "flash sale", "clearance", "exclusive deal". If the prompt is positioning-focused (heritage, craftsmanship, lifestyle, brand intro), the ad has NO promo — just the brand story.
+
+- **USER-STATED COLORS / FONTS / LANGUAGE / VISUAL DIRECTIONS ARE LAW — NEVER OVERRIDE.** When the user explicitly states a color ("use white orange color", "in blue and gold", "pastel pink palette"), a font ("in serif", "use script lettering"), a language ("Hindi", "Hinglish", "include English and Tamil"), an aspect ratio, or any concrete visual direction — that instruction is NON-NEGOTIABLE and overrides all default industry-color logic, archetype defaults, and atmospheric mood mappings. The 60-30-10 ratio, color psychology guides, and industry-chromatic-logic exist to fill the GAPS when the user is silent — they NEVER override an explicit user instruction. If the user said "white and orange" for a devotional poster, the palette is "warm cream/off-white 60% (background), saffron orange 30% (accent panels), deep marigold orange 10% (CTA/dates)" — NOT maroon, NOT red, NOT gold-on-burgundy even if "devotional/temple" archetype suggests those. If the user says "Hindi welcome line included", at least one prominent Hindi line MUST appear on canvas verbatim. If the user names specific people/dates/times ("Pandit X on May 4 at 6:30 PM"), every name/date/time renders verbatim in the layout — no swapping for fictional alternatives, no dropping the time. Direct user words are the floor; archetype guidance only applies above that floor.
 
 - **QUOTED TEXT IS A FLOOR, NOT A CEILING — STILL INVENT THE FULL AD FRAMEWORK.** When the user writes `"with text 'BEAT FEST 2026' and 'March 15'"` or `"with text 'GRAND OPENING' and 'Free Dessert'"`, those quoted strings are the **mandatory** copy — but the ad is NOT complete with just those. A real festival/restaurant/event poster also needs: a fictional **brand name** (e.g. "PULSE PRESENTS", "EMBER & SAGE"), 2-4 short **benefit_lines** (e.g. "60+ Artists", "3 Stages", "Food Trucks" / "Hand-Crafted", "Local Sourcing", "Live Music"), 2-3 **trust_signals** (e.g. "Sold Out 2025", "Press Pick" / "Zomato 4.7★", "Time Out Approved"), an **emotional_tagline** (e.g. "One Night. Pure Sound." / "Where every plate becomes a story."), and a **cta** (e.g. "Get Tickets", "Reserve Now"). User-quoted text fills `headline` + maybe `subhead`; you fill EVERYTHING ELSE. A poster with only a giant headline + date and nothing else looks like a placeholder, not a finished ad. Compare: ❌ `BEAT FEST 2026 / March 15` (3 elements, looks like a draft) vs ✅ `BEAT FEST 2026 / March 15 / 60+ Artists • 3 Stages • Food Trucks / "Pulse Presents" wordmark / Get Tickets button / "One Night. Pure Sound." tagline / Sold Out 2025 trust badge` (8 elements, finished poster).
 - Use straight double quotes for exact render: `"Mornings, Upgraded"`.

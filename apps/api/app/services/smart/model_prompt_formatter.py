@@ -416,6 +416,11 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     subhead_typo  = (ad_copy.get("subhead_typography") or "").strip()
     cta_typo      = (ad_copy.get("cta_typography") or "").strip()
     legal_disclaimer = (ad_copy.get("legal_disclaimer") or "").strip()
+    # Brand identity layer (May 6 2026)
+    brand_emblem = (ad_copy.get("brand_emblem_description") or "").strip()
+    website_url  = (ad_copy.get("website_url") or "").strip()
+    contact_info = (ad_copy.get("contact_info") or "").strip()
+    footer_strip = [str(f).strip() for f in (ad_copy.get("footer_strip") or []) if str(f).strip()]
 
     mood        = (visual.get("mood") or "").strip()
     palette     = (visual.get("color_palette") or "").strip()
@@ -511,6 +516,18 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
         text_lines.append(f"- TRUST_STRIP_ITEMS: [{trust_json}]")
     if legal_disclaimer:
         text_lines.append(f'- LEGAL_DISCLAIMER: "{legal_disclaimer}"')
+    if brand_emblem:
+        text_lines.append(f"- BRAND_EMBLEM (small decorative crest above headline OR top-left corner): {brand_emblem}")
+    if website_url:
+        text_lines.append(f'- WEBSITE_URL (small text in CTA strip): "{website_url}"')
+    if contact_info:
+        text_lines.append(f'- CONTACT_INFO (footer band): "{contact_info}"')
+    if footer_strip:
+        footer_json = ", ".join(f'"{f}"' for f in footer_strip[:4])
+        text_lines.append(
+            f"- FOOTER_BADGE_STRIP (horizontal row of small icon+label pairs at the very bottom): [{footer_json}]. "
+            "Each renders as a small icon followed by the label text in a tinted footer band spanning the full width."
+        )
 
     if text_lines:
         sections.append(
