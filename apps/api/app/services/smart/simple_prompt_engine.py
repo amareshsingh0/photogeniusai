@@ -810,17 +810,44 @@ Fill `visual.visual_metaphor` with ONE specific concept. If the user gave you a 
 
 `visual.depicted_subject` is the CONCRETE thing the camera will photograph. Not a concept, not a campaign type — a physical noun phrase.
 
-EXTRACT THIS FROM THE USER'S WORDS:
-- user wrote "detergent Cake" -> depicted_subject = "a glossy detergent bottle with brand label"
-- user wrote "shampoo Tiger" -> depicted_subject = "a sleek shampoo bottle"
-- user wrote "energy drink Bolt" -> depicted_subject = "a chilled aluminum energy drink can"
-- user wrote "iPhone case" -> depicted_subject = "a premium phone case product shot"
-- user wrote "wedding invite for Riya & Arjun" -> depicted_subject = "an elegant wedding invitation card"
+EXTRACT THIS FROM THE USER'S WORDS — but FIRST decide PRODUCT-ONLY vs LIFESTYLE-WITH-MODEL:
+
+**LIFESTYLE-WITH-MODEL (default for these categories — the product is shown WORN / USED / ENJOYED by a person):**
+- FASHION & APPAREL: saree, suit, dress, lehenga, kurta, jeans, jacket, t-shirt, shoes, handbag, scarf, wedding wear, traditional wear → depicted_subject = "an elegant {ethnicity-appropriate} woman/man wearing a {color/style} {garment}, {pose} in {setting}". Examples:
+  - "Banarasi saree, Glamour brand" → depicted_subject = "a graceful Indian woman wearing an exquisite hand-woven Banarasi silk saree in deep maroon and gold zari, draped traditionally over the shoulder, soft natural pose in a warm-lit heritage palace courtyard with carved pillars softly out of focus, gold jewelry catching light"
+  - "denim jacket" → depicted_subject = "a confident model wearing a vintage-wash blue denim jacket, hands in pockets, urban street backdrop"
+  - "wedding lehenga" → depicted_subject = "a stunning bride in a deep red wedding lehenga with intricate gold embroidery, full-length pose, traditional jewelry, soft warm temple-light backdrop"
+- JEWELRY (necklaces, earrings, bangles, watches): "a model's neckline / wrist / hand wearing the jewelry" — close-up portrait crop showing skin + jewelry interaction
+- COSMETICS / SKINCARE / HAIRCARE on body: "a model's face/hands/lips with the product applied/being applied" — beauty close-up. (Compact/bottle-only flat-lay is allowed only if user explicitly says "product shot only" or "flat lay")
+- FOOTWEAR: "feet/legs of a model wearing the shoes in motion or styled outfit" — NOT just shoes on white background unless user asks for catalog
+- EYEWEAR: "a model's face wearing the glasses, three-quarter view"
+- WATCHES: "a model's wrist with the watch styled with cuff/sleeve"
+
+**PRODUCT-ONLY (the product is the hero, no person needed):**
+- PACKAGED CONSUMER GOODS: detergent, shampoo, energy drink, food packaging, beverages, cleaning products, OTC medicine — "a {adjective} {container} with brand label"
+- ELECTRONICS / GADGETS / TECH: "a sleek black wireless earbuds case with internal LED glow"
+- HOME & KITCHEN: "a premium ceramic dinner plate set", "a designer table lamp"
+- STATIONERY / CARDS / INVITES: "an elegant wedding invitation card with gold foil"
+- BOOKS: "a hardcover book with embossed title"
+
+**THE RULE:** if the product is something a person WEARS, USES ON THEIR BODY, or whose value is felt through human styling/emotion → ALWAYS include a model. If it sits on a shelf/table/desk → product-only is fine. When in doubt for fashion/jewelry/cosmetics, default to LIFESTYLE-WITH-MODEL — that is what real D2C ads on Instagram look like and what users implicitly want when they say "create an Instagram post for my [fashion brand]".
+
+EXAMPLES (extending earlier list):
+- user wrote "detergent Cake" -> depicted_subject = "a glossy detergent bottle with brand label" (PRODUCT-ONLY)
+- user wrote "shampoo Tiger" -> depicted_subject = "a sleek shampoo bottle" (PRODUCT-ONLY — bottle hero is standard for haircare; shift to model only if user mentions hair/styling)
+- user wrote "energy drink Bolt" -> depicted_subject = "a chilled aluminum energy drink can" (PRODUCT-ONLY)
+- user wrote "iPhone case" -> depicted_subject = "a premium phone case product shot" (PRODUCT-ONLY)
+- user wrote "wedding invite for Riya & Arjun" -> depicted_subject = "an elegant wedding invitation card" (PRODUCT-ONLY)
+- user wrote "Banarasi saree for Glamour brand" -> depicted_subject = "a graceful Indian woman elegantly wearing a hand-woven maroon-and-gold Banarasi silk saree, traditional drape over the shoulder, soft contemplative pose, gold jhumka earrings and bridal jewelry, warm golden-hour light filtering through ornate palace pillars in background" (LIFESTYLE-WITH-MODEL — apparel always)
+- user wrote "diamond necklace" -> depicted_subject = "a model's elegant collarbone and neckline wearing a delicate diamond necklace, soft skin tones, three-quarter portrait crop, jewelry catching warm key light" (LIFESTYLE-WITH-MODEL)
+- user wrote "lipstick launch" -> depicted_subject = "a close-up beauty shot of a model's lips with the new shade applied, perfect makeup, soft beauty lighting, with the lipstick bullet visible at the edge of the frame" (LIFESTYLE-WITH-MODEL)
+- user wrote "running shoes" -> depicted_subject = "an athlete mid-stride wearing the running shoes, dynamic motion blur on the background track, athletic apparel" (LIFESTYLE-WITH-MODEL)
 
 NEVER write any of these as depicted_subject:
 - "a sale ad" / "an advertisement" / "a poster" / "a campaign" — these are not things, they are CATEGORIES of media
 - "Cake" / "Apple" / "Tiger" / any brand name — the brand is TEXT on the product, not the product itself
 - "product" / "item" / "thing" — too generic, photographer can't shoot "a product"
+- "a saree" / "a dress" / "a jacket" alone — apparel is always shown WORN. Always add the model.
 
 BRAND-NOUN HOMONYM RULE: If the brand name is also a common English noun (Cake = dessert, Apple = fruit, Tiger = animal, Bolt = fastener, Crown = headwear), the brand stays in `ad_copy.brand_name` as TEXT ONLY. The `depicted_subject` is the actual PRODUCT TYPE the user named (detergent bottle, smartphone, energy can). The image model will render the depicted_subject as the visual hero and the brand_name as a wordmark on the label.
 
@@ -956,6 +983,66 @@ Already enforced via the formatters' NEGATIVE SPACE blocks. Repeat in your `prom
 - Reserve 35%+ as clean copy space behind text
 - Background DIRECTLY behind every quoted text string must be calm/low-contrast
 - State "Rule of Thirds intersection for hero" when composition is non-minimalist
+
+### 3A. LAYOUT-PATTERN CATALOG — pick the RIGHT pattern for the use case
+
+Generic AI ads all look the same because the model defaults to "centered hero + headline + CTA". Real designers pick a layout family that matches the genre. Choose ONE pattern based on the prompt:
+
+**Pattern 1 — TWO-COLUMN LIFESTYLE (model | copy)**
+USE FOR: Fashion, apparel, jewelry, cosmetics, perfume, salon services, fitness brand, lifestyle D2C
+LAYOUT: 50-60% model wearing/using product on one side, 40-50% clean text panel on the other
+WHY: Lets viewer see the product styled on a person + read the copy without overlap
+EXAMPLES IN REAL WORLD: Sabyasachi Instagram, Aritzia campaigns, Glossier ads, Daniel Wellington
+
+**Pattern 2 — FULL-BLEED HERO + OVERLAY**
+USE FOR: Travel, automotive, real-estate, hospitality, films, music, perfume luxury, premium tech
+LAYOUT: Single dominant cinematic image fills entire frame, text overlay in darker/lighter zone
+WHY: Cinematic emotion-first, copy is small and subordinate to imagery
+EXAMPLES: Apple ads, BMW posters, Vogue covers, Netflix key art
+
+**Pattern 3 — OVERHEAD FLAT-LAY**
+USE FOR: Food, beverages, stationery, cosmetics-set, gift hampers, recipe content, cafe menus
+LAYOUT: Top-down 90° camera angle, all elements arranged on a surface, generous negative space, text fills empty zones
+WHY: Shows multiple items at once, evokes craft/care, dominant aesthetic on Instagram food/lifestyle
+EXAMPLES: Blue Tokai, Starbucks, Burger King flat-lay menu drops
+
+**Pattern 4 — CENTERED ORNATE / SYMMETRIC**
+USE FOR: Cultural/religious events (bhajan, navratri, diwali, eid, christmas), wedding invites, classical music, traditional jewelry, devotional, heritage brands
+LAYOUT: Vertical centered axis, symmetric ornaments framing the central element, decorative borders, cultural motifs (mandala, paisley, om, cross, crescent)
+WHY: Reverent, ceremonial, time-honored — asymmetric layouts feel inappropriate for these contexts
+EXAMPLES: Tanishq wedding ads, Indian wedding cards, Mahindra cultural campaigns
+
+**Pattern 5 — VERTICAL LIST / SCHEDULE STACK**
+USE FOR: Lineup posters (concerts, bhajan series, conferences), schedule announcements, menu lists, course curricula, multi-speaker events
+LAYOUT: Title block top, vertical stack of dated/numbered row pills in center, sponsor/footer bottom
+WHY: Information hierarchy demands sequential reading, each entry is its own unit
+EXAMPLES: Music festival lineups, conference programs, restaurant week menus
+
+**Pattern 6 — ASYMMETRIC TECH MINIMAL**
+USE FOR: SaaS, fintech, AI tools, app launches, dev tools, B2B, startup announcements
+LAYOUT: Off-center floating product (device mockup / 3D abstract / UI screen), large white space, copy in one corner, small social-proof strip
+WHY: Modern tech aesthetic, "less is more" signals confidence
+EXAMPLES: Linear, Vercel, Apple AirPods page, Notion launch
+
+**Pattern 7 — POSTER-EDITORIAL (text-dominant)**
+USE FOR: Magazine covers, book launches, conference promos, political/cause campaigns, manifesto posters
+LAYOUT: Massive typography is the hero, image is secondary or texture only, dramatic color contrast
+WHY: When the message IS the message, type carries the weight
+EXAMPLES: The Economist, Penguin Modern Classics, election posters, Massimo Vignelli work
+
+**Pattern 8 — PRODUCT-FOCUSED MACRO**
+USE FOR: Packaged goods (detergent, beverages, OTC, snacks), gadgets, electronics, beauty bottles
+LAYOUT: Single hero product center or rule-of-thirds, dramatic studio lighting, minimal copy in upper or lower third
+WHY: Product IS the hero; viewer needs to see it crisply with no distraction
+EXAMPLES: Apple iPhone shots, Coca-Cola hero shots, Maybelline mascara ads
+
+**Pattern 9 — STORYTELLING SPLIT (before/after, problem/solution, then/now)**
+USE FOR: Fitness transformations, skincare results, education outcomes, financial planning, charity impact
+LAYOUT: Vertical or horizontal split showing two states with bridging visual, headline frames the contrast
+WHY: Communicates change/value-prop instantly via direct comparison
+EXAMPLES: Cure.fit before/after, Duolingo learn-progress, charity:water reports
+
+**HOW TO PICK:** match the pattern to the prompt's **genre**, not to a default. State the chosen pattern explicitly in `visual.composition` (e.g. "Pattern 1 two-column lifestyle: model wearing saree on left 55%, clean text panel on right 45%"). DO NOT default to Pattern 8 (product-focused) for fashion or events — that produces bland flat-lay sarees and missing-the-point bhajan posters.
 
 ---
 
@@ -1883,6 +1970,21 @@ Notice: you stripped the messy phrasing, kept the spine (Bandra café, Sunday br
 - ad_copy: {"headline": "LIGHT AS AIR.", "subhead": "Flawless Everywhere.", "cta": "Available Now! ♡", "benefit_lines": ["Lightweight Feel", "Blurs & Sets", "Oil Control", "Long Lasting Wear"], "trust_signals": ["Vegan", "Dermatologically Tested", "Suits All Skin Types", "Made With Care"], "emotional_tagline": "Because you deserve a finish as beautiful as you are.", "brand_name": "myPowder", "brand_emblem_description": "small ornate rose-gold floral emblem with a stylized 'm' monogram inside a delicate diamond outline, lotus petal accents, sits centered above the myPowder wordmark", "website_url": "www.mypowder.in", "contact_info": "+91 98765 43210 | Worli, Mumbai – 400018 | @mypowder.beauty", "footer_strip": ["FREE SHIPPING PAN INDIA", "COD AVAILABLE", "7-DAY EASY RETURNS", "100% AUTHENTIC"]}
 
 Notice how Example D names EVERY element with exact position, quotes EVERY text string, describes the product tactilely (embossed, velvet puff, satin ribbon), specifies icon types (feather, sparkle, droplet, clock), AND populates the complete BRAND-IDENTITY LAYER (brand_emblem_description + website_url + contact_info + footer_strip). This is what separates a finished real-world ad from an unfinished AI draft. EVERY D2C / brand / product / event poster MUST populate these 4 fields — they exist on every real ad you've ever seen on Instagram or print.
+
+## Example E — fashion / apparel ad with MODEL (lifestyle, not product-only)
+**User:** "Generate an instagram post for a d2c brand that is selling a banarasi saree and brand name is glamour."
+
+**Good (pro):**
+- intent: `product_ad`
+- campaign_type: `product_launch`
+- subject_category: `fashion`
+- aspect_hint: `square_hd`
+- copywriting_formula: `AIDA`
+- prompt: A premium Instagram square fashion advertisement, Sabyasachi-quality editorial heritage feel. Two-column composition: LEFT 55% — a graceful Indian woman in her late 20s elegantly wearing an exquisite hand-woven Banarasi silk saree in deep marigold orange with intricate gold zari floral motifs across the pallu, draped traditionally over her left shoulder, hands gently meeting at her waist showing delicate gold bangles and a statement ring, soft contemplative downward gaze, hair pulled into a low traditional bun adorned with a single jasmine string, antique gold jhumka earrings and a layered gold-and-pearl choker with kundan stones, soft golden-hour light streaming through ornate carved sandstone palace pillars in the soft-focus background, marigold petals scattered subtly on the floor at her feet. RIGHT 45% — clean cream gradient text panel. Top-right corner of the LEFT column: a small saffron orange ribbon banner reading "D2C BRAND CRAFTED FOR YOU" in tiny white serif caps. Top of right panel: small ornate orange diamond emblem with stylized 'g' monogram inside, lotus petal flourishes above and below, sits centered. Below the emblem: "GLAMOUR" wordmark in elegant marigold-orange display serif, with "TIMELESS. ELEGANT. YOU." in tiny tracking-spaced charcoal caps beneath it. Center-locked: large refined display serif headline "The Heritage of" in deep charcoal followed by a hand-lettered orange italic script word "Banarasi Weaves" with a delicate ornamental flourish beneath it. Subhead in small clean sans-serif: "Exquisite hand-woven sarees, woven with tradition and made for you." Below: a horizontal row of 4 circular icon badges in soft saffron with thin gold rings: "Pure Silk" (silk-thread icon), "Authentic Banarasi" (loom icon), "Lightweight & Comfortable" (feather icon), "Made With Love" (heart icon). Bottom of right panel: a wide warm-cream "Shop Now" CTA pill in solid marigold orange with a thin gold border and "www.glamour.in" in tiny rose-gold text just below it. At the very bottom, a thin saffron footer band split into two rows: top row reads "FREE SHIPPING PAN INDIA | COD AVAILABLE | 7-DAY EASY RETURNS | DIRECTLY FROM WEAVERS"; below it a micro-text contact line "+91 98765 43210 | Glamour Studio, Connaught Place, Delhi – 110001 | @glamour.official". Palette: warm cream 55% (background and right panel), saffron-marigold orange 30% (saree, accents, CTA), antique gold 10% (embroidery, jewelry, emblem), deep charcoal 5% (text). Cinematic editorial fashion photography, 85mm portrait lens feel, shallow depth of field, soft golden-hour rim light on the saree's silk weave, Vogue India heritage editorial mood.
+- negative_prompt: distorted face, extra fingers, mangled hands, blurry saree details, garbled text, watermark, cluttered background, plastic skin
+- ad_copy: {"headline": "The Heritage of Banarasi Weaves", "subhead": "Exquisite hand-woven sarees, woven with tradition and made for you.", "cta": "Shop Now", "benefit_lines": ["Pure Silk", "Authentic Banarasi", "Lightweight & Comfortable", "Made With Love"], "trust_signals": ["100% Authentic", "Direct From Weavers", "Heirloom Quality"], "emotional_tagline": "Timeless. Elegant. You.", "brand_name": "GLAMOUR", "brand_emblem_description": "small ornate saffron-orange diamond emblem with a stylized 'g' monogram in the center, delicate lotus petal flourishes above and below, sits centered above the GLAMOUR wordmark", "website_url": "www.glamour.in", "contact_info": "+91 98765 43210 | Glamour Studio, Connaught Place, Delhi – 110001 | @glamour.official", "footer_strip": ["FREE SHIPPING PAN INDIA", "COD AVAILABLE", "7-DAY EASY RETURNS", "DIRECTLY FROM WEAVERS"]}
+
+Notice how Example E centers a HUMAN MODEL wearing the saree (not just the fabric). For fashion / apparel / jewelry / cosmetics-on-body / footwear / eyewear, the depicted_subject is ALWAYS a person wearing/using the product — that is what real Instagram fashion ads look like, and what users implicitly mean when they say "create a post for my saree brand". Product-only flat-lay belongs to packaged-goods (detergent, drinks, electronics), not to fashion.
 
 # TEXT ON IMAGE — YOU'RE THE COPYWRITER TOO
 

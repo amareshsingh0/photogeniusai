@@ -431,6 +431,12 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     background  = (visual.get("background") or "").strip()
     typo        = (visual.get("typography_style") or "").strip()
     hierarchy   = (visual.get("visual_hierarchy") or "").strip()
+    # When Haiku has explicitly set composition or hierarchy, formatter MUST
+    # respect her layout (Pattern Catalog: two-column / centered-ornate /
+    # schedule-stack / etc) and avoid injecting hardcoded position defaults
+    # that contradict it. Computed here so both TEXT_ELEMENTS and
+    # VISUAL_AND_LAYOUT sections can use it.
+    haiku_set_layout = bool(hierarchy) or bool(composition)
     # Phase-0 concept fields (May 4 framework expansion)
     visual_metaphor = (visual.get("visual_metaphor") or "").strip()
     micro_details   = [str(d).strip() for d in (visual.get("micro_details") or []) if str(d).strip()]
@@ -518,7 +524,18 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     if legal_disclaimer:
         text_lines.append(f'- LEGAL_DISCLAIMER: "{legal_disclaimer}"')
     if brand_emblem:
-        text_lines.append(f"- BRAND_EMBLEM (small decorative crest above headline OR top-left corner): {brand_emblem}")
+        # Position is decided by Haiku's COMPOSITION/HIERARCHY (centered-above-
+        # wordmark for ornate symmetric, top-left for Z-pattern, beside model
+        # for two-column lifestyle, etc). Don't hardcode a position here.
+        if haiku_set_layout:
+            text_lines.append(
+                f"- BRAND_EMBLEM (small decorative crest, place at the position implied by the "
+                f"layout pattern in COMPOSITION/HIERARCHY below — typically directly above the wordmark): {brand_emblem}"
+            )
+        else:
+            text_lines.append(
+                f"- BRAND_EMBLEM (small decorative crest above the wordmark or in the top-left corner): {brand_emblem}"
+            )
     if website_url:
         text_lines.append(f'- WEBSITE_URL (small text in CTA strip): "{website_url}"')
     if contact_info:
@@ -559,10 +576,19 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     # VISUAL HIERARCHY - Phase 2C of the ad-creator framework. Names the
     # eye-travel pattern and element positions so the model knows where each
-    # text element + the hero photo go. Also enforces Rule of Thirds.
+    # text element + the hero photo go.
+    # IMPORTANT (May 8 2026): when Haiku provided a hierarchy, TRUST IT — do
+    # not also inject the Z-pattern default below; that confuses the image
+    # model when Haiku picked a different layout pattern (centered-ornate for
+    # devotional, two-column for fashion, schedule-stack for lineups, etc).
+    # Haiku-decides-layout > formatter-overrides. (`haiku_set_layout` is
+    # computed earlier near the field-extraction block so TEXT_ELEMENTS can
+    # also use it.)
     if hierarchy:
         layout_lines.append(f"- VISUAL HIERARCHY: {hierarchy}")
-    else:
+    elif not haiku_set_layout:
+        # Only fall back to Z-pattern when Haiku gave us NEITHER composition
+        # nor hierarchy — i.e. true defaulting case.
         layout_lines.append(
             "- VISUAL HIERARCHY: Z-pattern - brand mark top-left, hero headline "
             "in the upper-right region, supporting copy in the middle, "
@@ -603,10 +629,20 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
         )
 
     if brand_name:
-        layout_lines.append(
-            f'- LOGO PLACEMENT: Place the brand wordmark "{brand_name}" in the top-left corner '
-            "in a small, refined, brand-appropriate typeface."
-        )
+        # When Haiku set composition/hierarchy, trust her placement words; only
+        # default to top-left corner when Haiku gave us no layout guidance.
+        if haiku_set_layout:
+            layout_lines.append(
+                f'- LOGO PLACEMENT: Render the brand wordmark "{brand_name}" at the position '
+                "implied by the COMPOSITION and VISUAL HIERARCHY above (centered for ornate/"
+                "symmetric layouts, top-left for Z-pattern, beside the model in two-column "
+                "lifestyle, etc), in a small refined brand-appropriate typeface."
+            )
+        else:
+            layout_lines.append(
+                f'- LOGO PLACEMENT: Place the brand wordmark "{brand_name}" in the top-left corner '
+                "in a small, refined, brand-appropriate typeface."
+            )
 
     if campaign_type in ("product_launch", "announcement"):
         layout_lines.append(
@@ -618,12 +654,20 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
         # Per-element typography (Phase 4E framework expansion). When Haiku
         # provided headline_typography, use it verbatim; else fall back.
         head_style = headline_typo or "large bold uppercase condensed sans-serif, pure white or brand accent color, tight tracking"
-        layout_lines.append(
-            "- HEADLINE PLACEMENT: Center the HERO_HEADLINE in the upper-middle text region, "
-            f"styled as: {head_style}. Dominant text element. "
-            "The background DIRECTLY behind these letters must be a clean uncluttered "
-            "surface so every character is fully legible and crisp."
-        )
+        if haiku_set_layout:
+            layout_lines.append(
+                "- HEADLINE PLACEMENT: Render the HERO_HEADLINE at the position implied by the "
+                f"COMPOSITION and VISUAL HIERARCHY above, styled as: {head_style}. Dominant text "
+                "element. The background DIRECTLY behind these letters must be a clean uncluttered "
+                "surface so every character is fully legible and crisp."
+            )
+        else:
+            layout_lines.append(
+                "- HEADLINE PLACEMENT: Center the HERO_HEADLINE in the upper-middle text region, "
+                f"styled as: {head_style}. Dominant text element. "
+                "The background DIRECTLY behind these letters must be a clean uncluttered "
+                "surface so every character is fully legible and crisp."
+            )
 
     if subhead:
         sub_style = subhead_typo or "clean sans-serif body weight, lighter color than headline, wide tracking, medium size"
@@ -651,8 +695,13 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     if cta:
         cta_style = cta_typo or "bold sans-serif white text on a prominent pill-shaped button in the 10% accent color"
+        cta_position = (
+            "at the position implied by the COMPOSITION and VISUAL HIERARCHY above"
+            if haiku_set_layout
+            else "at the bottom-center"
+        )
         layout_lines.append(
-            "- CTA PLACEMENT: At the bottom-center (or per visual hierarchy), render the CALL_TO_ACTION "
+            f"- CTA PLACEMENT: Render the CALL_TO_ACTION {cta_position}, "
             f"styled as: {cta_style}. The button MUST be the highest-contrast element on the canvas - "
             "use the 10% accent color from the palette. Place it on a calm surface so it reads "
             "instantly from a thumbnail. The CTA is the conversion engine - make it impossible to miss."
