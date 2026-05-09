@@ -391,6 +391,73 @@ BUCKET_MODEL_MAP = {
         QualityTier.RES_2K: "gemini_3_imagen",
         QualityTier.RES_4K: "imagen_4_ultra",
     },
+
+    # Food → 45-deg flat-lay strength of Flux + Imagen detail at high tier
+    "photorealism_food": {
+        QualityTier.RES_1K: "flux_2_flex",
+        QualityTier.RES_2K: "imagen_4_base",
+        QualityTier.RES_4K: "imagen_4_ultra",
+    },
+
+    # Fashion → Hunyuan handles humans best at 1K, Imagen for editorial 2K/4K
+    "photorealism_fashion": {
+        QualityTier.RES_1K: "hunyuan_image",
+        QualityTier.RES_2K: "gemini_3_1_imagen",
+        QualityTier.RES_4K: "imagen_4_ultra",
+    },
+
+    # Landscape → Flux for atmosphere at 1K, Imagen for resolution + detail
+    "photorealism_landscape": {
+        QualityTier.RES_1K: "flux_2_flex",
+        QualityTier.RES_2K: "imagen_4_base",
+        QualityTier.RES_4K: "imagen_4_ultra",
+    },
+
+    # Interior / architecture → Flux for clean lines, Imagen for material detail
+    "interior_arch": {
+        QualityTier.RES_1K: "flux_2_flex",
+        QualityTier.RES_2K: "imagen_4_base",
+        QualityTier.RES_4K: "imagen_4_ultra",
+    },
+
+    # Multi-person group photos → Hunyuan strongest at 1K (best face fidelity),
+    # Imagen for higher tiers (handles 4+ faces with less drift than Flux)
+    "multiperson": {
+        QualityTier.RES_1K: "hunyuan_image",
+        QualityTier.RES_2K: "gemini_3_1_imagen",
+        QualityTier.RES_4K: "imagen_4_ultra",
+    },
+
+    # Character consistency — without ref image: GPT Image 2 (best instruction
+    # following for character sheet layouts). With ref image: gpt_image_2_edit
+    # (force-routed in generate_stream when reference_image_url is set).
+    "character_consistency": {
+        QualityTier.RES_1K: "gpt_image_2",
+        QualityTier.RES_2K: "gpt_image_2",
+        QualityTier.RES_4K: "gpt_image_2",
+    },
+
+    # Image-to-image, multi_reference, editing all force-route to gpt_image_2_edit
+    # via _EDIT_MODE_PREFERENCE in the generate_stream / edit pipeline. These
+    # entries are static fallbacks for when DB has no active models for the bucket.
+    # All clamped to 1K (GPT Image 2 edit only supports 1K reliably).
+    "image_to_image": {
+        QualityTier.RES_1K: "gpt_image_2_edit",
+        QualityTier.RES_2K: "gpt_image_2_edit",
+        QualityTier.RES_4K: "gpt_image_2_edit",
+    },
+
+    "multi_reference": {
+        QualityTier.RES_1K: "gpt_image_2_edit",
+        QualityTier.RES_2K: "gpt_image_2_edit",
+        QualityTier.RES_4K: "gpt_image_2_edit",
+    },
+
+    "editing": {
+        QualityTier.RES_1K: "gpt_image_2_edit",
+        QualityTier.RES_2K: "gpt_image_2_edit",
+        QualityTier.RES_4K: "gpt_image_2_edit",
+    },
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

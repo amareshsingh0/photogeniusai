@@ -141,6 +141,11 @@ _VALID_BUCKETS = {
     "photorealism_fashion",
     "photorealism_landscape",
     "photorealism",
+    "character_consistency",
+    "multiperson",
+    "multi_reference",
+    "image_to_image",
+    "editing",
 }
 
 
@@ -166,6 +171,11 @@ BUCKETS (pick exactly one):
 - photorealism_fashion  = clothing, fashion shoot
 - photorealism_landscape= landscape, nature, scenery
 - photorealism          = generic photoreal scene
+- character_consistency = SAME named character across multiple poses/scenes/outfits ("show Riya in 4 different poses", "the same boy at age 5, 10, 15", "consistent character sheet"). Identity must be preserved.
+- multiperson           = TWO OR MORE distinct people interacting in ONE scene ("a couple holding hands", "a family of 5 at dinner", "team photo of 6 founders", "bride and groom"). Anatomy + identity discipline matters more than usual.
+- multi_reference       = User uploaded MULTIPLE reference images to compose into one (NOT for editing one image). Detect from words like "combine these images", "merge these references", "use all these styles".
+- image_to_image        = User wants to TRANSFORM / EDIT / REMIX an existing image they uploaded ("change background", "make it night", "add a hat", "remove person", "restyle in anime"). Single reference image, modification intent.
+- editing               = Same as image_to_image but explicit edit operations (inpaint mask, object add/remove, text replace) — usually triggered via /edit endpoint, but classifier may see it on /generate too.
 
 Return JSON ONLY (no prose, no markdown fences):
 {{
@@ -186,6 +196,11 @@ RULES:
 - REALISM KEYWORD OVERRIDE (HIGH PRIORITY): if the prompt contains any of these explicit realism cues — "real", "realistic", "photo", "photoreal", "photorealistic", "DSLR", "shot on", "85mm", "cinematic photo", "lifelike", "actual", "live action" — route to a photorealism bucket EVEN IF the scene is fantastical or surreal (e.g. "real tiger sitting on a cloud with flowers", "realistic dragon over a city", "photoreal astronaut on Mars"). The user wants a photographic rendering of an imaginative scene — NOT a painting/illustration of it. Pick the most specific photorealism sub-bucket: animal/nature scene → photorealism_landscape or photorealism (generic), human → photorealism_portrait, product → photorealism_product. Only route to "artistic" when the user EXPLICITLY asks for a painting / illustration / concept art / watercolor / oil / digital-art / sketch / drawn / surreal-art style. Default for ambiguous fantastical scenes WITHOUT artistic-medium keyword: photorealism.
 - DEFAULT BIAS — PHOTOREALISM IS THE DEFAULT (HIGHEST PRIORITY RULE): For ANY prompt that does not EXPLICITLY request a non-photoreal style, route to photorealism. The bar to leave photorealism is HIGH — the user must use one of these explicit art-medium / non-photo keywords: "painting", "illustration", "watercolor", "oil paint", "gouache", "ink", "sketch", "drawn", "drawing", "concept art", "art style", "artistic", "stylized", "anime", "manga", "cartoon", "comic", "vector", "flat design", "logo", "icon", "poster", "ad", "banner", "wallpaper-style", "wallpaper art", "3D render", "CGI", "low-poly", "isometric", "pixel art". Without one of those keywords, the bucket is photorealism — no exceptions. Generic prompts like "tiger in jungle", "girl with red dress", "city at night", "coffee on a table", "mountain landscape", "dog playing with ball" → ALL photorealism. Even fantastical scenes ("dragon flying over castle", "astronaut on alien planet", "tiger sitting on a cloud") default to photorealism unless the user asked for an art medium. Pick the most specific photorealism sub-bucket: human → photorealism_portrait, product/object → photorealism_product, food → photorealism_food, fashion → photorealism_fashion, landscape/nature → photorealism_landscape, anything else → photorealism (generic).
 - ARTISTIC BUCKET IS OPT-IN ONLY: do NOT route to "artistic" based on scene mood/atmosphere alone. "dreamy forest", "magical castle", "mystical creature", "surreal scene", "fantasy landscape" → STILL photorealism unless the user explicitly says "painted / illustrated / watercolor / concept art / drawn / etc". A surreal subject does not equal an artistic medium. Photorealism can render surreal subjects — that is what makes them striking.
+- CHARACTER_CONSISTENCY: trigger words "same character", "consistent", "character sheet", "in different poses", "across scenes", "same person aged X", "lineup of the same". Has STRONG priority — overrides photorealism when consistency is the user's stated goal.
+- MULTIPERSON: trigger when prompt mentions ≥2 named/described people interacting ("couple", "family", "team of N", "bride and groom", "father and son", "two friends"). Group photos > 1 person. NOT just "a person and their pet".
+- MULTI_REFERENCE: trigger when prompt mentions multiple reference images: "combine these", "blend these styles", "use all the references". Distinct from image_to_image (which is one image transform).
+- IMAGE_TO_IMAGE: trigger when prompt verb is transformation of an existing image: "change", "edit", "modify", "restyle", "swap", "replace", "make it [different style/time/season]", "add/remove X to/from this image". Implies a reference image is supplied.
+- EDITING: same family as image_to_image — pick this when user uses explicit edit verbs ("inpaint", "mask", "background swap", "object remove", "text replace") or when the prompt is clearly a /edit operation.
 """
 
 
@@ -415,6 +430,18 @@ _USE_SELF_CRITIQUE = os.getenv("USE_SELF_CRITIQUE", "true").lower() != "false"
 # full critique payload runs 1500-2200 output tokens. Bumped to 4000 for
 # safety so we never truncate mid-string.
 _CRITIQUE_MAX_TOKENS = int(os.getenv("SELF_CRITIQUE_MAX_TOKENS", "6000"))
+# Quality critique fires for non-ad buckets where craft matters more than
+# copy (portraits, art, anime, vector logos, multiperson groups, etc).
+# Shared 8-point checklist + per-bucket additions. Same cost/latency as ad
+# critique. Excludes 'fast' (speed-first), 'editing' / 'image_to_image' /
+# 'multi_reference' (output is a transform, not a fresh generation —
+# critique would just second-guess the user's reference image).
+_QUALITY_CRITIQUE_BUCKETS = {
+    "photorealism", "photorealism_portrait", "photorealism_product",
+    "photorealism_food", "photorealism_fashion", "photorealism_landscape",
+    "interior_arch", "artistic", "anime", "vector",
+    "multiperson", "character_consistency",
+}
 _USE_CACHING  = os.getenv("USE_PROMPT_CACHING", "true").lower() != "false"
 # Instructor auto-retries up to N times when Haiku violates the schema
 # (each retry appends the validation error to the conversation, so the model
@@ -2096,7 +2123,37 @@ Never wrap JSON in code fences. Never add commentary. JSON only."""
 # Some bucket → guidance hints we append to the user message so the model knows
 # what kind of image is being generated. This stays small (one line).
 _BUCKET_HINTS = {
-    "typography":            "Output is text-heavy (poster/wishes/banner). Prioritize legible copy + supportive imagery.",
+    "typography": (
+        "Output is a TEXT-HEAVY ad / poster / banner / social creative. Apply ADVERTISING ART-DIRECTION DISCIPLINE:\n"
+        "  1. HIERARCHY FIRST — name the layout pattern explicitly (Z / F / center-out / two-column / "
+        "asymmetric tech / poster-editorial / overhead flat-lay / centered ornate / schedule-stack / "
+        "storytelling-split). Eye must travel: hero visual → headline → benefit cluster → CTA. Hero "
+        "on Rule-of-Thirds intersection, NEVER dead-center for non-minimalist work.\n"
+        "  2. COPY DISCIPLINE — headline 2-5 WORDS MAX (Pydantic enforces), subhead ≤10, CTA 2-3 "
+        "action verbs. Loss-aversion framing beats gain (+18% lift). CTA = Call-to-Value, not "
+        "generic ('Start Saving Today' > 'Buy Now'). Pass the THUMB TEST: would a user STOP scrolling "
+        "in 0.3 seconds?\n"
+        "  3. NEGATIVE SPACE — reserve ≥35% clean copy-zone. Background DIRECTLY behind every "
+        "quoted text string must be calm/low-contrast (solid color, soft gradient, or out-of-focus "
+        "area). Garbled text = the #1 ad-image failure mode; clean surface behind text fixes it.\n"
+        "  4. 60-30-10 COLOR — dominant 60% (background), secondary 30% (supporting), accent 10% "
+        "(CTA only — highest contrast hue). Industry-chromatic-logic: food = warm reds/yellows; "
+        "finance = trust blue; luxury = matte black + champagne gold; eco = sage green + earth.\n"
+        "  5. TYPOGRAPHY — MAX 2 fonts (1 display + 1 body). Format: 'display: <font> / body: "
+        "<font>'. Specify weight + tracking + per-element styling (headline_typography / "
+        "subhead_typography / cta_typography). 3+ fonts = amateur.\n"
+        "  6. BRAND-IDENTITY LAYER — for D2C / event / heritage / spiritual / fashion / food brands "
+        "ALWAYS populate: brand_emblem_description (small ornate crest above wordmark), website_url "
+        "(www.brand.in/.com), contact_info (phone | venue | @social), footer_strip (3-4 trust "
+        "badges: FREE SHIPPING / COD / RETURNS / AUTHENTIC). Without these, output looks unfinished "
+        "vs ChatGPT-quality ads.\n"
+        "  7. ANTI-PATTERNS in negative_prompt: 'collage, multi-panel, design sheet, pitch deck, "
+        "Option 1/2/3, lorem ipsum, garbled letters, misspelled words, fake placeholder text, "
+        "overlapping text, text on busy background, more than 3 focal points, watermark, "
+        "low-contrast text, text touching edge of canvas without padding'.\n"
+        "  8. 0.3-SECOND TEST — at thumb-stop scroll speed, would the viewer (a) recognize the "
+        "brand, (b) understand the offer, (c) know what to do next? If any fails — simplify."
+    ),
     "photorealism": (
         "Output is a PHOTOREAL image. Apply CINEMATIC PHOTOGRAPHY DISCIPLINE (not optional):\n"
         "  1. CAMERA — name a real lens (24mm/35mm/50mm/85mm/100mm macro), aperture (f/1.4 - f/16), "
@@ -2418,6 +2475,224 @@ _BUCKET_HINTS = {
         "designer's brief, not a generic image prompt. If the request is NOT a logo (flat "
         "illustration, sticker, infographic, icon set), ignore Phases 1/4/5 and just specify "
         "shapes, palette, geometry, no photo realism."
+    ),
+    "photorealism_food": (
+        "Output is a PHOTOREAL FOOD IMAGE. Apply FOOD-PHOTOGRAPHY DISCIPLINE:\n"
+        "  1. APPETITE TRIGGERS — name the freshness cues: steam rising from hot dishes, condensation "
+        "on cold drinks, butter melt on hot bread, glistening sauce, pulled-apart cheese, sear marks, "
+        "crisp herb garnish. These micro-details sell hunger; without them, food looks plastic.\n"
+        "  2. CAMERA + ANGLE — 45° hero angle for plated dishes (shows depth + topping), overhead "
+        "flat-lay for spreads/cocktails/recipes/multi-element compositions, eye-level for burgers/"
+        "stacks/layered drinks. 50-100mm macro, f/4-f/8 for surface detail with creamy bokeh on "
+        "background props.\n"
+        "  3. LIGHTING — soft directional window light (preferred) or large diffused softbox from "
+        "side/back. Backlight for translucent (citrus, broth, ice). Rim-light for steam visibility. "
+        "Avoid hard flash (kills texture) and flat overhead (kills depth).\n"
+        "  4. SURFACE + STYLING — surface (rustic wood / marble slab / linen / dark slate / "
+        "weathered ceramic), 2-3 supporting props (raw ingredients, herbs, utensils, glassware), "
+        "color story complementing the food. Negative space for breathing room — cluttered = chaos.\n"
+        "  5. ANTI-PATTERNS in negative_prompt: 'plastic-looking food, fake glossy varnish, "
+        "uniform glossy texture, AI-default soup-of-ingredients, melted-into-each-other forms, "
+        "wrong portion proportions, harsh flash, sterile background, dust, hair, blurry food'."
+    ),
+    "photorealism_fashion": (
+        "Output is a PHOTOREAL FASHION IMAGE. Apply EDITORIAL FASHION-PHOTOGRAPHY DISCIPLINE:\n"
+        "  1. MODEL-WEARING-IT DEFAULT — fashion is shown WORN, not flat-laid. Specify model age "
+        "range, body type/ethnicity (when relevant + respectful), pose (3/4 turn, walking, "
+        "looking-away, hand-on-hip, candid laugh), expression. Static catalog stance = boring; "
+        "movement + emotion = editorial.\n"
+        "  2. WARDROBE FIDELITY — describe the garment specifically: silhouette (A-line / "
+        "boxy / draped / fitted), fabric (silk / wool / linen / denim / leather + weight), "
+        "color, embellishments (embroidery / beading / hardware), construction details "
+        "(seams, pleats, drape). For ethnic wear: explicit drape style and ornament.\n"
+        "  3. CAMERA — 50-85mm for editorial portraits, 35mm for environmental / street / "
+        "movement shots. f/2.0-f/4.0 for subject isolation with environmental context. Eye-level "
+        "for connection, slight low-angle for power, slight high-angle for vulnerability.\n"
+        "  4. LIGHTING — golden-hour rim-light for warmth + fabric specular highlights, large "
+        "softbox key for studio/beauty, window light + reflector for editorial natural. Avoid "
+        "harsh top-down (ages model + flattens fabric).\n"
+        "  5. LOCATION + ATMOSPHERE — context that matches the brand archetype: heritage palace / "
+        "minimal studio / urban street / beach / forest / ornate interior. Background bokeh-soft "
+        "so the wardrobe and model are the focal hierarchy.\n"
+        "  6. ANTI-PATTERNS in negative_prompt: 'flat-lay (when model is required), mannequin "
+        "stiffness, plastic skin, waxy makeup, mismatched lighting on model vs background, "
+        "wrong fabric drape, distorted hands, asymmetric eyes, generic studio gradient, "
+        "clothes-floating-without-body'."
+    ),
+    "photorealism_landscape": (
+        "Output is a PHOTOREAL LANDSCAPE / NATURE / SCENERY shot. Apply LANDSCAPE-PHOTOGRAPHY DISCIPLINE:\n"
+        "  1. LIGHT IS EVERYTHING — name the time of day explicitly: golden hour (warm rim, long "
+        "shadows), blue hour (cool atmospheric), midday harsh (high contrast, strong shadows — use "
+        "intentionally), overcast soft (even illumination — colors saturate), storm light (dramatic "
+        "shafts breaking through clouds). Generic 'sunny' = generic output.\n"
+        "  2. COMPOSITION + DEPTH — explicit foreground / midground / background layering. "
+        "Foreground anchor (rocks, flowers, fence post) gives scale. Leading lines (river, road, "
+        "ridgeline) into the frame. Rule of Thirds for horizon (1/3 sky vs 2/3 land — or invert for "
+        "dramatic sky). Atmospheric perspective (haze cooling distant mountains).\n"
+        "  3. CAMERA — wide 14-24mm for sweeping vistas with foreground anchor, 35-50mm for "
+        "intimate scenes, 70-200mm telephoto for compressed mountain layers + isolated detail. "
+        "Small apertures f/8-f/16 for hyperfocal sharpness front-to-back. Tripod implied — long "
+        "exposures for water (silky), clouds (streaked), stars (trails).\n"
+        "  4. WEATHER + ATMOSPHERE — fog rolling through valleys, rain-soaked rocks reflecting, "
+        "mist rising off water at dawn, dust haze in golden light, snow-laden branches, autumn "
+        "leaves underfoot. Atmosphere sells mood.\n"
+        "  5. SCALE CUE — a tiny human figure, a single tree, a lone cabin, a deer at the lake "
+        "edge. Without scale reference, viewers can't read the grandeur of the landscape.\n"
+        "  6. ANTI-PATTERNS in negative_prompt: 'oversaturated HDR look, fake-painted clouds, "
+        "AI-default smooth gradient sky, plastic water, blurry foreground without intent, "
+        "missing horizon line, no scale reference, watermark, lens flare unless intentional, "
+        "color-graded-to-death amateur look'."
+    ),
+    "interior_arch": (
+        "Output is an INTERIOR or ARCHITECTURAL photograph. Apply ARCHITECTURE-PHOTOGRAPHY DISCIPLINE:\n"
+        "  1. STYLE LINEAGE — name the design school: Mid-century modern / Scandinavian minimal / "
+        "Industrial loft / Japanese wabi-sabi / Mediterranean / Brutalist / Tropical modern / "
+        "French classical / Bauhaus / Maximalist eclectic. Without a named style, the output "
+        "becomes generic.\n"
+        "  2. CAMERA + PERSPECTIVE — 14-24mm wide for full-room context (corrected verticals — "
+        "no keystone distortion). One-point perspective from doorway is a classic. 35-50mm for "
+        "vignette / detail shots. Eye-level (~1.5m) is the human standard; slight low-angle for "
+        "monumentality.\n"
+        "  3. LIGHTING DUET — natural daylight through windows is the hero (soft, directional), "
+        "supplemented with warm practical lights (lamps, sconces, pendant) for ambient warmth. "
+        "Twilight 'mixed light' (window + interior practicals) is the signature architectural "
+        "look. Avoid flat single-source flash.\n"
+        "  4. MATERIAL READABILITY — call out tactile surfaces: oak floor grain, raw concrete "
+        "texture, brushed brass fixtures, white-oiled timber, terrazzo, rattan, linen, marble "
+        "veining. Materials are the protagonists in interior design — generic 'wood floor' fails.\n"
+        "  5. STYLING + LIFE — staged but believable: a thrown blanket, an open book, fresh "
+        "flowers, a half-full coffee cup, plants. NEVER sterile catalog-empty. NEVER cluttered.\n"
+        "  6. ANTI-PATTERNS in negative_prompt: 'distorted verticals, fish-eye warp, sterile "
+        "showroom, plastic-looking surfaces, harsh flash flatness, chaotic clutter, mismatched "
+        "scale (oversized sofa, tiny windows), AI-default minimalism with no warmth, generic "
+        "stock-photo feel, watermark'."
+    ),
+    "character_consistency": (
+        "Output is the SAME NAMED CHARACTER across multiple poses / scenes / outfits / ages. "
+        "Apply CHARACTER-DESIGN DISCIPLINE:\n"
+        "  1. LOCK IDENTITY MARKERS FIRST — at the top of the prompt, define the character "
+        "anchor: face shape, skin tone, eye color + shape, hair (color + cut + texture), "
+        "distinguishing features (mole, scar, tattoo, glasses, freckles). These traits MUST "
+        "repeat verbatim in every panel/scene description so the model has identity invariants "
+        "to lock onto.\n"
+        "  2. CONSISTENT ART STYLE — same medium across all panels (cel anime / soft 3D / "
+        "photoreal / watercolor). Mixing styles breaks consistency. State the style ONCE at the "
+        "top, then describe each pose/scene below.\n"
+        "  3. MULTI-PANEL LAYOUT — when user wants multiple poses in one image: use a clean "
+        "grid (2×2 or 3×1 or 4×1), neutral solid background, character isolated per cell, NO "
+        "panel borders unless user asked. Each cell labeled with the pose context internally "
+        "(your prompt) but rendered without text overlay unless it IS a character sheet.\n"
+        "  4. WARDROBE CONTINUITY — if outfit is the same across scenes, repeat its description "
+        "verbatim. If outfit changes, name it explicitly per scene ('panel 1: school uniform; "
+        "panel 2: pajamas; panel 3: hiking gear').\n"
+        "  5. POSE/EXPRESSION VARIETY — name each pose explicitly: front-facing neutral, "
+        "3/4 turn smiling, side-profile thinking, back-view walking. Avoid the 'same pose 4 "
+        "times with minor changes' AI failure mode.\n"
+        "  6. ANTI-PATTERNS in negative_prompt: 'face drift, identity inconsistency between "
+        "panels, different skin tones, different eye colors, different hair colors, different "
+        "art styles between cells, body-type drift, age drift unless intentional, mismatched "
+        "lighting per panel, wrong wardrobe in wrong panel, panel borders unless requested'.\n"
+        "  REFERENCE-IMAGE NOTE: when a user uploads ONE reference image, this bucket pairs "
+        "with GPT Image 2 edit (instruction_edit mode) so the model anchors identity from the "
+        "reference rather than guessing. The reference image carries the identity; the prompt "
+        "carries the new pose/scene/outfit."
+    ),
+    "multiperson": (
+        "Output contains TWO OR MORE distinct people interacting in ONE scene. Apply "
+        "GROUP-PHOTO DISCIPLINE — anatomy + identity + interaction matter more than usual:\n"
+        "  1. PER-PERSON DESCRIPTION — describe each person individually: age range, gender "
+        "presentation, ethnicity (when relevant + respectful), distinguishing features, hair, "
+        "wardrobe. NEVER 'two people' — be concrete: 'a 30-year-old Indian woman with shoulder-"
+        "length curly hair in a saffron kurta' AND 'a 35-year-old Indian man with short black "
+        "hair and a navy linen shirt'. Without per-person specificity, the model averages them "
+        "into uncanny twins.\n"
+        "  2. INTERACTION + RELATIONSHIP — name the relationship (couple / siblings / friends / "
+        "co-workers / family) and the interaction (holding hands / clinking glasses / one "
+        "consoling the other / candid laughter / wedding ceremony). Body language sells story.\n"
+        "  3. SPATIAL ARRANGEMENT — explicit positions: who is left/right/front/back, who is "
+        "looking at whom, depth (one closer to camera, others receding). For groups of 4+, name "
+        "the formation (semicircle / clustered / staggered heights). Avoid the 'all in a flat "
+        "row' staff photo unless intentional.\n"
+        "  4. CAMERA — 35mm for tight groups + interaction context, 50mm natural for couples, "
+        "85mm for intimate two-shots. f/2.8-f/5.6 for everyone in focus. For groups >4 use "
+        "f/8 + step back.\n"
+        "  5. LIGHTING UNIFORMITY — same key direction + quality across all faces. Mismatched "
+        "light per face is the giveaway of AI composite. Wrap-around light or large softbox "
+        "ensures everyone reads as 'in the same scene at the same time'.\n"
+        "  6. ANATOMY DISCIPLINE — explicit count: 'exactly 2 people, 4 hands total, 4 eyes "
+        "total per person'. Hands clasped or held together get specific attention — 'fingers "
+        "clearly defined, no fused hands, no extra arms, no missing limbs'.\n"
+        "  7. ANTI-PATTERNS in negative_prompt: 'fused faces, twin-lookalike (when not twins), "
+        "extra arms, extra hands, fused hands, missing limbs, asymmetric body proportions, "
+        "wrong number of people, floating limbs, mismatched lighting between people, "
+        "different image quality between faces, plastic skin, AI-default smiling-row staff "
+        "shot, watermark'."
+    ),
+    "multi_reference": (
+        "Output is generated by COMBINING / BLENDING multiple reference images the user "
+        "uploaded. Apply REFERENCE-COMPOSITION DISCIPLINE:\n"
+        "  1. IDENTIFY EACH REFERENCE'S ROLE — explicitly state what each reference contributes: "
+        "'reference 1 = subject identity, reference 2 = pose, reference 3 = lighting style, "
+        "reference 4 = color palette, reference 5 = background environment'. Without role "
+        "assignment, the model averages everything into mush.\n"
+        "  2. KEEP ONE PRIMARY ANCHOR — designate ONE reference as the dominant identity / "
+        "subject anchor; the others are STYLE / CONTEXT modifiers. Multi-source identity = "
+        "uncanny composite.\n"
+        "  3. EXPLICIT BLEND INSTRUCTIONS — say what to TAKE from each and what to IGNORE: "
+        "'take subject and outfit from ref 1; take lighting and atmosphere from ref 2; ignore "
+        "background of ref 1; ignore subject of ref 2'. Imperative is king with multi-image.\n"
+        "  4. OUTPUT TARGET — describe the synthesized result as if you were photographing it "
+        "fresh — full scene description with all the references' contributions WOVEN IN. Don't "
+        "just list references — paint the final picture.\n"
+        "  5. ANTI-PATTERNS in negative_prompt: 'collage of references, side-by-side composite, "
+        "panel layout showing references separately, ghosting / double exposure, identity drift "
+        "between subject regions, mismatched lighting between subject and background, watermark'.\n"
+        "  ROUTING NOTE: this bucket pairs with GPT Image 2 edit (compose mode) which accepts "
+        "up to 5 reference images via repeated `image` form-field. Tier hard-clamped to 1K."
+    ),
+    "image_to_image": (
+        "Output is a TRANSFORMATION of an existing reference image the user uploaded. Apply "
+        "EDIT-DISCIPLINE — preserve what should stay, change only what was asked:\n"
+        "  1. PRESERVATION CONTRACT — at the TOP of the prompt, list what MUST be preserved "
+        "verbatim from the reference: 'KEEP: subject identity (face, body, pose, expression), "
+        "wardrobe, foreground objects'. Then state the change: 'CHANGE: only the background, "
+        "replace with [new background description]'. Without explicit preservation, the model "
+        "regenerates from scratch.\n"
+        "  2. SCOPE THE EDIT NARROWLY — single-target edits work; multi-target compound edits "
+        "(change background AND lighting AND outfit) often fail. If user asks for compound, "
+        "rank them and describe each region's change separately.\n"
+        "  3. STYLE CONTINUITY — match the reference's lighting direction + color temperature + "
+        "image quality unless the user EXPLICITLY asked for a style shift. Mismatched lighting = "
+        "obviously edited.\n"
+        "  4. SEAMLESS BOUNDARIES — at any region boundary (subject ↔ new background, "
+        "old object ↔ replacement), describe the transition: shadows on the floor under the "
+        "subject must match the new background's light direction; edge soft, not a hard cutout.\n"
+        "  5. ANTI-PATTERNS in negative_prompt: 'subject regenerated from scratch, identity "
+        "drift from reference, halo around subject, hard cutout edge, shadow direction mismatch, "
+        "color temperature mismatch between subject and new background, lost original details, "
+        "wrong style applied to subject'.\n"
+        "  ROUTING NOTE: this bucket forces GPT Image 2 edit (instruction_edit). Tier "
+        "hard-clamped to 1K (GPT Image 2 edit only supports 1K reliably)."
+    ),
+    "editing": (
+        "Output is an EDIT operation on a supplied image (mask inpaint / object add / "
+        "object remove / background swap / text replace). Apply MASK-DISCIPLINE:\n"
+        "  1. NAME THE OPERATION — say which edit_mode is implied: instruction_edit (free-form "
+        "instruction), inpaint_mask (user drew a mask region), object_add, object_remove, "
+        "background_swap, text_replace, style_remix, compose. Each has different routing.\n"
+        "  2. FOR INPAINT/OBJECT EDITS — describe ONLY the new content for the masked region. "
+        "DO NOT describe the rest of the image (model has the full reference). Describing the "
+        "untouched regions causes the model to regenerate them, breaking consistency.\n"
+        "  3. FOR BACKGROUND SWAP — preserve the subject's lighting + shadow direction. "
+        "Describe the new background's light source so the model can match it on the subject "
+        "(or call out 'relight subject to match new background').\n"
+        "  4. FOR TEXT REPLACE — quote the EXACT old string and the EXACT new string. Specify "
+        "font + size + color of replacement text should match (or differ from) the original.\n"
+        "  5. ANTI-PATTERNS in negative_prompt: 'regenerated entire image, mask boundary "
+        "visible, hard edge between edited and original regions, lighting mismatch, shadow "
+        "direction wrong, lost original detail outside mask, watermark'.\n"
+        "  ROUTING NOTE: this bucket usually arrives via /edit endpoint. When seen on /generate, "
+        "force-route to GPT Image 2 edit at 1K."
     ),
     "fast":                  "Output is a quick general image. Cover subject + scene + lighting + style succinctly.",
 }
@@ -2998,6 +3273,21 @@ class SimplePromptEngine:
                     (improved.target_audience or "")[:60],
                 )
                 output = improved
+            elif _USE_SELF_CRITIQUE and (classification.get("bucket") or "") in _QUALITY_CRITIQUE_BUCKETS:
+                # Non-ad quality critique: portraits, artistic, anime, vector,
+                # multiperson, character_consistency, photorealism subtypes etc.
+                # Runs a SHARED 8-point quality checklist + per-bucket additions.
+                # Cost / latency parity with ad critique (~$0.0001 + ~1.5s).
+                critique_start = time.time()
+                improved = await self._critique_quality_with_gemini(output, user_prompt, classification)
+                logger.info(
+                    "[critique-quality][%s] (%.2fs) prompt %d->%d chars",
+                    classification.get("bucket"),
+                    time.time() - critique_start,
+                    len(output.prompt or ""),
+                    len(improved.prompt or ""),
+                )
+                output = improved
 
             # ORDER MATTERS: sanitize FIRST, then fill empty quotes.
             # Reason: _sanitize_prompt has a CTA-verb stripper ("Shop Now",
@@ -3259,6 +3549,282 @@ class SimplePromptEngine:
         except ValidationError as ve:
             logger.warning(
                 "[critique] gemini output failed Pydantic validation (%d issues) -- keeping draft: %s",
+                ve.error_count(), ve.errors()[:2],
+            )
+            return draft
+
+        return improved
+
+    async def _critique_quality_with_gemini(
+        self, draft: SimpleEngineOutput, user_prompt: str, classification: Dict[str, Any]
+    ) -> SimpleEngineOutput:
+        """Stage-2.5 QUALITY critique pass for non-ad buckets.
+
+        Different from `_critique_with_gemini` (which is ad-shaped: hierarchy,
+        copy, brand-identity layer). This one applies CRAFT discipline to the
+        Haiku draft's `prompt` + `visual` fields for portraits, artistic work,
+        anime, vector, multiperson, character_consistency, and the photoreal
+        sub-buckets. Skips ad_copy review entirely (those fields are empty
+        for non-ad buckets).
+
+        Architecture: shared 8-point checklist applies to ALL non-ad buckets,
+        plus a per-bucket section that drills into the discipline that bucket
+        cares most about (portrait → anatomy + lighting setup; vector → 7-phase
+        logo framework; anime → era + linework; artistic → medium fidelity).
+
+        Failure non-fatal — returns the draft on any error.
+        """
+        try:
+            from app.services.smart.design_agent_chain import _get_gemini_client
+            from google.genai import types
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[critique-quality] google-genai unavailable: %s -- skipping", e)
+            return draft
+
+        bucket = (classification.get("bucket") or "").strip()
+        vis = draft.visual
+
+        # ─── per-bucket extension blocks ──────────────────────────────────
+        per_bucket = {
+            "photorealism_portrait": (
+                "PORTRAIT-SPECIFIC CHECKS:\n"
+                "  P1. Subject identity: age range + gender presentation + ethnicity (when relevant) + "
+                "distinguishing features stated. Reject 'beautiful woman' / 'handsome man' generics.\n"
+                "  P2. Lighting setup NAMED: Rembrandt / loop / butterfly / split / clamshell / "
+                "window-light + ratio. Generic 'soft light' = REJECT.\n"
+                "  P3. Camera: 85mm or 100mm preferred for portraits, f/1.8-f/2.8 for bokeh, eyes "
+                "tack-sharp. If missing, ADD.\n"
+                "  P4. Anatomy negatives MANDATORY: 'extra fingers, mangled hands, asymmetric eyes, "
+                "plastic skin, doll-like, waxy, uncanny valley, deformed' must appear in negative_prompt."
+            ),
+            "photorealism_product": (
+                "PRODUCT-SHOT-SPECIFIC CHECKS:\n"
+                "  P1. Product fidelity: exact shape + label + material described. Brand label spelling "
+                "preserved. If user named a brand, label text must be in quotes in the prompt.\n"
+                "  P2. Lighting: softbox + fill + rim is studio default. For glass/liquid → backlight "
+                "for translucency. For metal → large diffused source. State explicitly.\n"
+                "  P3. Camera: 50-100mm to avoid distortion, f/8-f/11 for full sharpness.\n"
+                "  P4. Micro-details required: condensation / steam / embossed label / wood grain / "
+                "fabric weave — at least 2 in the prompt."
+            ),
+            "photorealism_food": (
+                "FOOD-PHOTOGRAPHY-SPECIFIC CHECKS:\n"
+                "  P1. Appetite triggers named: steam / condensation / butter melt / glistening sauce / "
+                "sear marks / fresh herb. At least 2.\n"
+                "  P2. Camera angle explicit: 45° hero / overhead flat-lay / eye-level — matches dish.\n"
+                "  P3. Surface + 2-3 supporting props named (not 5+ — that's clutter).\n"
+                "  P4. Anti-patterns in negative_prompt: 'plastic-looking food, fake glossy, AI-default "
+                "soup-of-ingredients, melted-into-each-other forms, harsh flash'."
+            ),
+            "photorealism_fashion": (
+                "FASHION-PHOTOGRAPHY-SPECIFIC CHECKS:\n"
+                "  P1. Model-wearing-it (not flat-lay) for apparel/jewelry/footwear. Pose + expression "
+                "named. Static catalog stance = REJECT.\n"
+                "  P2. Wardrobe fidelity: silhouette + fabric + color + embellishments + construction "
+                "details. Generic 'a dress' = REJECT.\n"
+                "  P3. Lighting matches editorial: golden-hour rim / softbox key / window+reflector. "
+                "Specify direction + quality.\n"
+                "  P4. Background bokeh-soft so wardrobe is the focal hierarchy."
+            ),
+            "photorealism_landscape": (
+                "LANDSCAPE-SPECIFIC CHECKS:\n"
+                "  P1. Time-of-day NAMED: golden hour / blue hour / midday harsh / overcast soft / "
+                "storm light. 'Sunny' = REJECT.\n"
+                "  P2. Foreground / midground / background layering explicit. Foreground anchor "
+                "(rocks / flowers / fence) for scale.\n"
+                "  P3. Atmospheric perspective (haze cooling distant mountains) or weather "
+                "(fog / rain / mist / snow) at least one.\n"
+                "  P4. Scale cue: tiny human / lone tree / cabin / deer — without scale, grandeur "
+                "is unreadable."
+            ),
+            "photorealism": (
+                "GENERAL-PHOTOREAL CHECKS:\n"
+                "  P1. Camera (lens + aperture + ISO mood) explicit. Generic 'photo' = REJECT.\n"
+                "  P2. Lighting (direction + quality + color temp) named.\n"
+                "  P3. Composition (Rule of Thirds / leading lines / depth) stated.\n"
+                "  P4. Anti-patterns: 'illustrated, cartoon, painterly, plastic skin, AI-rendered "
+                "look, extra fingers, fused limbs' in negative_prompt."
+            ),
+            "interior_arch": (
+                "INTERIOR/ARCHITECTURE CHECKS:\n"
+                "  P1. Design school NAMED (mid-century / Scandinavian / industrial / wabi-sabi / "
+                "etc). Generic 'modern' = REJECT.\n"
+                "  P2. Camera 14-24mm wide with corrected verticals (no keystone).\n"
+                "  P3. Mixed lighting (window daylight + practical lamps) for architectural signature.\n"
+                "  P4. Material readability: 2+ tactile surfaces named (oak grain / brushed brass / "
+                "linen / marble veining).\n"
+                "  P5. Styled but believable (thrown blanket / open book / fresh flowers) — never "
+                "sterile catalog-empty."
+            ),
+            "artistic": (
+                "FINE-ART CHECKS:\n"
+                "  P1. Medium NAMED specifically: oil / gouache / watercolor / ink / digital painting / "
+                "charcoal / pastel / woodblock. NOT just 'painted'.\n"
+                "  P2. ONE artist/movement reference for anchor (Mucha / Studio Ghibli / Beksinski / "
+                "Hopper). NOT a soup of names.\n"
+                "  P3. Brushwork / line quality described (impasto / stippling / wet-on-wet / hatching).\n"
+                "  P4. Constrained palette (3-5 named colors, named relationship: complementary / "
+                "analogous / monochrome+pop). 'Colorful' = REJECT.\n"
+                "  P5. Anti-patterns: 'photorealistic, 3D render, plastic look, AI-default soft glow' "
+                "in negative_prompt."
+            ),
+            "anime": (
+                "ANIME-PRODUCTION CHECKS:\n"
+                "  P1. Style era / studio NAMED: 90s cel / modern digital / Studio Ghibli / shōnen / "
+                "shōjo / seinen. ONE pick.\n"
+                "  P2. Linework: clean tapered / varied weight / thick-thin manga ink / paint-only. "
+                "Outline color stated.\n"
+                "  P3. Shading: cel-shaded (with tone-step count) / soft anime gradient / painterly / "
+                "screentone.\n"
+                "  P4. Character design: hair (color/cut/movement) + eyes (shape/color) + face "
+                "proportions (chibi / standard / realistic) + outfit specifics.\n"
+                "  P5. Background and character must visually agree (don't mix photoreal bg + chibi "
+                "character unless intentional)."
+            ),
+            "vector": (
+                "LOGO/VECTOR 7-PHASE FRAMEWORK CHECKS:\n"
+                "  P1. PHASE 1 — brand archetype STATED (Caregiver / Ruler / Hero / Magician / "
+                "Lover / Outlaw). Drives all downstream choices.\n"
+                "  P2. PHASE 2 — color processed FIRST, deliberate neuro-rationale (blue=trust, "
+                "red=urgency, etc). 2026 palettes confident high-contrast — NOT washed-out beige.\n"
+                "  P3. PHASE 3 — ONE dominant shape family (circle/square/triangle/organic).\n"
+                "  P4. PHASE 4 — mark type chosen: PICTORIAL SYMBOL is the default, NOT first-letter "
+                "lettermark. Reject 'stylized P' for new brands unless user explicitly asked.\n"
+                "  P5. PHASE 5 — typography ownable (NOT blanded geometric sans-serif). MAX 2 fonts. "
+                "Letter-accuracy guarantee for wordmarks (multi-state the exact letter shape).\n"
+                "  P6. PHASE 6 — scalable (16px → billboard), B&W-first silhouette strong, ≥25% "
+                "negative space, WCAG 4.5:1 contrast.\n"
+                "  P7. PHASE 7 — anti-patterns: 'photo background, 3D bevel, drop shadow, generic "
+                "swoosh+globe+gear, AI-default geometric P/A/B in cyan-and-black, blanded sans-serif, "
+                "wrong letter, lorem ipsum' in negative_prompt.\n"
+                "  P8. ANTI-DEFAULTS: did the model push past lazy default (first-letter-as-logo OR "
+                "literal name illustration)? If brand name is Pixium → not just pixels; Sunrise → "
+                "not just a sun. Push to second/third interpretation."
+            ),
+            "multiperson": (
+                "MULTI-PERSON CHECKS:\n"
+                "  P1. PER-PERSON description: each person individually (age/gender/ethnicity/hair/"
+                "wardrobe). Generic 'two people' = REJECT.\n"
+                "  P2. Relationship + interaction NAMED (couple holding hands / siblings laughing / "
+                "team clinking glasses).\n"
+                "  P3. Spatial arrangement explicit: who is left/right/front/back, who looks at whom.\n"
+                "  P4. Anatomy discipline: 'exactly N people, 2N hands total, 2N eyes total, fingers "
+                "clearly defined, no fused hands, no extra arms, no missing limbs' in prompt or "
+                "negative_prompt.\n"
+                "  P5. Lighting uniformity stated (same key direction + quality across all faces) — "
+                "mismatched per-face light = AI composite tell."
+            ),
+            "character_consistency": (
+                "CHARACTER-CONSISTENCY CHECKS:\n"
+                "  P1. Identity anchor at TOP of prompt: face shape + skin tone + eye color/shape + "
+                "hair (color/cut/texture) + distinguishing feature (mole/scar/glasses/freckles). MUST "
+                "repeat verbatim in every panel/scene description.\n"
+                "  P2. ONE consistent art style across all panels (no medium mixing).\n"
+                "  P3. Multi-panel layout: clean grid (2×2/3×1/4×1), neutral background, no panel "
+                "borders unless requested.\n"
+                "  P4. Wardrobe continuity: same outfit verbatim if same; explicit per-panel change "
+                "if different.\n"
+                "  P5. Pose/expression VARIETY (front / 3-4 turn / side / back) — not 'same pose 4 "
+                "times with minor changes'.\n"
+                "  P6. Anti-patterns: 'face drift, identity inconsistency, different skin tones, "
+                "different eye colors, different hair colors, different art styles between cells'."
+            ),
+        }
+
+        bucket_block = per_bucket.get(bucket, "")
+
+        review_msg = (
+            f"USER ORIGINAL REQUEST:\n{user_prompt.strip()}\n\n"
+            f"INTENT CLASSIFIER:\n  bucket={bucket}, category={classification.get('category_key')}, "
+            f"has_text={classification.get('has_text')}, platform={classification.get('platform')}\n\n"
+            f"HAIKU FIRST DRAFT (review and improve - DO NOT start over):\n"
+            f"=== prompt (image-gen prompt) ===\n{(draft.prompt or '')[:2400]}\n\n"
+            f"=== negative_prompt ===\n{draft.negative_prompt or '(empty)'}\n\n"
+            f"=== visual ===\n"
+            f"  mood:                    {(vis.mood if vis else '') or '(empty)'}\n"
+            f"  color_palette:           {(vis.color_palette if vis else '') or '(empty)'}\n"
+            f"  lighting:                {(vis.lighting if vis else '') or '(empty)'}\n"
+            f"  background:              {(vis.background if vis else '') or '(empty)'}\n"
+            f"  composition:             {(vis.composition if vis else '') or '(empty)'}\n"
+            f"  depicted_subject:        {(vis.depicted_subject if vis else '') or '(empty)'}\n"
+            f"  micro_details:           {(vis.micro_details if vis else []) or '(empty)'}\n"
+            f"  visual_metaphor:         {(vis.visual_metaphor if vis else '') or '(empty)'}\n\n"
+            "===== SHARED 8-POINT QUALITY CHECKLIST =====\n"
+            "  S1. CONCRETE SUBJECT — `prompt` opens with a SPECIFIC photographable subject (not "
+            "campaign-words like 'an artwork', 'a piece', 'a creation'). If vague, REJECT and rewrite "
+            "with the actual subject from the user prompt.\n"
+            "  S2. PHYSICAL SPECIFICITY — replaces generic adjectives ('beautiful', 'amazing', "
+            "'stunning', 'premium') with concrete imagery (textures / materials / proportions / scale "
+            "cues). Generic adjectives = REJECT.\n"
+            "  S3. LIGHTING NAMED — direction + quality + color temperature stated. Generic 'good "
+            "lighting' / 'beautiful light' = REJECT.\n"
+            "  S4. COMPOSITION INTENT — Rule of Thirds / leading lines / depth / negative space "
+            "named explicitly. Generic 'well composed' = REJECT.\n"
+            "  S5. PALETTE DISCIPLINE — 3-5 named colors with relationship (complementary / "
+            "analogous / monochrome+pop). 'Colorful' or 'vibrant' alone = REJECT.\n"
+            "  S6. ANTI-AI-DEFAULT NEGATIVES — negative_prompt must include the bucket's anti-patterns "
+            "(see per-bucket checks below). Empty negatives = REJECT.\n"
+            "  S7. NO STRUCTURAL NOUNS IN PROMPT — no 'headline', 'subhead', 'caption', 'tagline' "
+            "describing TEXT inside the image (those belong in ad_copy fields, not in `prompt`).\n"
+            "  S8. SINGLE COHESIVE COMPOSITION — no 'collage', 'multi-panel', 'design sheet', "
+            "'pitch deck', 'Option 1/2/3' anywhere unless user explicitly asked for a sheet.\n\n"
+            f"{bucket_block}\n\n"
+            "===== HARD ANTI-PATTERNS (must remove) =====\n"
+            "  A. NO markdown chars (#, *, _, `, ~) inside any \"...\" quoted text.\n"
+            "  B. NO vague filler ('amazing', 'great', 'best', 'truly', 'really') — replace with "
+            "concrete imagery.\n"
+            "  C. Keep the same intent + subject + style. Tighten + clarify — do NOT redesign.\n\n"
+            "===== TASK =====\n"
+            "Return the IMPROVED draft as a JSON object with EXACTLY this shape (every key required, "
+            "omit nothing — empty string for unused fields):\n"
+            "{\n"
+            '  "intent": "...",\n'
+            '  "prompt": "...",\n'
+            '  "negative_prompt": "...",\n'
+            '  "aspect_hint": "square_hd|portrait_4_3|landscape_4_3|portrait_9_16|landscape_16_9",\n'
+            '  "campaign_type": "...",\n'
+            '  "subject_category": "...",\n'
+            '  "platform": "...",\n'
+            '  "copywriting_formula": "AIDA|PAS|BAB|simple",\n'
+            '  "target_audience": "...",\n'
+            '  "objective": "awareness|conversion|engagement|education|retention",\n'
+            '  "ad_copy": {"headline":"","headline_typography":"","subhead":"","subhead_typography":"","cta":"","cta_typography":"","benefit_lines":[],"trust_signals":[],"emotional_tagline":null,"brand_name":null,"legal_disclaimer":"","brand_emblem_description":null,"website_url":null,"contact_info":null,"footer_strip":[],"lineup_items":[]},\n'
+            '  "visual": {"visual_metaphor":"","micro_details":[],"mood":"...","color_palette":"...","color_psychology_intent":"","lighting":"...","background":"...","composition":"...","visual_hierarchy":"","typography_style":"","depicted_subject":"..."}\n'
+            "}\n"
+            "Output JSON only - no prose, no markdown fences."
+        )
+
+        try:
+            client = _get_gemini_client()
+            resp = await client.aio.models.generate_content(
+                model=_CLASSIFIER_MODEL,
+                contents=[{"role": "user", "parts": [{"text": review_msg}]}],
+                config=types.GenerateContentConfig(
+                    temperature=0.4,
+                    max_output_tokens=_CRITIQUE_MAX_TOKENS,
+                    response_mime_type="application/json",
+                ),
+            )
+            raw = (resp.text or "").strip()
+            if not raw:
+                finish = resp.candidates[0].finish_reason if resp.candidates else "UNKNOWN"
+                logger.warning("[critique-quality] empty Gemini response (finish=%s) -- keeping draft", finish)
+                return draft
+            if raw.startswith("```"):
+                raw = re.sub(r"^```(?:json)?\s*|\s*```\s*$", "", raw, flags=re.MULTILINE).strip()
+            first, last = raw.find("{"), raw.rfind("}")
+            if first != -1 and last != -1 and last > first:
+                raw = raw[first:last + 1]
+            data = json.loads(raw)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[critique-quality] gemini call failed: %s -- keeping draft", e)
+            return draft
+
+        try:
+            improved = SimpleEngineOutput.model_validate(data)
+        except ValidationError as ve:
+            logger.warning(
+                "[critique-quality] gemini output failed Pydantic validation (%d issues) -- keeping draft: %s",
                 ve.error_count(), ve.errors()[:2],
             )
             return draft

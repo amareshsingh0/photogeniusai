@@ -303,12 +303,22 @@ def _format_for_gpt_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
         )
     else:
         persona = {
-            "portrait":             "world-class portrait photographer in the style of Annie Leibovitz",
-            "photorealism_portrait":"world-class portrait photographer in the style of Annie Leibovitz",
-            "anime":                "world-class anime art director in the studio Ghibli tradition",
-            "vector":               "world-class vector illustrator and graphic designer",
-            "artistic":             "world-class fine-art digital painter",
-            "photorealism":         "world-class commercial photographer and cinematographer",
+            "portrait":               "world-class portrait photographer in the style of Annie Leibovitz",
+            "photorealism_portrait":  "world-class portrait photographer in the style of Annie Leibovitz",
+            "anime":                  "world-class anime art director in the studio Ghibli tradition",
+            "vector":                 "world-class vector illustrator and graphic designer",
+            "artistic":               "world-class fine-art digital painter",
+            "photorealism":           "world-class commercial photographer and cinematographer",
+            "photorealism_food":      "world-class food photographer in the tradition of David Loftus and Bon Appetit editorial",
+            "photorealism_fashion":   "world-class editorial fashion photographer (Vogue / Harper's Bazaar tradition)",
+            "photorealism_landscape": "world-class landscape photographer in the tradition of Ansel Adams and Marc Adamus",
+            "photorealism_product":   "world-class commercial product photographer specializing in studio packshots",
+            "interior_arch":          "world-class architectural and interior photographer (Dezeen / ArchDaily editorial tradition)",
+            "multiperson":            "world-class group-portrait photographer who specializes in capturing authentic human interaction",
+            "character_consistency":  "world-class character designer producing a model sheet — same identity, varied poses, consistent style",
+            "image_to_image":         "world-class image-edit specialist preserving subject identity while transforming the scene as requested",
+            "multi_reference":        "world-class composite-image specialist who blends multiple references into one cohesive scene",
+            "editing":                "world-class image-edit specialist applying a precise, region-scoped modification",
         }.get(subject_category, "world-class commercial photographer and cinematographer")
 
     sections: list[str] = [f"Act as a {persona}."]
