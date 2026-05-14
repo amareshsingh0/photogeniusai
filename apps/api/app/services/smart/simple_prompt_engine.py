@@ -188,8 +188,12 @@ Return JSON ONLY (no prose, no markdown fences):
 
 RULES:
 - "logo", "brand mark", "wordmark", "monogram", "icon for app", "favicon", "emblem", "badge" -> bucket=vector. is_ad=false. has_text=true ONLY if it's a wordmark/combination (brand name visible); has_text=false for pure symbol/pictorial mark.
-- "post for instagram", "ad", "poster", "launch", "promo", "campaign" -> bucket=typography, has_text=true, is_ad=true. BUT if the prompt describes a LOGO and just lists "campaign / ad / poster" as features of a product/website (e.g. "logo for an app that creates ads, posters, campaigns"), DO NOT confuse those feature words with the deliverable — the deliverable is the LOGO, so route bucket=vector.
-- A product launch ad with brand name -> typography even if user calls it a "photo"
+- "post for instagram", "ad", "advert", "promo", "campaign", "sale", "launch ad", "discount", "offer", "buy now" -> bucket=typography, has_text=true, is_ad=true. BUT if the prompt describes a LOGO and just lists "campaign / ad / poster" as features of a product/website (e.g. "logo for an app that creates ads, posters, campaigns"), DO NOT confuse those feature words with the deliverable — the deliverable is the LOGO, so route bucket=vector.
+- POSTER DISAMBIGUATION (IMPORTANT — do not blindly is_ad=true on the word "poster"):
+  * "movie poster", "film poster", "concert poster", "art poster", "book cover", "album cover", "tour poster", "theatre poster" -> these are ARTISTIC / EDITORIAL posters, NOT commercial ads. Route bucket=photorealism (or photorealism_portrait if a person is the subject) or artistic (if user asks for painted/illustrated medium). has_text=true ONLY if user asked for a title to appear, otherwise false. **is_ad=false** — these are cinematic creative artworks, not promotional ads with CTAs/sale badges/brand footers.
+  * "sale poster", "promo poster", "event poster" (with sale/promo/discount/offer signals), "banner ad", "billboard ad", "social ad" -> commercial ad. bucket=typography, has_text=true, is_ad=true.
+  * Ambiguous "poster" with no sale/promo/discount/brand context -> default to ARTISTIC poster (is_ad=false), let the visual cues (cinematic, golden hour, 35mm, dramatic light) lead.
+- A product launch ad with brand name + sale/CTA language -> typography, is_ad=true even if user calls it a "photo". A product photo without sale/CTA language -> photorealism_product, is_ad=false.
 - Pure scene description ("car on mars", "anime girl in forest") -> appropriate non-typography bucket, has_text=false
 - If unsure between typography and photorealism: prefer typography when prompt mentions a brand, CTA, sale, headline, or platform.
 - Distinguishing logo vs. ad: a LOGO is the standalone brand identifier (small mark, scalable, no scene). An AD is a marketing layout (product + headline + scene + CTA). If the request says "create a logo / mark / icon" -> vector. If it says "create an ad / poster / banner / social post" -> typography.
@@ -225,13 +229,21 @@ def _fallback_classification(user_prompt: str) -> Dict[str, Any]:
     except Exception:
         pass
     needle = (user_prompt or "").lower()
+    # Artistic-poster contexts that mention "poster" but are NOT commercial ads.
+    # These should stay in photorealism/artistic and NOT trigger the is_ad ad-creator path.
+    artistic_poster_signals = ("movie poster", "film poster", "concert poster",
+                                "art poster", "book cover", "album cover",
+                                "tour poster", "theatre poster", "theater poster")
+    is_artistic_poster = any(s in needle for s in artistic_poster_signals)
     # Heuristic ad-intent flags so the critique pass + per-model formatters
     # still know this is an ad even when Gemini can't classify.
-    ad_signals = ("ad", "advert", "poster", "banner", "promo", "campaign",
+    # "poster" alone removed — too ambiguous (movie posters are not ads). Sale/promo/CTA
+    # words are the real signal.
+    ad_signals = ("ad", "advert", "banner ad", "billboard ad", "promo", "campaign",
                   "launch", "sale", "offer", "discount", "brand", "buy",
                   "shop", "post", "reel", "story", "instagram", "facebook",
                   "linkedin", "tiktok", "youtube")
-    if out["bucket"] in ("typography", "ad_creative") or any(s in needle for s in ad_signals):
+    if not is_artistic_poster and (out["bucket"] in ("typography", "ad_creative") or any(s in needle for s in ad_signals)):
         out["is_ad"] = True
         out["has_text"] = True
         if "typography" not in out["bucket"]:

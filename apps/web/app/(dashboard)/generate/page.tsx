@@ -95,6 +95,7 @@ export default function Generate() {
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [multiResults, setMultiResults] = useState<GenerationResult[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const refFileInput = useRef<HTMLInputElement>(null);
 
@@ -128,6 +129,22 @@ export default function Generate() {
     e.target.value = "";
     setRefsOpen(false);
   }, [referenceImages.length]);
+
+  // ── Detect admin (enables parallel multi-model testing mode on the backend) ──
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/user/current");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.email === "dev@photogenius.local") setIsAdmin(true);
+      } catch {
+        /* assume not admin on failure (safe default) */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // ── History drawer — fetch the user's recent generations when opened ──────
   // /api/generations returns a flat array of { id, prompt, selectedUrl, outputUrls[], previewUrl, ... }
@@ -189,6 +206,7 @@ export default function Generate() {
         extra_reference_images: referenceImages.length > 1 ? referenceImages.slice(1) : undefined,
         negative_prompt: negative.trim() || undefined,
         capability_bucket: activeType !== "fast" ? activeType : undefined,
+        testing_mode: isAdmin,
         // Per-slot seed so each batch slot gets a different image
         seed: locked ? Number(seed) || undefined : Math.floor(Math.random() * 1_000_000) + slot * 7919,
       }),
@@ -240,7 +258,7 @@ export default function Generate() {
       }
     }
     return final;
-  }, [prompt, activeRatio, activeQuality, style, referenceImages, negative, activeType, customMode, customW, customH, locked, seed]);
+  }, [prompt, activeRatio, activeQuality, style, referenceImages, negative, activeType, customMode, customW, customH, locked, seed, isAdmin]);
 
   // ── Real generation: Pixium SSE pipeline (single or batch) ──────────────────────────────────
   const generate = useCallback(async () => {
@@ -311,6 +329,7 @@ export default function Generate() {
           extra_reference_images: referenceImages.length > 1 ? referenceImages.slice(1) : undefined,
           negative_prompt: negative.trim() || undefined,
           capability_bucket: activeType !== "fast" ? activeType : undefined,
+          testing_mode: isAdmin,
         }),
       });
 
@@ -397,7 +416,7 @@ export default function Generate() {
       clearTimeout(timeoutId);
       setIsGenerating(false);
     }
-  }, [prompt, isGenerating, activeRatio, activeQuality, style, referenceImages, negative, activeType, locked, customMode, customW, customH, batch, runOneGeneration, activeModel]);
+  }, [prompt, isGenerating, activeRatio, activeQuality, style, referenceImages, negative, activeType, locked, customMode, customW, customH, batch, runOneGeneration, activeModel, isAdmin]);
 
   // ── Visible tiles: real result(s) > one placeholder sample matching aspect ──
   const visibleTiles = useMemo<GenerationResult[]>(() => {
@@ -475,12 +494,6 @@ export default function Generate() {
               <span className="kerned text-white/40">Studio</span>
               <span className="text-white/20">/</span>
               <span className="font-display">Create</span>
-              {activeModel && (
-                <>
-                  <span className="text-white/20">·</span>
-                  <span className="font-mono text-[11px] text-white/50">{activeModel}</span>
-                </>
-              )}
             </div>
             <div className="flex items-center gap-1.5">
               <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 text-xs lg:hidden">
