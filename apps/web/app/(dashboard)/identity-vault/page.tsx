@@ -1,8 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { motion } from "framer-motion"
-import { Button } from "@/components/ui/button"
 import {
   Plus,
   Users,
@@ -103,7 +101,6 @@ export default function IdentityVaultPage() {
         method: "POST",
       })
       if (response.ok) {
-        // Update the identity status to TRAINING
         setIdentities((prev) =>
           prev.map((identity) =>
             identity.id === id ? { ...identity, status: "TRAINING" as const } : identity
@@ -131,343 +128,193 @@ export default function IdentityVaultPage() {
     return `https://picsum.photos/seed/${identity.id}/400/400`
   }
 
-  const getStatusInfo = (status: string) => {
+  const statusMeta = (status: string) => {
     switch (status) {
-      case "READY":
-        return { label: "Ready", color: "text-emerald-500 bg-emerald-500/10", icon: CheckCircle }
-      case "TRAINING":
-        return { label: "Training", color: "text-amber-500 bg-amber-500/10", icon: Loader2 }
-      case "PENDING":
-        return { label: "Pending", color: "text-blue-500 bg-blue-500/10", icon: Clock }
-      default:
-        return { label: "Failed", color: "text-red-500 bg-red-500/10", icon: Clock }
+      case "READY": return { label: "Ready", dot: "bg-emerald-500/80", icon: CheckCircle }
+      case "TRAINING": return { label: "Training", dot: "bg-amber-500/80", icon: Loader2 }
+      case "PENDING": return { label: "Pending", dot: "bg-white/40", icon: Clock }
+      default: return { label: "Failed", dot: "bg-red-500/80", icon: AlertCircle }
     }
   }
 
   const readyCount = identities.filter((i) => i.status === "READY").length
   const trainingCount = identities.filter((i) => i.status === "TRAINING").length
+  const photosTrained = identities.filter((i) => i.status === "READY").reduce((n, i) => n + (i.imageUrls?.length || 0), 0)
 
   return (
-    <div className="identity-page-bg min-h-screen">
-      <div className="max-w-5xl mx-auto space-y-8">
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4"
-      >
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight flex items-center gap-2">
-            <span className="inline-flex p-2 rounded-xl bg-primary/10 relative">
-              <span className="identity-scan-ring" aria-hidden />
-              <Users className="h-6 w-6 text-primary relative z-10" />
-            </span>
-            <span className="gradient-text">Identity Vault</span>
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            📸 Upload photos → 🧠 AI trains → ✨ Use in generations
-          </p>
+    <div className="mx-auto max-w-7xl px-4 py-8 pb-24 space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center gap-3">
+          <Users className="h-5 w-5 text-white/60" />
+          <div>
+            <h1 className="font-display text-3xl tracking-tight sm:text-4xl">Identity Vault</h1>
+            <p className="mt-1 text-sm text-white/50">Upload photos → AI trains → use in generations.</p>
+          </div>
         </div>
-        <Button
+        <button
           onClick={() => setCreateModalOpen(true)}
-          variant="outline"
-          className="shrink-0 rounded-xl border-white/15 bg-white/[0.04] hover:bg-white/[0.08] text-foreground"
+          className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-black transition"
+          style={{ background: "var(--gradient-aurora)" }}
         >
-          <Plus className="h-4 w-4 mr-2" />
-          New Identity
-        </Button>
-      </motion.div>
+          <Plus className="h-4 w-4" /> New identity
+        </button>
+      </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.05 }}
-        className="grid grid-cols-2 sm:grid-cols-3 gap-4"
-      >
-        <div className="identity-stat-card p-5 rounded-2xl">
-          <p className="text-2xl font-bold tabular-nums text-foreground">{identities.length}</p>
-          <p className="text-xs text-muted-foreground font-medium">Total</p>
-        </div>
-        <div
-          className={cn(
-            "identity-stat-card p-5 rounded-2xl transition-colors",
-            readyCount > 0 && "identity-stat-ready"
-          )}
-        >
-          <p
-            className={cn(
-              "text-2xl font-bold tabular-nums",
-              readyCount > 0 ? "text-emerald-400" : "text-muted-foreground"
-            )}
-          >
-            {readyCount}
-          </p>
-          <p className="text-xs text-muted-foreground font-medium">Ready</p>
-        </div>
-        <div
-          className={cn(
-            "identity-stat-card p-5 rounded-2xl hidden sm:block",
-            trainingCount > 0 && "identity-stat-training identity-training"
-          )}
-        >
-          <p
-            className={cn(
-              "text-2xl font-bold tabular-nums",
-              trainingCount > 0 ? "text-amber-400" : "text-muted-foreground"
-            )}
-          >
-            {trainingCount}
-          </p>
-          <p className="text-xs text-muted-foreground font-medium">Training</p>
-          {trainingCount > 0 && (
-            <p className="text-xs text-amber-400/90 mt-1">
-              Training • — ≈15–20 min remaining
-            </p>
-          )}
-        </div>
-      </motion.div>
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "TOTAL", value: identities.length },
+          { label: "READY", value: readyCount },
+          { label: "TRAINING", value: trainingCount },
+          { label: "PHOTOS TRAINED", value: photosTrained },
+        ].map((s) => (
+          <div key={s.label} className="glass-panel rounded-2xl p-4">
+            <p className="kerned text-white/40 mb-2">{s.label}</p>
+            <p className="font-mono text-3xl text-aurora">{s.value}</p>
+          </div>
+        ))}
+      </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="aspect-[4/5] rounded-2xl shimmer" />
-          ))}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => <div key={i} className="aspect-[4/5] animate-pulse rounded-2xl bg-white/[0.02]" />)}
         </div>
       ) : identities.length === 0 ? (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="identity-empty-state text-center py-16 rounded-2xl"
-        >
-          <div className="flex justify-center gap-6 mb-8">
-            {[1, 2, 3].map((i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setCreateModalOpen(true)}
-                className="w-24 h-28 rounded-2xl border-2 border-dashed border-white/15 bg-white/[0.02] flex items-center justify-center hover:border-white/25 hover:bg-white/[0.04] transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                <Plus className="h-8 w-8 text-muted-foreground/60" />
-              </button>
-            ))}
-          </div>
-          <p className="text-sm text-muted-foreground mb-8">Your identities will appear here</p>
-          <div className="flex flex-wrap justify-center gap-6 text-left mb-8 max-w-md mx-auto">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">📸</span>
-              <span className="text-sm text-muted-foreground">Upload 8–20 photos</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🧠</span>
-              <span className="text-sm text-muted-foreground">AI learns your face</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">✨</span>
-              <span className="text-sm text-muted-foreground">Generate consistent faces forever</span>
-            </div>
-          </div>
-          <Button onClick={() => setCreateModalOpen(true)} className="identity-primary-btn text-white rounded-xl px-8 py-6 text-base font-semibold border-0">
-            <Plus className="h-5 w-5 mr-2" />
-            Create First Identity
-          </Button>
-        </motion.div>
+        <div className="glass-panel rounded-2xl p-12 text-center">
+          <h3 className="font-display text-2xl tracking-tight">Create your first identity</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-white/50">
+            Upload 8–20 photos, let the AI learn the face, then generate consistent likenesses forever.
+          </p>
+          <Link
+            href="/identity-vault/new"
+            className="mt-5 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-black transition"
+            style={{ background: "var(--gradient-aurora)" }}
+          >
+            <Plus className="h-4 w-4" /> Create identity
+          </Link>
+        </div>
       ) : (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-        >
-          {identities.map((identity, idx) => {
-            const statusInfo = getStatusInfo(identity.status)
-            const StatusIcon = statusInfo.icon
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {identities.map((identity) => {
+            const meta = statusMeta(identity.status)
             const isReady = identity.status === "READY"
-
+            const photos = identity.imageUrls?.length || 0
             return (
-              <motion.div
-                key={identity.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: Math.min(idx * 0.05, 0.15) }}
-                className="group relative rounded-2xl glass-card border border-white/[0.06] overflow-hidden hover:border-white/15 transition-colors"
-              >
-                {/* Image */}
-                <div className="aspect-square relative">
-                  <Image
-                    src={getThumbnail(identity)}
-                    alt={identity.name}
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                  {/* Gradient Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-                  {/* Status Badge */}
-                  <div className={cn(
-                    "absolute top-3 left-3 flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium",
-                    statusInfo.color
-                  )}>
-                    <StatusIcon className={cn("h-3 w-3", identity.status === "TRAINING" && "animate-spin")} />
-                    {statusInfo.label}
+              <div key={identity.id} className="glass-panel group relative overflow-hidden rounded-2xl p-4 transition hover:-translate-y-0.5">
+                <div className="flex items-start gap-3">
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-white/[0.04]">
+                    {photos > 0 ? (
+                      <Image src={getThumbnail(identity)} alt={identity.name} fill className="object-cover" unoptimized />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center"><Users className="h-6 w-6 text-white/30" /></div>
+                    )}
                   </div>
-
-                  {/* Menu */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-2 right-2 h-8 w-8 bg-black/40 hover:bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => handleDeleteClick(identity)}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  {/* Bottom Info */}
-                  <div className="absolute bottom-0 left-0 right-0 p-4">
-                    <h3 className="text-lg font-semibold text-white mb-1">
-                      {identity.name}
-                    </h3>
-                    <p className="text-xs text-white/70">
-                      {identity.imageUrls?.length || 0} reference photos
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-display text-lg tracking-tight truncate">{identity.name}</h3>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="rounded-lg p-1 text-white/30 opacity-0 transition hover:text-white/70 group-hover:opacity-100">
+                          <MoreVertical className="h-4 w-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem className="text-red-300 focus:text-red-300" onClick={() => handleDeleteClick(identity)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-white/70 inline-flex items-center gap-1.5">
+                        <span className={cn("h-2 w-2 rounded-full", meta.dot)} />
+                        {meta.label}
+                      </span>
+                      <span className="font-mono text-[10px] text-white/60">{photos} photos</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Face Consistency — READY only */}
                 {isReady && (
-                  <div className="px-4 py-2 border-t border-white/[0.06]">
-                    <p className="text-xs text-muted-foreground flex justify-between mb-1">
-                      <span>Face Consistency</span>
-                      <span className="font-medium text-foreground">
-                        {identity.consistencyScore ?? 92}%
-                      </span>
-                    </p>
-                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-emerald-500/80 transition-all duration-500"
-                        style={{ width: `${identity.consistencyScore ?? 92}%` }}
-                      />
+                  <div className="mt-4">
+                    <div className="mb-1 flex justify-between text-xs text-white/50">
+                      <span>Consistency</span>
+                      <span className="font-mono text-[11px] text-white/70">{identity.consistencyScore ?? 92}%</span>
                     </div>
-                  </div>
-                )}
-
-                {/* Action */}
-                {isReady && (
-                  <div className="p-3 border-t border-white/[0.06]">
-                    <Link href={`/generate?identity=${identity.id}`}>
-                      <Button variant="ghost" size="sm" className="w-full justify-between rounded-xl text-muted-foreground hover:text-foreground">
-                        <span className="flex items-center gap-2">
-                          <Sparkles className="h-4 w-4" />
-                          Generate with this identity
-                        </span>
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                    </Link>
+                    <div className="h-1.5 rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-white/70 transition-all duration-500" style={{ width: `${identity.consistencyScore ?? 92}%` }} />
+                    </div>
                   </div>
                 )}
 
                 {identity.status === "TRAINING" && (
-                  <div className="p-3 border-t border-white/[0.06]">
-                    <div className="flex items-center gap-2 text-amber-500">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="text-sm">Training in progress...</span>
-                    </div>
+                  <div className="mt-4 flex items-center gap-2 text-sm text-amber-300">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Training in progress…
                   </div>
                 )}
 
                 {identity.status === "PENDING" && (
-                  <div className="p-3 border-t border-white/[0.06]">
-                    {(identity.imageUrls?.length || 0) >= MIN_PHOTOS_FOR_TRAINING ? (
-                      <Button
+                  <div className="mt-4">
+                    {photos >= MIN_PHOTOS_FOR_TRAINING ? (
+                      <button
                         onClick={() => handleStartTraining(identity.id)}
                         disabled={trainingIds.has(identity.id)}
-                        className="w-full btn-premium text-white"
-                        size="sm"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 transition disabled:opacity-50"
                       >
-                        {trainingIds.has(identity.id) ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Starting...
-                          </>
-                        ) : (
-                          <>
-                            <Play className="h-4 w-4 mr-2" />
-                            Start Training
-                          </>
-                        )}
-                      </Button>
+                        {trainingIds.has(identity.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                        {trainingIds.has(identity.id) ? "Starting…" : "Start training"}
+                      </button>
                     ) : (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <AlertCircle className="h-4 w-4 text-amber-500" />
-                        <span className="text-xs">
-                          Need {MIN_PHOTOS_FOR_TRAINING - (identity.imageUrls?.length || 0)} more photos
-                        </span>
-                      </div>
+                      <p className="flex items-center gap-2 text-xs text-white/50">
+                        <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
+                        Need {MIN_PHOTOS_FOR_TRAINING - photos} more photos
+                      </p>
                     )}
                   </div>
                 )}
 
                 {identity.status === "FAILED" && (
-                  <div className="p-3 border-t border-white/[0.06]">
-                    <Button
+                  <div className="mt-4">
+                    <button
                       onClick={() => handleStartTraining(identity.id)}
                       disabled={trainingIds.has(identity.id)}
-                      variant="outline"
-                      className="w-full rounded-xl"
-                      size="sm"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 transition disabled:opacity-50"
                     >
-                      {trainingIds.has(identity.id) ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Retrying...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-4 w-4 mr-2" />
-                          Retry Training
-                        </>
-                      )}
-                    </Button>
+                      {trainingIds.has(identity.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                      {trainingIds.has(identity.id) ? "Retrying…" : "Retry training"}
+                    </button>
                   </div>
                 )}
-              </motion.div>
+
+                <div className="mt-4 flex items-center gap-2">
+                  <Link href={`/identity-vault/${identity.id}`} className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 transition">
+                    Open
+                  </Link>
+                  {isReady && (
+                    <Link href={`/generate?identity=${identity.id}`} className="flex flex-1 items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 transition">
+                      <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Generate</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  )}
+                </div>
+              </div>
             )
           })}
-        </motion.div>
+        </div>
       )}
 
       {trainingCount > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-5 rounded-2xl glass-card border border-amber-500/20"
-        >
+        <div className="glass-panel rounded-2xl p-4">
           <div className="flex items-start gap-3">
-            <Clock className="h-5 w-5 text-amber-500 mt-0.5" />
+            <Clock className="mt-0.5 h-4 w-4 text-amber-400" />
             <div>
-              <h4 className="font-medium text-foreground">Training in Progress</h4>
-              <p className="text-sm text-muted-foreground mt-1">
-                {trainingCount} {trainingCount === 1 ? "identity is" : "identities are"} being trained. This usually takes 15-20 minutes. You can close this page - training continues in the background.
+              <p className="text-sm text-white/85">Training in progress</p>
+              <p className="mt-1 text-sm text-white/50">
+                {trainingCount} {trainingCount === 1 ? "identity is" : "identities are"} being trained. This usually takes 15–20 minutes — you can close this page.
               </p>
             </div>
           </div>
-        </motion.div>
+        </div>
       )}
 
-      {/* Create Modal */}
       <CreateIdentityModal
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
@@ -477,7 +324,6 @@ export default function IdentityVaultPage() {
         }}
       />
 
-      {/* Delete confirmation */}
       <DeleteIdentityDialog
         identity={identityToDelete ? { ...identityToDelete, imageUrls: identityToDelete.imageUrls } : null}
         isOpen={!!identityToDelete}
@@ -485,7 +331,6 @@ export default function IdentityVaultPage() {
         onDelete={handleDeleteConfirm}
         isDeleting={isDeleting}
       />
-      </div>
     </div>
   )
 }

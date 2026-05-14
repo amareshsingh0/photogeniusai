@@ -397,6 +397,26 @@ python3 scripts/mine_category_recipes.py   # writes category_recipes_mined.json
 
 ---
 
+## AD QUALITY GAP-CLOSE (May 8 2026)
+
+Closed the visible quality gap between Pixium and ChatGPT/GPT Image 2 outputs on the same prompts. Five layered fixes — all generic, no hardcoding:
+
+1. **Brand-identity layer** (`AdCopy` schema): new fields `brand_emblem_description`, `website_url`, `contact_info`, `footer_strip`, `lineup_items`. Worked Examples C, D, E in system prompt populate them; Gemini critique enforces (points 17-21); formatter renders them. Real ads pair the wordmark with a tiny crest/mandala/diamond-emblem; have a website URL near the CTA; carry a contact line; close with a footer trust strip. Without these, output looks unfinished vs ChatGPT.
+
+2. **9-Pattern Layout Catalog** (Phase 3 system prompt): Haiku picks ONE layout per genre — Two-column lifestyle (fashion), Full-bleed cinematic (travel/auto), Overhead flat-lay (food), Centered ornate (devotional/wedding), Schedule-stack (lineups/conferences), Asymmetric tech (SaaS), Poster-editorial type-dominant (manifesto), Product-focused macro (packaged goods), Storytelling split (before/after). Each pattern has real-world brand examples cited. Match the pattern to genre, not to a default.
+
+3. **Lifestyle-with-model rule**: fashion / apparel / jewelry / cosmetics-on-body / footwear / eyewear / watches → `depicted_subject` is "a model wearing/using {product}", not flat-lay. Packaged goods / electronics / stationery stay product-only. Default for ambiguous: model-wearing-it.
+
+4. **Haiku-decides-layout formatter contract** (`_format_for_gpt`): added `haiku_set_layout` flag. All position rules (BRAND_EMBLEM / LOGO / HEADLINE / CTA / VISUAL HIERARCHY default) now respect Haiku's pattern selection from `visual.composition` / `visual.visual_hierarchy`. Hardcoded "top-left corner" / "upper-middle" / "bottom-center" defaults fire ONLY when Haiku gave us nothing. This was the single biggest fix — without it, every output collapsed into Z-pattern.
+
+5. **User-instructions-are-LAW + anti-hallucinated-offers**: explicit user colors/fonts/language override archetype defaults. No inventing "20% OFF / LIMITED TIME" when user didn't mention a sale.
+
+**Side fixes**: prompt cap 3800→6500 (rich enriched prompts were getting truncated, losing brand-identity layer). OpenAI multi-image edit form-field `image[]` → repeated `image` (was silently sending only first reference image). SVG content-type accepted by post-output validator.
+
+Full detail in [memory/may-8-ad-quality-gap-close.md](memory/may-8-ad-quality-gap-close.md).
+
+---
+
 ## LOGO COGNITIVE FRAMEWORK (May 6 2026)
 
 `_BUCKET_HINTS["vector"]` in `simple_prompt_engine.py` is now a 7-phase cognitive framework based on `Research/Logo Design Process and Trends.docx`:

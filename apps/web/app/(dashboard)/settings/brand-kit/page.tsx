@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState } from 'react'
-import { Palette, Type, Megaphone, Image, Save, CheckCircle, Loader2, RotateCcw, Globe } from 'lucide-react'
+import { Palette, Type, Megaphone, Save, CheckCircle, Loader2, RotateCcw, Globe } from 'lucide-react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003'
 
@@ -16,7 +16,7 @@ const FONT_STYLES = [
   { key: 'bold_tech',      label: 'Bold Tech',     preview: 'Space Grotesk / Syne', sample: 'Aa' },
   { key: 'playful_round',  label: 'Playful Round', preview: 'Nunito / Fredoka',      sample: 'Aa' },
   { key: 'minimal_light',  label: 'Minimal Light', preview: 'DM Sans / Outfit',      sample: 'Aa' },
-  { key: 'luxury_display', label: 'Luxury Display','preview': 'Cormorant / Libre',    sample: 'Aa' },
+  { key: 'luxury_display', label: 'Luxury Display', preview: 'Cormorant / Libre',    sample: 'Aa' },
 ]
 
 const BRAND_TONES = [
@@ -138,26 +138,23 @@ export default function BrandKitPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-white/50" />
       </div>
     )
   }
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="mx-auto max-w-4xl px-4 py-8 pb-24 space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-white">Brand Kit</h1>
-        <p className="text-sm text-white/40 mt-1">
-          Your brand identity is auto-applied to every generated ad and poster.
-        </p>
+        <h1 className="font-display text-3xl tracking-tight sm:text-4xl">Brand Kit</h1>
+        <p className="mt-1 text-sm text-white/50">Your brand identity is auto-applied to every generated ad and poster.</p>
       </div>
 
-      {/* Import from Website */}
-      <Section icon={<Globe className="w-4 h-4" />} title="Import from Website">
-        <p className="text-xs text-white/40">
-          Paste your website URL — we'll extract your brand name, colors, and tone automatically.
-        </p>
+      {/* Import from website */}
+      <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div className="flex items-center gap-2"><Globe className="h-4 w-4 text-white/60" /><p className="kerned text-white/40">IMPORT FROM WEBSITE</p></div>
+        <p className="text-xs text-white/50">Paste your website URL — we'll extract your brand name, colors, and tone automatically.</p>
         <div className="flex items-center gap-2">
           <input
             type="url"
@@ -165,171 +162,111 @@ export default function BrandKitPage() {
             onChange={e => setWebsiteUrl(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleResearch()}
             placeholder="https://yourbrand.com"
-            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-purple-500/50"
+            className="flex-1 rounded-lg border border-white/10 bg-black/20 p-2 text-sm outline-none focus:border-white/30"
           />
           <button
             onClick={handleResearch}
             disabled={researching || !websiteUrl.trim()}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/8 hover:bg-white/12 disabled:opacity-40 text-white text-sm font-medium transition-colors whitespace-nowrap border border-white/10"
+            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 transition disabled:opacity-40 whitespace-nowrap"
           >
-            {researching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
+            {researching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />}
             {researching ? 'Analysing…' : 'Import'}
           </button>
         </div>
         {researchMsg && (
-          <p className={`text-xs ${researchMsg.startsWith('Failed') || researchMsg.startsWith('Could') ? 'text-red-400' : 'text-emerald-400'}`}>
-            {researchMsg}
-          </p>
+          <p className={`text-xs ${researchMsg.startsWith('Failed') || researchMsg.startsWith('Could') ? 'text-red-400' : 'text-emerald-400'}`}>{researchMsg}</p>
         )}
-      </Section>
+      </div>
 
-      {/* Brand Info */}
-      <Section icon={<Megaphone className="w-4 h-4" />} title="Brand Identity">
-        <div className="grid grid-cols-2 gap-4">
+      {/* Brand identity */}
+      <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div className="flex items-center gap-2"><Megaphone className="h-4 w-4 text-white/60" /><p className="kerned text-white/40">BRAND IDENTITY</p></div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-xs text-white/50 mb-1.5">Brand / Company Name</label>
-            <input
-              type="text"
-              value={kit.brand_name}
-              onChange={e => update('brand_name', e.target.value)}
-              placeholder="e.g. Pixium AI"
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-purple-500/50 focus:bg-white/8"
-            />
+            <p className="kerned text-white/40 mb-2">BRAND / COMPANY NAME</p>
+            <input type="text" value={kit.brand_name} onChange={e => update('brand_name', e.target.value)} placeholder="e.g. Pixium AI" className="w-full rounded-lg border border-white/10 bg-black/20 p-2 text-sm outline-none focus:border-white/30" />
           </div>
           <div>
-            <label className="block text-xs text-white/50 mb-1.5">Industry</label>
-            <select
-              value={kit.industry}
-              onChange={e => update('industry', e.target.value)}
-              style={{ colorScheme: 'dark' }}
-              className="w-full bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer"
-            >
-              <option value="" style={{ background: '#1a1a2e', color: '#fff' }}>Select industry…</option>
-              {INDUSTRIES.map(i => <option key={i} value={i} style={{ background: '#1a1a2e', color: '#fff' }}>{i}</option>)}
+            <p className="kerned text-white/40 mb-2">INDUSTRY</p>
+            <select value={kit.industry} onChange={e => update('industry', e.target.value)} className="w-full rounded-lg border border-white/10 bg-black/20 p-2 text-sm outline-none focus:border-white/30">
+              <option value="">Select industry…</option>
+              {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
             </select>
           </div>
         </div>
         <div>
-          <label className="block text-xs text-white/50 mb-1.5">Logo URL</label>
-          <input
-            type="url"
-            value={kit.logo_url}
-            onChange={e => update('logo_url', e.target.value)}
-            placeholder="https://yourdomain.com/logo.png"
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-purple-500/50"
-          />
-          {kit.logo_url && (
-            <img src={kit.logo_url} alt="logo preview" className="mt-2 h-10 object-contain rounded" />
-          )}
+          <p className="kerned text-white/40 mb-2">LOGO URL</p>
+          <input type="url" value={kit.logo_url} onChange={e => update('logo_url', e.target.value)} placeholder="https://yourdomain.com/logo.png" className="w-full rounded-lg border border-white/10 bg-black/20 p-2 text-sm outline-none focus:border-white/30" />
+          {kit.logo_url && <img src={kit.logo_url} alt="logo preview" className="mt-2 h-10 rounded object-contain" />}
         </div>
-      </Section>
+      </div>
 
-      {/* Brand Colors */}
-      <Section icon={<Palette className="w-4 h-4" />} title="Brand Colors">
-        <div className="grid grid-cols-2 gap-4">
-          <ColorPicker label="Primary Color" value={kit.primary_color} onChange={v => update('primary_color', v)} />
-          <ColorPicker label="Secondary Color" value={kit.secondary_color} onChange={v => update('secondary_color', v)} />
-          <ColorPicker label="Accent / CTA Color" value={kit.accent_color} onChange={v => update('accent_color', v)} />
-          <ColorPicker label="Background Color" value={kit.bg_color} onChange={v => update('bg_color', v)} />
+      {/* Brand colors */}
+      <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div className="flex items-center gap-2"><Palette className="h-4 w-4 text-white/60" /><p className="kerned text-white/40">BRAND COLORS</p></div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <ColorPicker label="PRIMARY COLOR" value={kit.primary_color} onChange={v => update('primary_color', v)} />
+          <ColorPicker label="SECONDARY COLOR" value={kit.secondary_color} onChange={v => update('secondary_color', v)} />
+          <ColorPicker label="ACCENT / CTA COLOR" value={kit.accent_color} onChange={v => update('accent_color', v)} />
+          <ColorPicker label="BACKGROUND COLOR" value={kit.bg_color} onChange={v => update('bg_color', v)} />
         </div>
-        {/* Preview swatch */}
-        <div
-          className="mt-3 h-10 rounded-lg flex items-center justify-center gap-2 text-xs font-medium overflow-hidden"
-          style={{ background: kit.bg_color }}
-        >
+        <div className="flex h-10 items-center justify-center gap-2 overflow-hidden rounded-lg text-xs font-medium" style={{ background: kit.bg_color }}>
           <span style={{ color: kit.primary_color }}>Headline</span>
           <span style={{ color: kit.secondary_color }}>Body text</span>
-          <span
-            className="px-2 py-0.5 rounded"
-            style={{ background: kit.accent_color, color: '#000' }}
-          >
-            CTA Button
-          </span>
+          <span className="rounded px-2 py-0.5" style={{ background: kit.accent_color, color: '#000' }}>CTA Button</span>
         </div>
-      </Section>
+      </div>
 
-      {/* Font Style */}
-      <Section icon={<Type className="w-4 h-4" />} title="Font Style">
-        <div className="grid grid-cols-3 gap-2">
+      {/* Font style */}
+      <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div className="flex items-center gap-2"><Type className="h-4 w-4 text-white/60" /><p className="kerned text-white/40">FONT STYLE</p></div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {FONT_STYLES.map(f => (
             <button
               key={f.key}
               onClick={() => update('font_style', f.key)}
-              className={[
-                'flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all',
-                kit.font_style === f.key
-                  ? 'bg-purple-600/15 border-purple-500/50 text-white'
-                  : 'bg-white/3 border-white/8 text-white/50 hover:border-white/20 hover:text-white',
-              ].join(' ')}
+              className={`hairline flex flex-col items-start gap-1 rounded-xl p-3 text-left transition ${kit.font_style === f.key ? 'bg-white/10 ring-1 ring-white/30' : 'hover:bg-white/[0.04]'}`}
             >
-              <span className="text-xl font-bold leading-none" style={{ fontFamily: f.key.includes('serif') ? 'Georgia, serif' : 'inherit' }}>
-                {f.sample}
-              </span>
-              <span className="text-xs font-medium">{f.label}</span>
-              <span className="text-[10px] opacity-60">{f.preview}</span>
+              <span className="text-xl leading-none" style={{ fontFamily: f.key.includes('serif') ? 'Georgia, serif' : 'inherit' }}>{f.sample}</span>
+              <span className="text-xs text-white/85">{f.label}</span>
+              <span className="text-[10px] text-white/50">{f.preview}</span>
             </button>
           ))}
         </div>
-      </Section>
+      </div>
 
-      {/* Brand Tone */}
-      <Section icon={<Megaphone className="w-4 h-4" />} title="Brand Voice & Tone">
-        <div className="grid grid-cols-3 gap-2">
+      {/* Brand tone */}
+      <div className="glass-panel rounded-2xl p-5 space-y-4">
+        <div className="flex items-center gap-2"><Megaphone className="h-4 w-4 text-white/60" /><p className="kerned text-white/40">BRAND VOICE & TONE</p></div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {BRAND_TONES.map(t => (
             <button
               key={t.key}
               onClick={() => update('brand_tone', t.key)}
-              className={[
-                'flex flex-col gap-0.5 p-3 rounded-xl border text-left transition-all',
-                kit.brand_tone === t.key
-                  ? 'bg-purple-600/15 border-purple-500/50 text-white'
-                  : 'bg-white/3 border-white/8 text-white/50 hover:border-white/20 hover:text-white',
-              ].join(' ')}
+              className={`hairline flex flex-col gap-0.5 rounded-xl p-3 text-left transition ${kit.brand_tone === t.key ? 'bg-white/10 ring-1 ring-white/30' : 'hover:bg-white/[0.04]'}`}
             >
-              <span className="text-xs font-semibold">{t.label}</span>
-              <span className="text-[10px] opacity-60 leading-snug">{t.desc}</span>
+              <span className="text-xs text-white/85">{t.label}</span>
+              <span className="text-[10px] leading-snug text-white/50">{t.desc}</span>
             </button>
           ))}
         </div>
-      </Section>
+      </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-3 pb-8">
+      <div className="flex items-center gap-3">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-sm font-medium transition-colors"
+          className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-black transition disabled:opacity-60"
+          style={{ background: 'var(--gradient-aurora)' }}
         >
-          {saving ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : saved ? (
-            <CheckCircle className="w-4 h-4" />
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
-          {saved ? 'Saved!' : saving ? 'Saving…' : 'Save Brand Kit'}
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <CheckCircle className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+          {saved ? 'Saved!' : saving ? 'Saving…' : 'Save brand kit'}
         </button>
-        <button
-          onClick={() => setKit(DEFAULTS)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 text-white/40 hover:text-white hover:border-white/20 text-sm transition-colors"
-        >
-          <RotateCcw className="w-3.5 h-3.5" /> Reset
+        <button onClick={() => setKit(DEFAULTS)} className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 transition">
+          <RotateCcw className="h-3.5 w-3.5" /> Reset
         </button>
       </div>
-    </div>
-  )
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────────────
-
-function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-white/60">
-        {icon}
-        <h2 className="text-xs font-semibold uppercase tracking-widest">{title}</h2>
-      </div>
-      <div className="space-y-3">{children}</div>
     </div>
   )
 }
@@ -337,28 +274,17 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
 function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
-      <label className="block text-xs text-white/50 mb-1.5">{label}</label>
-      <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5">
+      <p className="kerned text-white/40 mb-2">{label}</p>
+      <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2 py-1.5">
         <label className="relative cursor-pointer">
-          <div
-            className="w-6 h-6 rounded-md border border-white/20 shadow-inner"
-            style={{ background: value }}
-          />
-          <input
-            type="color"
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-          />
+          <div className="h-6 w-6 rounded-md border border-white/20" style={{ background: value }} />
+          <input type="color" value={value} onChange={e => onChange(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
         </label>
         <input
           type="text"
           value={value}
-          onChange={e => {
-            const v = e.target.value
-            if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) onChange(v)
-          }}
-          className="flex-1 bg-transparent text-sm text-white focus:outline-none font-mono"
+          onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) onChange(v) }}
+          className="flex-1 bg-transparent font-mono text-sm text-white/85 outline-none"
           maxLength={7}
         />
       </div>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import {
   Users,
   Image as ImageIcon,
@@ -18,8 +17,6 @@ import {
   LogOut,
   Sliders,
   Cpu,
-  CheckCircle,
-  XCircle,
   DollarSign,
   Clock,
   Star,
@@ -359,692 +356,426 @@ export default function AdminDashboard() {
     { id: "settings" as Tab, label: "Settings", icon: Settings },
   ];
 
+  const filteredModels = models.filter((m) =>
+    modelsFilter === "all" ? true : modelsFilter === "active" ? m.isActive : !m.isActive
+  );
+
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      {/* Header */}
-      <div className="border-b border-zinc-800 bg-zinc-900/50">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-orange-600 flex items-center justify-center">
-                <Shield className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-                <p className="text-sm text-zinc-500">Full system control & analytics</p>
-              </div>
+    <div className="min-h-screen">
+      <div className="mx-auto max-w-7xl px-4 py-8 pb-24">
+        {/* Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <Shield className="h-5 w-5 text-white/60" />
+            <div>
+              <h1 className="font-display text-3xl tracking-tight sm:text-4xl">Admin Dashboard</h1>
+              <p className="mt-1 text-sm text-white/50">Full system control & analytics.</p>
             </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </button>
           </div>
-
-          {/* Tabs */}
-          <div className="flex gap-2">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all",
-                    activeTab === tab.id
-                      ? "bg-violet-600 text-white"
-                      : "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                  )}
-                >
-                  <Icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-sm text-red-200 hover:bg-red-500/15 transition"
+          >
+            <LogOut className="h-3.5 w-3.5" /> Logout
+          </button>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {error && (
-          <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
-            {error}
-          </div>
-        )}
-
-        {/* Overview Tab */}
-        {activeTab === "overview" && analytics && (
-          <div className="space-y-6">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard
-                label="Total Users"
-                value={analytics.overview.totalUsers}
-                icon={Users}
-                color="blue"
-              />
-              <StatCard
-                label="Total Generations"
-                value={analytics.overview.totalGenerations}
-                icon={ImageIcon}
-                color="violet"
-              />
-              <StatCard
-                label="Active Users (7d)"
-                value={analytics.overview.activeUsers}
-                icon={Users}
-                color="green"
-              />
-              <StatCard
-                label="Credits Used"
-                value={analytics.overview.totalCreditsUsed}
-                icon={BarChart3}
-                color="orange"
-              />
-            </div>
-
-            {/* Generation Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <StatCard
-                label="Today"
-                value={analytics.generations.today}
-                icon={ImageIcon}
-                color="violet"
-                small
-              />
-              <StatCard
-                label="This Week"
-                value={analytics.generations.week}
-                icon={ImageIcon}
-                color="violet"
-                small
-              />
-              <StatCard
-                label="This Month"
-                value={analytics.generations.month}
-                icon={ImageIcon}
-                color="violet"
-                small
-              />
-            </div>
-
-            {/* Breakdown */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                <h3 className="text-lg font-semibold mb-4">By Quality Tier</h3>
-                <div className="space-y-3">
-                  {analytics.breakdown.byTier.map((item) => (
-                    <div key={item.tier} className="flex items-center justify-between">
-                      <span className="text-zinc-400 capitalize">{item.tier}</span>
-                      <span className="font-semibold">{item.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                <h3 className="text-lg font-semibold mb-4">By Bucket</h3>
-                <div className="space-y-3">
-                  {analytics.breakdown.byBucket.slice(0, 5).map((item) => (
-                    <div key={item.bucket} className="flex items-center justify-between">
-                      <span className="text-zinc-400 capitalize">{item.bucket}</span>
-                      <span className="font-semibold">{item.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Users Tab */}
-        {activeTab === "users" && (
-          <div className="space-y-6">
-            {/* Search */}
-            <div className="flex items-center gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input
-                  type="text"
-                  placeholder="Search by email or name..."
-                  value={usersSearch}
-                  onChange={(e) => {
-                    setUsersSearch(e.target.value);
-                    setUsersPage(1);
-                  }}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:border-violet-600"
-                />
-              </div>
+        {/* Tab strip */}
+        <div className="mt-6 flex flex-wrap gap-1.5">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
               <button
-                onClick={fetchUsers}
-                className="p-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 transition-colors"
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] transition",
+                  activeTab === tab.id ? "bg-white text-black" : "bg-white/5 text-white/70 hover:bg-white/10"
+                )}
               >
-                <RefreshCw className="w-4 h-4" />
+                <Icon className="h-3.5 w-3.5" />
+                {tab.label}
               </button>
-            </div>
+            );
+          })}
+        </div>
 
-            {/* Users Table */}
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-zinc-800 bg-zinc-900">
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-400 uppercase">
-                        User
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-400 uppercase">
-                        Role
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-400 uppercase">
-                        Credits
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-400 uppercase">
-                        Generations
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-zinc-400 uppercase">
-                        Joined
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-semibold text-zinc-400 uppercase">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => (
-                      <tr key={user.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                        <td className="px-6 py-4">
-                          <div>
-                            <div className="font-medium">{user.name}</div>
-                            <div className="text-sm text-zinc-500">{user.email}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={cn(
-                              "px-2 py-1 rounded-md text-xs font-medium",
-                              user.role === "ADMIN" || user.role === "SUPER_ADMIN"
-                                ? "bg-red-500/10 text-red-400"
-                                : "bg-zinc-700 text-zinc-300"
-                            )}
-                          >
-                            {user.role || "USER"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 font-medium">{user.credits}</td>
-                        <td className="px-6 py-4 text-zinc-400">{user._count.generations}</td>
-                        <td className="px-6 py-4 text-sm text-zinc-500">
-                          {new Date(user.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingUser(user);
-                                setEditForm({
-                                  name: user.name,
-                                  email: user.email,
-                                  role: user.role || "USER",
-                                  credits: user.credits,
-                                });
-                              }}
-                              className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUser(user.id)}
-                              className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+        {/* Content */}
+        <div className="mt-6 space-y-6">
+          {error && (
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</div>
+          )}
+
+          {/* Overview Tab */}
+          {activeTab === "overview" && analytics && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <StatCard label="TOTAL USERS" value={analytics.overview.totalUsers} />
+                <StatCard label="TOTAL GENERATIONS" value={analytics.overview.totalGenerations} />
+                <StatCard label="ACTIVE USERS (7D)" value={analytics.overview.activeUsers} />
+                <StatCard label="CREDITS USED" value={analytics.overview.totalCreditsUsed} />
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <StatCard label="TODAY" value={analytics.generations.today} />
+                <StatCard label="THIS WEEK" value={analytics.generations.week} />
+                <StatCard label="THIS MONTH" value={analytics.generations.month} />
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="glass-panel rounded-2xl p-5">
+                  <p className="kerned text-white/40 mb-4">BY QUALITY TIER</p>
+                  <div className="space-y-3">
+                    {analytics.breakdown.byTier.map((item) => (
+                      <div key={item.tier} className="flex items-center justify-between text-sm">
+                        <span className="capitalize text-white/70">{item.tier}</span>
+                        <span className="font-mono text-[11px] text-white/85">{item.count}</span>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-800">
-                <div className="text-sm text-zinc-500">
-                  Showing {users.length} of {usersTotal} users
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setUsersPage((p) => Math.max(1, p - 1))}
-                    disabled={usersPage === 1}
-                    className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="text-sm">Page {usersPage}</span>
-                  <button
-                    onClick={() => setUsersPage((p) => p + 1)}
-                    disabled={users.length < 50}
-                    className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+                <div className="glass-panel rounded-2xl p-5">
+                  <p className="kerned text-white/40 mb-4">BY BUCKET</p>
+                  <div className="space-y-3">
+                    {analytics.breakdown.byBucket.slice(0, 5).map((item) => (
+                      <div key={item.bucket} className="flex items-center justify-between text-sm">
+                        <span className="capitalize text-white/70">{item.bucket}</span>
+                        <span className="font-mono text-[11px] text-white/85">{item.count}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Generations Tab */}
-        {activeTab === "generations" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">All Generations</h2>
-            </div>
-            <GenerationsTable />
-          </div>
-        )}
-
-        {/* Models Tab */}
-        {activeTab === "models" && (
-          <div className="max-w-7xl mx-auto px-6 py-8">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-2xl font-bold">Model Registry</h2>
-                <p className="text-zinc-400 mt-1">Manage AI models for image generation</p>
-              </div>
-              <button
-                onClick={() => fetchModels()}
-                disabled={modelsLoading}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={cn("w-4 h-4", modelsLoading && "animate-spin")} />
-                Refresh
-              </button>
-            </div>
-
-            {/* Filter Tabs */}
-            <div className="flex gap-2 mb-6">
-              {(["all", "active", "inactive"] as const).map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setModelsFilter(filter)}
-                  className={cn(
-                    "px-4 py-2 rounded-lg font-medium transition-colors capitalize",
-                    modelsFilter === filter
-                      ? "bg-violet-600 text-white"
-                      : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                  )}
-                >
-                  {filter} ({filter === "all" ? models.length : filter === "active" ? models.filter(m => m.isActive).length : models.filter(m => !m.isActive).length})
+          {/* Users Tab */}
+          {activeTab === "users" && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+                  <input
+                    type="text"
+                    placeholder="Search by email or name…"
+                    value={usersSearch}
+                    onChange={(e) => {
+                      setUsersSearch(e.target.value);
+                      setUsersPage(1);
+                    }}
+                    className="w-full rounded-lg border border-white/10 bg-black/20 py-2 pl-10 pr-3 text-sm outline-none focus:border-white/30"
+                  />
+                </div>
+                <button onClick={fetchUsers} className="rounded-xl border border-white/10 bg-white/5 p-2 hover:bg-white/10 transition">
+                  <RefreshCw className="h-4 w-4" />
                 </button>
-              ))}
-            </div>
-
-            {/* Models Grid */}
-            {modelsLoading ? (
-              <div className="flex items-center justify-center h-64">
-                <RefreshCw className="w-8 h-8 animate-spin text-violet-500" />
               </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {models
-                  .filter((m) =>
-                    modelsFilter === "all" ? true :
-                    modelsFilter === "active" ? m.isActive :
-                    !m.isActive
-                  )
-                  .map((model) => (
-                    <div
-                      key={model.id}
-                      className={cn(
-                        "bg-zinc-900/50 border rounded-xl p-6 transition-all",
-                        model.isActive ? "border-green-500/30 hover:border-green-500/50" : "border-zinc-800 hover:border-zinc-700"
-                      )}
+
+              <div className="glass-panel overflow-hidden rounded-2xl p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr>
+                        <th className="kerned text-white/40 text-left py-2 px-4">User</th>
+                        <th className="kerned text-white/40 text-left py-2 px-4">Role</th>
+                        <th className="kerned text-white/40 text-left py-2 px-4">Credits</th>
+                        <th className="kerned text-white/40 text-left py-2 px-4">Generations</th>
+                        <th className="kerned text-white/40 text-left py-2 px-4">Joined</th>
+                        <th className="kerned text-white/40 text-left py-2 px-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user) => (
+                        <tr key={user.id} className="border-b border-white/5">
+                          <td className="py-3 px-4 text-sm">
+                            <div className="text-white/85">{user.name}</div>
+                            <div className="font-mono text-[10px] text-white/60">{user.email}</div>
+                          </td>
+                          <td className="py-3 px-4 text-sm">
+                            <span className={cn(
+                              "rounded-full px-2 py-0.5 text-[10px]",
+                              user.role === "ADMIN" || user.role === "SUPER_ADMIN" ? "bg-red-500/15 text-red-200" : "bg-white/5 text-white/70"
+                            )}>
+                              {user.role || "USER"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-sm font-mono text-[11px] text-white/85">{user.credits}</td>
+                          <td className="py-3 px-4 text-sm font-mono text-[11px] text-white/60">{user._count.generations}</td>
+                          <td className="py-3 px-4 text-sm font-mono text-[11px] text-white/60">{new Date(user.createdAt).toLocaleDateString()}</td>
+                          <td className="py-3 px-4 text-sm">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingUser(user);
+                                  setEditForm({
+                                    name: user.name,
+                                    email: user.email,
+                                    role: user.role || "USER",
+                                    credits: user.credits,
+                                  });
+                                }}
+                                className="rounded-lg border border-white/10 bg-white/5 p-1.5 hover:bg-white/10 transition"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(user.id)}
+                                className="rounded-lg border border-red-500/30 bg-red-500/10 p-1.5 text-red-200 hover:bg-red-500/15 transition"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-white/5 px-4 py-3">
+                  <div className="text-sm text-white/50">Showing {users.length} of {usersTotal} users</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setUsersPage((p) => Math.max(1, p - 1))}
+                      disabled={usersPage === 1}
+                      className="rounded-lg border border-white/10 bg-white/5 p-1.5 hover:bg-white/10 transition disabled:opacity-40"
                     >
-                      {/* Header */}
-                      <div className="flex items-start justify-between mb-4">
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="text-sm text-white/70">Page {usersPage}</span>
+                    <button
+                      onClick={() => setUsersPage((p) => p + 1)}
+                      disabled={users.length < 50}
+                      className="rounded-lg border border-white/10 bg-white/5 p-1.5 hover:bg-white/10 transition disabled:opacity-40"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Generations Tab */}
+          {activeTab === "generations" && (
+            <div className="space-y-6">
+              <h2 className="font-display text-2xl tracking-tight">All Generations</h2>
+              <div className="glass-panel rounded-2xl p-5">
+                <GenerationsTable />
+              </div>
+            </div>
+          )}
+
+          {/* Models Tab */}
+          {activeTab === "models" && (
+            <div className="space-y-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="font-display text-2xl tracking-tight">Model Registry</h2>
+                  <p className="mt-1 text-sm text-white/50">Manage AI models for image generation.</p>
+                </div>
+                <button
+                  onClick={() => fetchModels()}
+                  disabled={modelsLoading}
+                  className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 transition disabled:opacity-50"
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", modelsLoading && "animate-spin")} /> Refresh
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {(["all", "active", "inactive"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setModelsFilter(filter)}
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[11px] capitalize transition",
+                      modelsFilter === filter ? "bg-white text-black" : "bg-white/5 text-white/70 hover:bg-white/10"
+                    )}
+                  >
+                    {filter} ({filter === "all" ? models.length : filter === "active" ? models.filter(m => m.isActive).length : models.filter(m => !m.isActive).length})
+                  </button>
+                ))}
+              </div>
+
+              {modelsLoading ? (
+                <div className="flex h-64 items-center justify-center">
+                  <RefreshCw className="h-8 w-8 animate-spin text-white/40" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {filteredModels.map((model) => (
+                    <div key={model.id} className="glass-panel rounded-2xl p-5 transition hover:-translate-y-0.5">
+                      <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-semibold">{model.displayName}</h3>
-                            {model.isActive ? (
-                              <CheckCircle className="w-5 h-5 text-green-500" />
-                            ) : (
-                              <XCircle className="w-5 h-5 text-zinc-600" />
-                            )}
+                          <div className="mb-2 flex items-center gap-2">
+                            <h3 className="font-display text-lg tracking-tight">{model.displayName}</h3>
+                            <span className={cn("h-2 w-2 rounded-full", model.isActive ? "bg-emerald-500/80" : "bg-white/40")} />
                           </div>
                           <div className="flex items-center gap-2 text-sm">
-                            <span className="px-2 py-1 rounded-md bg-zinc-800 text-zinc-400 font-mono">
-                              {model.provider}
-                            </span>
-                            <span className="text-zinc-500">•</span>
-                            <span className="text-zinc-400">{model.modelId}</span>
+                            <span className="rounded-full bg-white/5 px-2 py-0.5 font-mono text-[10px] text-white/70">{model.provider}</span>
+                            <span className="text-white/30">·</span>
+                            <span className="font-mono text-[10px] text-white/60">{model.modelId}</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Buckets */}
-                      <div className="flex flex-wrap gap-2 mb-4">
+                      <div className="mt-3 flex flex-wrap gap-1.5">
                         {model.buckets.map((bucket) => (
-                          <span
-                            key={bucket}
-                            className="px-2 py-1 rounded-md bg-violet-500/10 text-violet-400 text-xs font-medium"
-                          >
-                            {bucket}
-                          </span>
+                          <span key={bucket} className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-white/60">{bucket}</span>
                         ))}
                       </div>
 
-                      {/* Stats Grid */}
-                      <div className="grid grid-cols-2 gap-3 mb-4">
-                        <div className="bg-zinc-800/50 rounded-lg p-3">
-                          <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
-                            <DollarSign className="w-3 h-3" />
-                            Cost/Image
-                          </div>
-                          <div className="text-lg font-semibold">${model.costPerImage.toFixed(3)}</div>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <div className="hairline rounded-xl p-3">
+                          <div className="mb-1 flex items-center gap-1.5 text-[10px] text-white/40"><DollarSign className="h-3 w-3" /> Cost/Image</div>
+                          <div className="font-mono text-sm text-white/85">${model.costPerImage.toFixed(3)}</div>
                         </div>
-                        <div className="bg-zinc-800/50 rounded-lg p-3">
-                          <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
-                            <ImageIcon className="w-3 h-3" />
-                            Generations
-                          </div>
-                          <div className="text-lg font-semibold">{model.totalGenerations}</div>
+                        <div className="hairline rounded-xl p-3">
+                          <div className="mb-1 flex items-center gap-1.5 text-[10px] text-white/40"><ImageIcon className="h-3 w-3" /> Generations</div>
+                          <div className="font-mono text-sm text-white/85">{model.totalGenerations}</div>
                         </div>
-                        <div className="bg-zinc-800/50 rounded-lg p-3">
-                          <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
-                            <Star className="w-3 h-3" />
-                            Avg Rating
-                          </div>
-                          <div className="text-lg font-semibold">
-                            {model.avgRating ? model.avgRating.toFixed(2) : "N/A"}
-                          </div>
+                        <div className="hairline rounded-xl p-3">
+                          <div className="mb-1 flex items-center gap-1.5 text-[10px] text-white/40"><Star className="h-3 w-3" /> Avg Rating</div>
+                          <div className="font-mono text-sm text-white/85">{model.avgRating ? model.avgRating.toFixed(2) : "N/A"}</div>
                         </div>
-                        <div className="bg-zinc-800/50 rounded-lg p-3">
-                          <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
-                            <Clock className="w-3 h-3" />
-                            Avg Latency
-                          </div>
-                          <div className="text-lg font-semibold">
-                            {model.avgLatency ? `${model.avgLatency.toFixed(1)}s` : "N/A"}
-                          </div>
+                        <div className="hairline rounded-xl p-3">
+                          <div className="mb-1 flex items-center gap-1.5 text-[10px] text-white/40"><Clock className="h-3 w-3" /> Avg Latency</div>
+                          <div className="font-mono text-sm text-white/85">{model.avgLatency ? `${model.avgLatency.toFixed(1)}s` : "N/A"}</div>
                         </div>
                       </div>
 
-                      {/* Toggle Switches */}
-                      <div className="space-y-3 pt-4 border-t border-zinc-800">
-                        {/* Active Toggle */}
+                      <div className="mt-4 space-y-3 border-t border-white/5 pt-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="font-medium text-sm">Active for Production</div>
-                            <div className="text-xs text-zinc-500">
-                              {model.isActive ? "Available for generation" : "Disabled"}
-                            </div>
+                            <div className="text-sm text-white/85">Active for production</div>
+                            <div className="text-xs text-white/50">{model.isActive ? "Available for generation" : "Disabled"}</div>
                           </div>
-                          <button
-                            onClick={() => handleToggleModel(model.modelId, "isActive", model.isActive)}
-                            className={cn(
-                              "relative w-14 h-8 rounded-full transition-colors",
-                              model.isActive ? "bg-green-500" : "bg-zinc-700"
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                "absolute top-1 w-6 h-6 bg-white rounded-full transition-transform",
-                                model.isActive ? "right-1" : "left-1"
-                              )}
-                            />
-                          </button>
+                          <Switch on={model.isActive} onClick={() => handleToggleModel(model.modelId, "isActive", model.isActive)} />
                         </div>
-
-                        {/* Testing Toggle */}
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="font-medium text-sm">Testing Mode</div>
-                            <div className="text-xs text-zinc-500">
-                              {model.isTestingEnabled ? "Enabled for parallel testing" : "Not in testing"}
-                            </div>
+                            <div className="text-sm text-white/85">Testing mode</div>
+                            <div className="text-xs text-white/50">{model.isTestingEnabled ? "Enabled for parallel testing" : "Not in testing"}</div>
                           </div>
-                          <button
-                            onClick={() => handleToggleModel(model.modelId, "isTestingEnabled", model.isTestingEnabled)}
-                            className={cn(
-                              "relative w-14 h-8 rounded-full transition-colors",
-                              model.isTestingEnabled ? "bg-violet-500" : "bg-zinc-700"
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                "absolute top-1 w-6 h-6 bg-white rounded-full transition-transform",
-                                model.isTestingEnabled ? "right-1" : "left-1"
-                              )}
-                            />
-                          </button>
+                          <Switch on={model.isTestingEnabled} onClick={() => handleToggleModel(model.modelId, "isTestingEnabled", model.isTestingEnabled)} />
                         </div>
-
-                        {/* View Ratings Button */}
                         <button
                           onClick={() => setViewingRatingsModel({ id: model.modelId, name: model.displayName })}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-colors text-sm font-medium"
+                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 transition"
                         >
-                          <Star className="w-4 h-4" />
-                          View Ratings
-                          {model.avgRating && ` (${model.avgRating.toFixed(1)} avg)`}
+                          <Star className="h-3.5 w-3.5" /> View ratings{model.avgRating ? ` (${model.avgRating.toFixed(1)} avg)` : ""}
                         </button>
                       </div>
                     </div>
                   ))}
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* Empty State */}
-            {!modelsLoading && models.filter((m) =>
-              modelsFilter === "all" ? true :
-              modelsFilter === "active" ? m.isActive :
-              !m.isActive
-            ).length === 0 && (
-              <div className="text-center py-16 text-zinc-500">
-                No {modelsFilter !== "all" && modelsFilter} models found
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Feature Config Tab */}
-        {activeTab === "config" && (
-          <FeatureConfigPanel />
-        )}
-
-        {/* Settings Tab */}
-        {activeTab === "settings" && settings && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold">System Settings</h2>
-
-            {/* Generation Settings */}
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4">Generation Backend</h3>
-              <div className="space-y-3">
-                <SettingToggle
-                  label="Use Ideogram v3"
-                  description="Typography & poster generation"
-                  enabled={settings.generation.useIdeogram}
-                  onToggle={() =>
-                    handleToggleSetting("generation", "useIdeogram", settings.generation.useIdeogram)
-                  }
-                />
-                <SettingToggle
-                  label="Use Gemini Engine"
-                  description="Prompt engineering with Gemini 2.5 Flash"
-                  enabled={settings.generation.useGeminiEngine}
-                  onToggle={() =>
-                    handleToggleSetting(
-                      "generation",
-                      "useGeminiEngine",
-                      settings.generation.useGeminiEngine
-                    )
-                  }
-                />
-                <SettingToggle
-                  label="Use BFL API"
-                  description="Flux 2 Max official ($0.060)"
-                  enabled={settings.generation.useBfl}
-                  onToggle={() =>
-                    handleToggleSetting("generation", "useBfl", settings.generation.useBfl)
-                  }
-                />
-                <SettingToggle
-                  label="Use KIE API"
-                  description="Flux 2 Pro cheapest ($0.025)"
-                  enabled={settings.generation.useKie}
-                  onToggle={() =>
-                    handleToggleSetting("generation", "useKie", settings.generation.useKie)
-                  }
-                />
-                <SettingToggle
-                  label="Use Pixazo API"
-                  description="Flux Schnell cheapest ($0.0012)"
-                  enabled={settings.generation.usePixazo}
-                  onToggle={() =>
-                    handleToggleSetting("generation", "usePixazo", settings.generation.usePixazo)
-                  }
-                />
-              </div>
+              {!modelsLoading && filteredModels.length === 0 && (
+                <div className="glass-panel rounded-2xl p-12 text-center text-sm text-white/50">
+                  No {modelsFilter !== "all" && modelsFilter} models found
+                </div>
+              )}
             </div>
+          )}
 
-            {/* Quality Settings */}
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4">Quality Critic</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">
-                    Global Threshold
-                  </label>
-                  <input
-                    type="number"
-                    value={settings.quality.threshold}
-                    readOnly
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white"
-                  />
+          {/* Feature Config Tab */}
+          {activeTab === "config" && (
+            <div className="glass-panel rounded-2xl p-5">
+              <FeatureConfigPanel />
+            </div>
+          )}
+
+          {/* Settings Tab */}
+          {activeTab === "settings" && settings && (
+            <div className="space-y-6">
+              <h2 className="font-display text-2xl tracking-tight">System Settings</h2>
+
+              <div className="glass-panel rounded-2xl p-5">
+                <p className="kerned text-white/40 mb-4">GENERATION BACKEND</p>
+                <div className="space-y-1">
+                  <SettingToggle label="Use Ideogram v3" description="Typography & poster generation" enabled={settings.generation.useIdeogram} onToggle={() => handleToggleSetting("generation", "useIdeogram", settings.generation.useIdeogram)} />
+                  <SettingToggle label="Use Gemini Engine" description="Prompt engineering with Gemini 2.5 Flash" enabled={settings.generation.useGeminiEngine} onToggle={() => handleToggleSetting("generation", "useGeminiEngine", settings.generation.useGeminiEngine)} />
+                  <SettingToggle label="Use BFL API" description="Flux 2 Max official ($0.060)" enabled={settings.generation.useBfl} onToggle={() => handleToggleSetting("generation", "useBfl", settings.generation.useBfl)} />
+                  <SettingToggle label="Use KIE API" description="Flux 2 Pro cheapest ($0.025)" enabled={settings.generation.useKie} onToggle={() => handleToggleSetting("generation", "useKie", settings.generation.useKie)} />
+                  <SettingToggle label="Use Pixazo API" description="Flux Schnell cheapest ($0.0012)" enabled={settings.generation.usePixazo} onToggle={() => handleToggleSetting("generation", "usePixazo", settings.generation.usePixazo)} />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">
-                    Dimension Floor
-                  </label>
-                  <input
-                    type="number"
-                    value={settings.quality.dimensionFloor}
-                    readOnly
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white"
-                  />
+              </div>
+
+              <div className="glass-panel rounded-2xl p-5">
+                <p className="kerned text-white/40 mb-4">QUALITY CRITIC</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <p className="kerned text-white/40 mb-2">GLOBAL THRESHOLD</p>
+                    <input type="number" value={settings.quality.threshold} readOnly className="w-full rounded-lg border border-white/10 bg-black/20 p-2 text-sm text-white/85 outline-none" />
+                  </div>
+                  <div>
+                    <p className="kerned text-white/40 mb-2">DIMENSION FLOOR</p>
+                    <input type="number" value={settings.quality.dimensionFloor} readOnly className="w-full rounded-lg border border-white/10 bg-black/20 p-2 text-sm text-white/85 outline-none" />
+                  </div>
+                  <div>
+                    <p className="kerned text-white/40 mb-2">MAX IMAGES</p>
+                    <input type="number" value={settings.quality.maxImages} readOnly className="w-full rounded-lg border border-white/10 bg-black/20 p-2 text-sm text-white/85 outline-none" />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">
-                    Max Images
-                  </label>
-                  <input
-                    type="number"
-                    value={settings.quality.maxImages}
-                    readOnly
-                    className="w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white"
-                  />
+              </div>
+
+              <div className="glass-panel rounded-2xl p-5">
+                <p className="kerned text-white/40 mb-4">API KEYS STATUS</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  <KeyStatus label="Gemini" configured={settings.providers.hasGeminiKey} />
+                  <KeyStatus label="FAL" configured={settings.providers.hasFalKey} />
+                  <KeyStatus label="Together" configured={settings.providers.hasTogetherKey} />
+                  <KeyStatus label="BFL" configured={settings.providers.hasBflKey} />
+                  <KeyStatus label="KIE" configured={settings.providers.hasKieKey} />
+                  <KeyStatus label="Pixazo" configured={settings.providers.hasPixazoKey} />
                 </div>
               </div>
             </div>
-
-            {/* API Keys Status */}
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4">API Keys Status</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <KeyStatus label="Gemini" configured={settings.providers.hasGeminiKey} />
-                <KeyStatus label="FAL" configured={settings.providers.hasFalKey} />
-                <KeyStatus label="Together" configured={settings.providers.hasTogetherKey} />
-                <KeyStatus label="BFL" configured={settings.providers.hasBflKey} />
-                <KeyStatus label="KIE" configured={settings.providers.hasKieKey} />
-                <KeyStatus label="Pixazo" configured={settings.providers.hasPixazoKey} />
-              </div>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Edit User Modal */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold">Edit User</h3>
-              <button
-                onClick={() => setEditingUser(null)}
-                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
-              >
-                <X className="w-4 h-4" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="glass-panel w-full max-w-md rounded-2xl p-6" style={{ boxShadow: "var(--shadow-float)" }}>
+            <div className="mb-6 flex items-center justify-between">
+              <h3 className="font-display text-lg tracking-tight">Edit user</h3>
+              <button onClick={() => setEditingUser(null)} className="rounded-xl border border-white/10 bg-white/5 p-1.5 hover:bg-white/10 transition">
+                <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-2">Name</label>
-                <input
-                  type="text"
-                  value={editForm.name}
-                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-violet-600"
-                />
+                <p className="kerned text-white/40 mb-2">NAME</p>
+                <input type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full rounded-lg border border-white/10 bg-black/20 p-2 text-sm outline-none focus:border-white/30" />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-2">Email</label>
-                <input
-                  type="email"
-                  value={editForm.email}
-                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-violet-600"
-                />
+                <p className="kerned text-white/40 mb-2">EMAIL</p>
+                <input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="w-full rounded-lg border border-white/10 bg-black/20 p-2 text-sm outline-none focus:border-white/30" />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-2">Role</label>
-                <select
-                  value={editForm.role}
-                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-violet-600"
-                >
+                <p className="kerned text-white/40 mb-2">ROLE</p>
+                <select value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })} className="w-full rounded-lg border border-white/10 bg-black/20 p-2 text-sm outline-none focus:border-white/30">
                   <option value="USER">USER</option>
                   <option value="ADMIN">ADMIN</option>
                   <option value="SUPER_ADMIN">SUPER_ADMIN</option>
                 </select>
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-2">Credits</label>
-                <input
-                  type="number"
-                  value={editForm.credits}
-                  onChange={(e) => setEditForm({ ...editForm, credits: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:border-violet-600"
-                />
+                <p className="kerned text-white/40 mb-2">CREDITS</p>
+                <input type="number" value={editForm.credits} onChange={(e) => setEditForm({ ...editForm, credits: parseInt(e.target.value) })} className="w-full rounded-lg border border-white/10 bg-black/20 p-2 text-sm outline-none focus:border-white/30" />
               </div>
             </div>
 
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setEditingUser(null)}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpdateUser}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 font-medium transition-colors"
-              >
-                Save Changes
-              </button>
+            <div className="mt-6 flex gap-3">
+              <button onClick={() => setEditingUser(null)} className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 transition">Cancel</button>
+              <button onClick={handleUpdateUser} className="flex-1 rounded-xl px-4 py-2 text-sm font-medium text-black transition" style={{ background: "var(--gradient-aurora)" }}>Save changes</button>
             </div>
-          </motion.div>
+          </div>
         </div>
       )}
 
@@ -1062,90 +793,42 @@ export default function AdminDashboard() {
 }
 
 // Helper Components
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  color,
-  small = false,
-}: {
-  label: string;
-  value: number | string;
-  icon: any;
-  color: string;
-  small?: boolean;
-}) {
-  const colorClasses = {
-    blue: "from-blue-600 to-cyan-600",
-    violet: "from-violet-600 to-indigo-600",
-    green: "from-green-600 to-emerald-600",
-    orange: "from-orange-600 to-red-600",
-  };
-
+function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-      <div className="flex items-center gap-3 mb-3">
-        <div
-          className={cn(
-            "w-10 h-10 rounded-lg bg-gradient-to-br flex items-center justify-center",
-            colorClasses[color as keyof typeof colorClasses]
-          )}
-        >
-          <Icon className="w-5 h-5 text-white" />
-        </div>
-        <span className="text-sm font-medium text-zinc-400">{label}</span>
-      </div>
-      <div className={cn("font-bold", small ? "text-2xl" : "text-3xl")}>{value}</div>
+    <div className="glass-panel rounded-2xl p-4">
+      <p className="kerned text-white/40 mb-2">{label}</p>
+      <p className="font-mono text-3xl text-aurora">{value}</p>
     </div>
   );
 }
 
-function SettingToggle({
-  label,
-  description,
-  enabled,
-  onToggle,
-}: {
-  label: string;
-  description: string;
-  enabled: boolean;
-  onToggle: () => void;
-}) {
+function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
-    <div className="flex items-center justify-between py-3">
+    <button onClick={onClick} className={cn("relative h-5 w-9 rounded-full transition", on ? "bg-white/80" : "bg-white/10")}>
+      <span className={cn("absolute top-0.5 h-4 w-4 rounded-full transition", on ? "left-0.5 translate-x-4 bg-black" : "left-0.5 bg-white")} />
+    </button>
+  );
+}
+
+function SettingToggle({ label, description, enabled, onToggle }: { label: string; description: string; enabled: boolean; onToggle: () => void }) {
+  return (
+    <div className="flex items-center justify-between border-b border-white/5 py-3 last:border-0">
       <div>
-        <div className="font-medium">{label}</div>
-        <div className="text-sm text-zinc-500">{description}</div>
+        <div className="text-sm text-white/85">{label}</div>
+        <div className="text-xs text-white/50">{description}</div>
       </div>
-      <button
-        onClick={onToggle}
-        className={cn(
-          "relative w-12 h-6 rounded-full transition-colors",
-          enabled ? "bg-violet-600" : "bg-zinc-700"
-        )}
-      >
-        <div
-          className={cn(
-            "absolute top-1 w-4 h-4 rounded-full bg-white transition-transform",
-            enabled ? "translate-x-7" : "translate-x-1"
-          )}
-        />
-      </button>
+      <Switch on={enabled} onClick={onToggle} />
     </div>
   );
 }
 
 function KeyStatus({ label, configured }: { label: string; configured: boolean }) {
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-800/50">
-      <span className="text-sm font-medium">{label}</span>
-      <span
-        className={cn(
-          "px-2 py-1 rounded-md text-xs font-medium",
-          configured ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"
-        )}
-      >
-        {configured ? "✓" : "✗"}
+    <div className="hairline flex items-center justify-between rounded-xl p-3">
+      <span className="text-sm text-white/85">{label}</span>
+      <span className="inline-flex items-center gap-1.5 text-xs text-white/60">
+        <span className={cn("h-2 w-2 rounded-full", configured ? "bg-emerald-500/80" : "bg-red-500/80")} />
+        {configured ? "Configured" : "Missing"}
       </span>
     </div>
   );

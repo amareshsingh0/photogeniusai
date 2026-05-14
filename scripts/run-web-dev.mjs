@@ -6,6 +6,7 @@
  */
 import { spawn, execSync } from "child_process";
 import net from "net";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -92,7 +93,7 @@ if (fs.existsSync(nextCacheDir)) {
 
 const child = spawn(
   "node",
-  [`--max-old-space-size=${NODE_HEAP}`, "node_modules/.bin/next", "dev", "-p", String(PORT), "-H", HOST],
+  [`--max-old-space-size=${NODE_HEAP}`, "node_modules/next/dist/bin/next", "dev", "-p", String(PORT), "-H", HOST],
   {
     cwd: webDir,
     stdio: "inherit",

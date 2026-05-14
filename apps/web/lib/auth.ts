@@ -58,7 +58,7 @@ async function verifyToken(token: string) {
  */
 export async function auth() {
   // Dev user bypass (no real auth implemented yet - Sprint 8 pending)
-  if (!process.env.REQUIRE_AUTH) {
+  if (process.env.REQUIRE_AUTH !== "true") {
     return {
       userId: DEV_USER.id,
       getToken: async () => "dev_token_123",
@@ -86,7 +86,7 @@ export async function auth() {
  */
 export async function getCurrentUser(): Promise<DevUser | null> {
   // Dev user bypass (no real auth implemented yet - Sprint 8 pending)
-  if (!process.env.REQUIRE_AUTH) {
+  if (process.env.REQUIRE_AUTH !== "true") {
     return DEV_USER;
   }
 
@@ -138,7 +138,7 @@ export async function checkCredits(requiredCredits: number): Promise<DevUser> {
   const user = await requireAuth();
 
   // Dev user bypass (no real auth implemented yet - Sprint 8 pending)
-  if (!process.env.REQUIRE_AUTH) {
+  if (process.env.REQUIRE_AUTH !== "true") {
     console.log(`[DEV] Credit check skipped - required: ${requiredCredits}`);
     return user;
   }

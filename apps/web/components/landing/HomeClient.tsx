@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
 import Footer from "@/components/landing/Footer";
 import { Camera, Film, Heart, Sparkles, Building2, Package, Gamepad2, ArrowRight } from "lucide-react";
@@ -114,7 +113,6 @@ export default function HomeClient() {
         <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.02] mix-blend-overlay" />
       </div>
 
-      <Navbar />
       <Hero />
       <div className="relative z-10 bg-[#030303]">
         <InstantMagicPreview />
