@@ -3,6 +3,7 @@ import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { SiteNav, MobileDock } from "@/components/pixium/site-nav";
 import { ConditionalFooter } from "@/components/pixium/conditional-footer";
+import { ImageProtection } from "@/components/pixium/image-protection";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -64,6 +65,7 @@ export default function RootLayout({
     >
       <body className="min-h-screen w-full overflow-x-hidden bg-background font-sans text-foreground antialiased">
         <a href="#main" className="skip-link">Skip to content</a>
+        <ImageProtection />
         <Providers>
           <SiteNav />
           <main id="main" tabIndex={-1} className="relative z-10 pt-20 focus:outline-none">

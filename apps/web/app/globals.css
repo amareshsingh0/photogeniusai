@@ -763,6 +763,26 @@
   }
   .text-balance { text-wrap: balance; }
 
+  /* Anti-download protection for bundled showcase imagery.
+     Applied to all <img> in pages that show only protected samples (landing,
+     explore, type/style thumbnails). User-generated images (gallery, history,
+     focused result tiles) intentionally use plain <img> so Download still works.
+     This is NOT a hard lock — DevTools can always inspect URLs — but it blocks
+     the casual right-click → Save and drag-to-desktop paths. */
+  .no-download img,
+  img.no-download {
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    pointer-events: auto;
+  }
+  /* Block the long-press context menu on iOS for protected images */
+  .no-download img::-webkit-media-controls,
+  img.no-download::-webkit-media-controls {
+    display: none !important;
+  }
+
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar {
     -ms-overflow-style: none;
