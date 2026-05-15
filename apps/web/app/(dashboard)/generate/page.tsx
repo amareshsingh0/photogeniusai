@@ -8,7 +8,7 @@ import {
   ChevronDown, Image as ImageIcon, Layers, Plus, Settings2,
   Palette, Type, Clock, X, ArrowLeft, ArrowUpToLine, Pencil,
   Wand, Gauge, SlidersHorizontal, Megaphone, Loader2, AlertCircle,
-  UserRoundCog, Package, Stamp,
+  UserRoundCog, Package, Stamp, Users,
 } from "lucide-react";
 import { samples, types, styles as styleList } from "@/lib/pixium/samples";
 
@@ -81,7 +81,7 @@ export default function Generate() {
   // arriving from the landing-page hero prompt bar or the /types catalog.
   const [prompt, setPrompt] = useState(search?.get("prompt") ?? "");
   const [negative, setNegative] = useState("");
-  const [activeType, setActiveType] = useState(search?.get("type") ?? types[0].id);
+  const [activeType, setActiveType] = useState(search?.get("type") ?? "auto");
   const [style, setStyle] = useState(search?.get("style") ?? "Auto");
   const [ratio, setRatio] = useState("1:1");
   const [customMode, setCustomMode] = useState(false);
@@ -100,23 +100,21 @@ export default function Generate() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
-  // Slotted references: named slots (subject/product/logo) + extras pool.
-  // The flat `referenceImages` is derived from these and sent to backend in slot order
-  // (subject first, then product, logo, extras). Backend treats reference_image[0] as primary.
-  const [refSubject, setRefSubject] = useState<string | null>(null);
-  const [refProduct, setRefProduct] = useState<string | null>(null);
-  const [refLogo, setRefLogo] = useState<string | null>(null);
+  // Slotted references: named multi-image slots (people/products/logos) + extras pool.
+  // Each named slot accepts 1+ images (couple, group of actors, product variants, etc).
+  // The flat `referenceImages` is derived from these and sent to backend in slot order:
+  // people first, then products, logos, extras. Backend treats reference_image[0] as primary.
+  const [refPeople, setRefPeople] = useState<string[]>([]);
+  const [refProducts, setRefProducts] = useState<string[]>([]);
+  const [refLogos, setRefLogos] = useState<string[]>([]);
   const [refExtras, setRefExtras] = useState<string[]>([]);
+  // Per-slot caps. People is the highest (group shots possible).
+  const SLOT_CAPS = { people: 4, products: 4, logos: 2, extras: 2 } as const;
   // Slot the file picker should fill on the next change event. null = legacy flat add.
-  const [pendingRefSlot, setPendingRefSlot] = useState<"subject" | "product" | "logo" | "extras" | null>(null);
+  const [pendingRefSlot, setPendingRefSlot] = useState<"people" | "products" | "logos" | "extras" | null>(null);
   const referenceImages = useMemo<string[]>(() => {
-    const list: string[] = [];
-    if (refSubject) list.push(refSubject);
-    if (refProduct) list.push(refProduct);
-    if (refLogo) list.push(refLogo);
-    list.push(...refExtras);
-    return list;
-  }, [refSubject, refProduct, refLogo, refExtras]);
+    return [...refPeople, ...refProducts, ...refLogos, ...refExtras];
+  }, [refPeople, refProducts, refLogos, refExtras]);
 
   // ── Generation lifecycle ──────────────────────────────────────────────────
   const [isGenerating, setIsGenerating] = useState(false);
@@ -147,51 +145,45 @@ export default function Generate() {
   const handleRefSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Reject if total refs at cap and we're trying to add an extra
     const slot = pendingRefSlot ?? "extras";
-    if (slot === "extras" && referenceImages.length >= MAX_REFS) {
-      setError(`Max ${MAX_REFS} reference images`);
+    const cap = SLOT_CAPS[slot];
+    const cur = slot === "people" ? refPeople.length : slot === "products" ? refProducts.length : slot === "logos" ? refLogos.length : refExtras.length;
+    if (cur >= cap) {
+      setError(`Max ${cap} ${slot} reference images`);
       e.target.value = "";
       return;
     }
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
-      if (slot === "subject") setRefSubject(dataUrl);
-      else if (slot === "product") setRefProduct(dataUrl);
-      else if (slot === "logo") setRefLogo(dataUrl);
-      else setRefExtras((prev) => [...prev, dataUrl]);
+      if (slot === "people") setRefPeople((p) => [...p, dataUrl]);
+      else if (slot === "products") setRefProducts((p) => [...p, dataUrl]);
+      else if (slot === "logos") setRefLogos((p) => [...p, dataUrl]);
+      else setRefExtras((p) => [...p, dataUrl]);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
     setPendingRefSlot(null);
     setRefsOpen(false);
-  }, [referenceImages.length, pendingRefSlot]);
+  }, [pendingRefSlot, refPeople.length, refProducts.length, refLogos.length, refExtras.length]);
 
   // Helper to trigger upload for a specific slot
-  const triggerSlotUpload = useCallback((slot: "subject" | "product" | "logo" | "extras") => {
+  const triggerSlotUpload = useCallback((slot: "people" | "products" | "logos" | "extras") => {
     setPendingRefSlot(slot);
     refFileInput.current?.click();
   }, []);
 
   // Remove a reference by its index in the flat referenceImages array.
-  // Maps the index back to the correct slot (subject/product/logo/extras[i]).
   const removeReferenceAt = useCallback((flatIdx: number) => {
     let i = flatIdx;
-    if (refSubject) {
-      if (i === 0) { setRefSubject(null); return; }
-      i -= 1;
-    }
-    if (refProduct) {
-      if (i === 0) { setRefProduct(null); return; }
-      i -= 1;
-    }
-    if (refLogo) {
-      if (i === 0) { setRefLogo(null); return; }
-      i -= 1;
-    }
+    if (i < refPeople.length) { setRefPeople((p) => p.filter((_, idx) => idx !== i)); return; }
+    i -= refPeople.length;
+    if (i < refProducts.length) { setRefProducts((p) => p.filter((_, idx) => idx !== i)); return; }
+    i -= refProducts.length;
+    if (i < refLogos.length) { setRefLogos((p) => p.filter((_, idx) => idx !== i)); return; }
+    i -= refLogos.length;
     setRefExtras((prev) => prev.filter((_, idx) => idx !== i));
-  }, [refSubject, refProduct, refLogo]);
+  }, [refPeople.length, refProducts.length, refLogos.length]);
 
   // ── Detect admin (enables parallel multi-model testing mode on the backend) ──
   useEffect(() => {
@@ -268,11 +260,13 @@ export default function Generate() {
         reference_image: referenceImages[0] || undefined,
         extra_reference_images: referenceImages.length > 1 ? referenceImages.slice(1) : undefined,
         // Slotted references — backend can compose a structured prompt from these
-        reference_subject: refSubject || undefined,
-        reference_product: refProduct || undefined,
-        reference_logo: refLogo || undefined,
+        // Slotted reference arrays (May 16 2026): each slot accepts multiple images
+        // (couple/group for people, product variants, primary+secondary logo, etc).
+        reference_people: refPeople.length ? refPeople : undefined,
+        reference_products: refProducts.length ? refProducts : undefined,
+        reference_logos: refLogos.length ? refLogos : undefined,
         negative_prompt: negative.trim() || undefined,
-        capability_bucket: activeType !== "fast" ? activeType : undefined,
+        capability_bucket: activeType !== "fast" && activeType !== "auto" ? activeType : undefined,
         testing_mode: isAdmin,
         // Per-slot seed so each batch slot gets a different image
         seed: locked ? Number(seed) || undefined : Math.floor(Math.random() * 1_000_000) + slot * 7919,
@@ -325,7 +319,7 @@ export default function Generate() {
       }
     }
     return final;
-  }, [prompt, activeRatio, activeQuality, style, referenceImages, refSubject, refProduct, refLogo, negative, activeType, customMode, customW, customH, locked, seed, isAdmin]);
+  }, [prompt, activeRatio, activeQuality, style, referenceImages, refPeople, refProducts, refLogos, negative, activeType, customMode, customW, customH, locked, seed, isAdmin]);
 
   // ── Real generation: Pixium SSE pipeline (single or batch) ──────────────────────────────────
   const generate = useCallback(async () => {
@@ -394,11 +388,11 @@ export default function Generate() {
           style: style !== "Auto" ? style : undefined,
           reference_image: referenceImages[0] || undefined,
           extra_reference_images: referenceImages.length > 1 ? referenceImages.slice(1) : undefined,
-          reference_subject: refSubject || undefined,
-          reference_product: refProduct || undefined,
-          reference_logo: refLogo || undefined,
+          reference_people: refPeople.length ? refPeople : undefined,
+          reference_products: refProducts.length ? refProducts : undefined,
+          reference_logos: refLogos.length ? refLogos : undefined,
           negative_prompt: negative.trim() || undefined,
-          capability_bucket: activeType !== "fast" ? activeType : undefined,
+          capability_bucket: activeType !== "fast" && activeType !== "auto" ? activeType : undefined,
           testing_mode: isAdmin,
         }),
       });
@@ -486,7 +480,7 @@ export default function Generate() {
       clearTimeout(timeoutId);
       setIsGenerating(false);
     }
-  }, [prompt, isGenerating, activeRatio, activeQuality, style, referenceImages, refSubject, refProduct, refLogo, negative, activeType, locked, customMode, customW, customH, batch, runOneGeneration, activeModel, isAdmin]);
+  }, [prompt, isGenerating, activeRatio, activeQuality, style, referenceImages, refPeople, refProducts, refLogos, negative, activeType, locked, customMode, customW, customH, batch, runOneGeneration, activeModel, isAdmin]);
 
   // ── Visible tiles: real result(s) > one placeholder sample matching aspect ──
   const visibleTiles = useMemo<GenerationResult[]>(() => {
@@ -565,9 +559,16 @@ export default function Generate() {
               <span className="text-white/20">/</span>
               <span className="font-display">Create</span>
               <span className="text-white/20">·</span>
-              {/* Type pills inline — replaces Inspector Type panel */}
+              {/* Type pills inline — Auto first (default), Fast hidden from picker */}
               <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
-                {types.map((t) => (
+                <button
+                  onClick={() => setActiveType("auto")}
+                  title="Auto — let the AI pick the best bucket from your prompt"
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${activeType === "auto" ? "bg-white text-black" : "border border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.08] hover:text-white"}`}
+                >
+                  Auto
+                </button>
+                {types.filter((t) => t.id !== "fast").map((t) => (
                   <button
                     key={t.id}
                     onClick={() => setActiveType(t.id)}
@@ -798,17 +799,17 @@ export default function Generate() {
               seed={seed} setSeed={setSeed}
               locked={locked} setLocked={setLocked}
               showAdvanced={showAdvanced} setShowAdvanced={setShowAdvanced}
-              refSubject={refSubject}
-              refProduct={refProduct}
-              refLogo={refLogo}
+              refPeople={refPeople}
+              refProducts={refProducts}
+              refLogos={refLogos}
               refExtras={refExtras}
               onSlotUpload={triggerSlotUpload}
-              onSlotClear={(s) => {
-                if (s === "subject") setRefSubject(null);
-                else if (s === "product") setRefProduct(null);
-                else if (s === "logo") setRefLogo(null);
+              onSlotItemRemove={(slot, idx) => {
+                if (slot === "people") setRefPeople((p) => p.filter((_, i) => i !== idx));
+                else if (slot === "products") setRefProducts((p) => p.filter((_, i) => i !== idx));
+                else if (slot === "logos") setRefLogos((p) => p.filter((_, i) => i !== idx));
+                else setRefExtras((p) => p.filter((_, i) => i !== idx));
               }}
-              onExtraRemove={(idx) => setRefExtras((prev) => prev.filter((_, i) => i !== idx))}
             />
           )}
         </aside>
@@ -927,17 +928,17 @@ export default function Generate() {
               seed={seed} setSeed={setSeed}
               locked={locked} setLocked={setLocked}
               showAdvanced={showAdvanced} setShowAdvanced={setShowAdvanced}
-              refSubject={refSubject}
-              refProduct={refProduct}
-              refLogo={refLogo}
+              refPeople={refPeople}
+              refProducts={refProducts}
+              refLogos={refLogos}
               refExtras={refExtras}
               onSlotUpload={triggerSlotUpload}
-              onSlotClear={(s) => {
-                if (s === "subject") setRefSubject(null);
-                else if (s === "product") setRefProduct(null);
-                else if (s === "logo") setRefLogo(null);
+              onSlotItemRemove={(slot, idx) => {
+                if (slot === "people") setRefPeople((p) => p.filter((_, i) => i !== idx));
+                else if (slot === "products") setRefProducts((p) => p.filter((_, i) => i !== idx));
+                else if (slot === "logos") setRefLogos((p) => p.filter((_, i) => i !== idx));
+                else setRefExtras((p) => p.filter((_, i) => i !== idx));
               }}
-              onExtraRemove={(idx) => setRefExtras((prev) => prev.filter((_, i) => i !== idx))}
             />
           </div>
         </div>
@@ -963,14 +964,13 @@ type InspectorProps = {
   seed: string; setSeed: (v: string) => void;
   locked: boolean; setLocked: (v: boolean) => void;
   showAdvanced: boolean; setShowAdvanced: (v: boolean) => void;
-  // Slotted references — named primary slots + freeform extras
-  refSubject: string | null;
-  refProduct: string | null;
-  refLogo: string | null;
+  // Slotted multi-image references — each slot accepts 1+ images
+  refPeople: string[];
+  refProducts: string[];
+  refLogos: string[];
   refExtras: string[];
-  onSlotUpload: (slot: "subject" | "product" | "logo" | "extras") => void;
-  onSlotClear: (slot: "subject" | "product" | "logo") => void;
-  onExtraRemove: (idx: number) => void;
+  onSlotUpload: (slot: "people" | "products" | "logos" | "extras") => void;
+  onSlotItemRemove: (slot: "people" | "products" | "logos" | "extras", idx: number) => void;
 };
 
 function Inspector(p: InspectorProps) {
@@ -983,70 +983,76 @@ function Inspector(p: InspectorProps) {
       </header>
 
       <div className="space-y-2">
-        {/* REFERENCES — named slots (Subject / Product / Logo) + freeform extras */}
+        {/* REFERENCES — multi-image slots (People / Products / Logos) + extras */}
         <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">References</h4>
             <span className="font-mono text-[10px] text-white/55">
-              {(p.refSubject ? 1 : 0) + (p.refProduct ? 1 : 0) + (p.refLogo ? 1 : 0) + p.refExtras.length}
+              {p.refPeople.length + p.refProducts.length + p.refLogos.length + p.refExtras.length}
             </span>
           </div>
-          <p className="mb-2 text-[10.5px] leading-snug text-white/50">
-            Drop images into the right slot so the AI knows what each one is.
+          <p className="mb-2.5 text-[10.5px] leading-snug text-white/50">
+            Tell the AI <em>what</em> each image is. Each slot accepts multiple — couples, product variants, multi-mark brands.
           </p>
 
-          {/* Named slots — 3 columns */}
-          <div className="grid grid-cols-3 gap-1.5">
+          {/* Named slots — stacked, each with its own thumb row */}
+          <div className="space-y-2">
             {([
-              { key: "subject", label: "Subject", hint: "Person / model / actor", value: p.refSubject, Icon: UserRoundCog },
-              { key: "product", label: "Product", hint: "Item to feature", value: p.refProduct, Icon: Package },
-              { key: "logo",    label: "Logo",    hint: "Brand mark",        value: p.refLogo,    Icon: Stamp },
+              { key: "people",   label: "People",   hint: "Model, actor, couple, group — up to 4", Icon: Users,   cap: 4, value: p.refPeople },
+              { key: "products", label: "Products", hint: "Item(s) to feature — up to 4 variants",  Icon: Package, cap: 4, value: p.refProducts },
+              { key: "logos",    label: "Logos",    hint: "Primary + secondary brand mark",         Icon: Stamp,   cap: 2, value: p.refLogos },
             ] as const).map((s) => (
-              <button
-                key={s.key}
-                onClick={() => p.onSlotUpload(s.key)}
-                title={`${s.label} — ${s.hint}${s.value ? " (click to replace)" : ""}`}
-                className={`group relative aspect-square overflow-hidden rounded-md transition ${
-                  s.value ? "ring-2 ring-white" : "ring-1 ring-white/[0.08] hover:ring-white/25 border border-dashed border-white/15"
-                }`}
-              >
-                {s.value ? (
-                  <>
-                    <img src={s.value} alt={s.label} className="h-full w-full object-cover" />
-                    <span className="absolute inset-x-0 bottom-0 truncate bg-linear-to-t from-black/85 via-black/40 to-transparent px-1 pt-3 pb-0.5 text-center text-[9px] font-medium text-white">
-                      {s.label}
-                    </span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); p.onSlotClear(s.key); }}
-                      className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100"
-                      aria-label={`Clear ${s.label}`}
-                    >×</button>
-                  </>
-                ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-white/[0.02] p-1 transition group-hover:bg-white/[0.05]">
-                    <s.Icon className="h-4 w-4 text-white/40 group-hover:text-white/70" />
-                    <span className="text-[9px] font-medium text-white/55 group-hover:text-white/85">{s.label}</span>
-                    <span className="hidden text-[8.5px] text-white/30 sm:block">+ Add</span>
+              <div key={s.key} className="rounded-md border border-white/[0.06] bg-white/[0.015] p-1.5">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <s.Icon className="h-3.5 w-3.5 text-white/55" />
+                    <span className="text-[10.5px] font-medium text-white/85">{s.label}</span>
+                    <span className="font-mono text-[9.5px] text-white/40">{s.value.length}/{s.cap}</span>
                   </div>
-                )}
-              </button>
+                  <span className="hidden text-[9.5px] text-white/35 sm:block">{s.hint}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  {s.value.map((url, i) => (
+                    <div key={i} className="group relative h-11 w-11 overflow-hidden rounded-md hairline">
+                      <img src={url} alt={`${s.label} ${i + 1}`} className="h-full w-full object-cover" />
+                      <span className="absolute left-0.5 top-0.5 rounded bg-black/60 px-1 font-mono text-[8.5px] text-white/90">{i + 1}</span>
+                      <button
+                        onClick={() => p.onSlotItemRemove(s.key, i)}
+                        className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100"
+                        aria-label="Remove"
+                      >×</button>
+                    </div>
+                  ))}
+                  {s.value.length < s.cap && (
+                    <button
+                      onClick={() => p.onSlotUpload(s.key)}
+                      title={`Add ${s.label.toLowerCase()} reference`}
+                      className="grid h-11 w-11 place-items-center rounded-md border border-dashed border-white/15 text-white/40 transition hover:border-white/30 hover:bg-white/[0.04] hover:text-white/70"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
 
           {/* Extras pool */}
-          <div className="mt-2">
-            <p className="mb-1 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-white/45">
-              More references {p.refExtras.length > 0 && <span className="font-mono text-white/35">({p.refExtras.length})</span>}
-            </p>
-            <p className="mb-1.5 text-[10px] text-white/40">
-              Background, mood board, style — describe each in your prompt.
-            </p>
-            <div className="flex flex-wrap items-center gap-1.5">
+          <div className="mt-2 rounded-md border border-white/[0.06] bg-white/[0.015] p-1.5">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <ImageIcon className="h-3.5 w-3.5 text-white/55" />
+                <span className="text-[10.5px] font-medium text-white/85">Other</span>
+                <span className="font-mono text-[9.5px] text-white/40">{p.refExtras.length}/2</span>
+              </div>
+              <span className="hidden text-[9.5px] text-white/35 sm:block">Background, mood, style</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
               {p.refExtras.map((url, i) => (
-                <div key={i} className="group relative h-10 w-10 overflow-hidden rounded-md hairline">
-                  <img src={url} alt={`Extra ${i + 1}`} className="h-full w-full object-cover" />
+                <div key={i} className="group relative h-11 w-11 overflow-hidden rounded-md hairline">
+                  <img src={url} alt={`Other ${i + 1}`} className="h-full w-full object-cover" />
                   <button
-                    onClick={() => p.onExtraRemove(i)}
+                    onClick={() => p.onSlotItemRemove("extras", i)}
                     className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100"
                     aria-label="Remove"
                   >×</button>
@@ -1056,12 +1062,15 @@ function Inspector(p: InspectorProps) {
                 <button
                   onClick={() => p.onSlotUpload("extras")}
                   title="Add another reference"
-                  className="grid h-10 w-10 place-items-center rounded-md border border-dashed border-white/15 text-white/40 transition hover:border-white/30 hover:bg-white/[0.04] hover:text-white/70"
+                  className="grid h-11 w-11 place-items-center rounded-md border border-dashed border-white/15 text-white/40 transition hover:border-white/30 hover:bg-white/[0.04] hover:text-white/70"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-4 w-4" />
                 </button>
               )}
             </div>
+            <p className="mt-1 text-[9.5px] text-white/35">
+              Describe role in your prompt: &quot;blend product into scene from Other 1&quot;.
+            </p>
           </div>
         </section>
 

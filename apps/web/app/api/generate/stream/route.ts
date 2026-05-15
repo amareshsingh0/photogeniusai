@@ -54,9 +54,11 @@ export async function POST(req: Request) {
     height?: number;
     reference_image?: string;
     extra_reference_images?: string[];
-    reference_subject?: string;
-    reference_product?: string;
-    reference_logo?: string;
+    // Multi-image slotted refs (May 16 2026) — arrays so people can include
+    // couples/groups, products can include variants, logos can include primary+secondary.
+    reference_people?: string[];
+    reference_products?: string[];
+    reference_logos?: string[];
     negative_prompt?: string;
     brand_kit?: Record<string, string>;
     testing_mode?: boolean;
@@ -70,9 +72,9 @@ export async function POST(req: Request) {
     height = 1024,
     reference_image,
     extra_reference_images,
-    reference_subject,
-    reference_product,
-    reference_logo,
+    reference_people,
+    reference_products,
+    reference_logos,
     negative_prompt,
     brand_kit,
     testing_mode = false,
@@ -140,9 +142,9 @@ export async function POST(req: Request) {
           : undefined,
         // Slotted references (May 16 2026): named slots let the backend build a
         // structured prompt — "model from subject, holding product, brand from logo"
-        reference_subject: reference_subject,
-        reference_product: reference_product,
-        reference_logo: reference_logo,
+        reference_people: reference_people && reference_people.length > 0 ? reference_people : undefined,
+        reference_products: reference_products && reference_products.length > 0 ? reference_products : undefined,
+        reference_logos: reference_logos && reference_logos.length > 0 ? reference_logos : undefined,
         negative_prompt,
         brand_kit: resolvedBrandKit || undefined,
         prompt_dna: resolvedPromptDna || undefined,
