@@ -34,18 +34,18 @@ export function brandedImageUrl(src: string | undefined | null): string {
     return src;
   }
 
-  // fal.media URLs → /api/img/fal/<path...>
+  // fal.media URLs → /api/img/p/<path...>   (p = "provider", obfuscated to hide upstream brand)
   if (isFalUrl(u)) {
     const path = u.pathname.replace(/^\/+/, "");
     const qs = u.search ? u.search : "";
-    return `/api/img/fal/${path}${qs}`;
+    return `/api/img/p/${path}${qs}`;
   }
 
-  // S3 URLs → /api/img/s3/<path...>
+  // S3 URLs → /api/img/c/<path...>          (c = "cache", obfuscated to hide AWS brand)
   if (isS3Url(u)) {
     const path = u.pathname.replace(/^\/+/, "");
     const qs = u.search ? u.search : "";
-    return `/api/img/s3/${path}${qs}`;
+    return `/api/img/c/${path}${qs}`;
   }
 
   // Anything else (already-CDN or third-party) — leave as-is

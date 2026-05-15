@@ -44,12 +44,14 @@ export async function GET(
 
   let upstreamUrl: string;
 
-  // Path style 1: /api/img/fal/<rest>  → https://v3.fal.media/<rest>
-  // Path style 2: /api/img/s3/<rest>   → https://<S3_HOST>/<rest>
-  // Path style 3: /api/img/<base64url>  → decoded URL (any allowed host)
-  if (parts[0] === "fal") {
+  // Path style 1: /api/img/p/<rest>   → https://v3.fal.media/<rest>     (p = "provider", was "fal")
+  // Path style 2: /api/img/c/<rest>   → https://<S3_HOST>/<rest>         (c = "cache",    was "s3")
+  // Path style 3: /api/img/<base64url> → decoded URL (any allowed host)
+  // Legacy aliases /api/img/fal/* and /api/img/s3/* are still accepted so existing
+  // links / DB-stored URLs don't break.
+  if (parts[0] === "p" || parts[0] === "fal") {
     upstreamUrl = `https://v3.fal.media/${parts.slice(1).join("/")}`;
-  } else if (parts[0] === "s3") {
+  } else if (parts[0] === "c" || parts[0] === "s3") {
     const s3Host = process.env.S3_PUBLIC_HOST
       || `${process.env.S3_BUCKET_NAME || "pixium-images-288761732313-ap-south-1-an"}.s3.${process.env.S3_REGION || "ap-south-1"}.amazonaws.com`;
     upstreamUrl = `https://${s3Host}/${parts.slice(1).join("/")}`;
