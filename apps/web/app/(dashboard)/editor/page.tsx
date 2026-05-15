@@ -1009,204 +1009,224 @@ export default function Editor() {
           </div>
 
           {inspectorTab === "controls" ? (
-            <div className="glass-panel space-y-3 rounded-3xl p-4">
-              <div>
-                <p className="text-sm font-medium text-white/90">{panel.title}</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-white/55">{panel.hint}</p>
-              </div>
+            <div className="glass-panel rounded-2xl p-3">
+              {/* Compact header */}
+              <header className="mb-2.5">
+                <h3 className="text-[13px] font-semibold tracking-tight text-white">{panel.title}</h3>
+                <p className="mt-0.5 text-[11px] leading-snug text-white/55">{panel.hint}</p>
+              </header>
 
-              {/* Mask painting (universal) */}
-              {isMaskMode && (
-                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="kerned text-white/55">Paint mask</p>
-                    <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${maskRequired ? "bg-rose-400/15 text-rose-200" : "bg-white/5 text-white/45"}`}>
-                      {maskRequired ? "REQUIRED" : "OPTIONAL"}
-                    </span>
-                  </div>
-                  <p className="text-[10px] leading-snug text-white/45">
-                    {maskRequired
-                      ? "Paint over the area you want to change."
-                      : "Optional — paint to focus the edit on a specific area, or leave empty to apply globally."}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {([
-                      { id: "brush", icon: Brush, label: "Brush" },
-                      { id: "circle", icon: Maximize, label: "Circle" },
-                      { id: "rect", icon: Square, label: "Box" },
-                      { id: "eraser", icon: Eraser, label: "Eraser" },
-                    ] as { id: MaskTool; icon: typeof Brush; label: string }[]).map((t) => {
-                      const Icon = t.icon;
-                      return (
-                        <button
-                          key={t.id}
-                          onClick={() => setMaskTool(t.id)}
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] transition ${maskTool === t.id ? "bg-white text-black" : "border border-white/10 bg-white/5 text-white/75 hover:bg-white/10"}`}
-                        >
-                          <Icon className="h-3 w-3" /> {t.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div>
-                    <p className="kerned mb-1 text-white/40">Brush size</p>
-                    <div className="flex items-center gap-1">
-                      {BRUSH_SIZES.map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => setBrushSize(s)}
-                          title={`${s}px`}
-                          className={`grid h-7 w-7 place-items-center rounded-md ${brushSize === s ? "bg-white/15 ring-1 ring-white/40" : "bg-white/5 hover:bg-white/10"}`}
-                        >
-                          <span className="rounded-full bg-white/70" style={{ width: Math.max(2, s / 5), height: Math.max(2, s / 5) }} />
-                        </button>
-                      ))}
+              <div className="space-y-2">
+                {/* Mask painting (universal) */}
+                {isMaskMode && (
+                  <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">Paint mask</h4>
+                      <span className={`rounded px-1.5 py-px text-[9px] font-medium tracking-wide ${maskRequired ? "bg-rose-400/15 text-rose-200" : "bg-white/[0.06] text-white/40"}`}>
+                        {maskRequired ? "REQUIRED" : "OPTIONAL"}
+                      </span>
                     </div>
-                  </div>
-                  <button onClick={clearMask} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] text-red-300 hover:bg-red-500/10">
-                    Clear mask
-                  </button>
-                </div>
-              )}
-
-              {/* Restyle theme presets */}
-              {tool === "restyle" && (
-                <div>
-                  <p className="kerned mb-1.5 text-white/40">Theme presets</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {THEME_PRESETS.map((p) => (
-                      <button
-                        key={p.label}
-                        onClick={() => setPrompt(p.prompt)}
-                        className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] text-white/75 hover:bg-white/10"
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-
-              {/* Logo overlay controls */}
-              {tool === "logo" && (
-                <div className="space-y-2.5">
-                  <div className="flex items-start gap-2">
-                    <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-lg border border-dashed border-white/15 bg-white/[0.02]">
-                      {logoData ? (
-                        <img src={logoData} alt="logo" className="h-full w-full object-contain" />
-                      ) : (
-                        <Stamp className="h-5 w-5 text-white/30" />
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <button onClick={() => logoFileRef.current?.click()} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] hover:bg-white/10">
-                        <Plus className="h-3 w-3" /> {logoData ? "Replace" : "Upload logo"}
-                      </button>
-                      {logoData && (
-                        <button onClick={() => setLogoData(null)} className="text-left text-[10px] text-white/40 hover:text-white/70">Remove</button>
-                      )}
-                      <input ref={logoFileRef} type="file" accept="image/*" onChange={onLogoFile} className="hidden" />
-                    </div>
-                  </div>
-                  <div>
-                    <p className="kerned mb-1 text-white/40">Position</p>
-                    <div className="grid w-fit grid-cols-3 gap-1">
-                      {LOGO_POSITIONS.map((p) => (
-                        <button
-                          key={p}
-                          onClick={() => setLogoPosition(p)}
-                          title={p}
-                          className={`h-7 w-7 rounded transition ${logoPosition === p ? "bg-white text-black" : "border border-white/10 bg-white/5 hover:bg-white/10"}`}
-                        >
-                          <span className="block h-1.5 w-1.5 rounded-full mx-auto" style={{ background: logoPosition === p ? "#000" : "rgba(255,255,255,0.6)" }} />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <label className="block text-[11px] text-white/60">
-                    <span className="kerned mb-0.5 block text-white/40">Size {logoSize}%</span>
-                    <input type="range" min={5} max={50} value={logoSize} onChange={(e) => setLogoSize(Number(e.target.value))} className="w-full" />
-                  </label>
-                  <label className="block text-[11px] text-white/60">
-                    <span className="kerned mb-0.5 block text-white/40">Opacity {logoOpacity}%</span>
-                    <input type="range" min={10} max={100} value={logoOpacity} onChange={(e) => setLogoOpacity(Number(e.target.value))} className="w-full" />
-                  </label>
-                </div>
-              )}
-
-              {/* Reference images (universal) */}
-              {isExtrasMode && (
-                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="kerned text-white/55">Reference images</p>
-                    <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${refRequired ? "bg-rose-400/15 text-rose-200" : "bg-white/5 text-white/45"}`}>
-                      {refRequired ? "REQUIRED" : "OPTIONAL"}
-                    </span>
-                  </div>
-                  <p className="text-[10px] leading-snug text-white/45">
-                    {refRequired
-                      ? `Add up to ${maxRefsForTool} reference images to combine.`
-                      : `Optional — upload images to guide the look (style, background, subject, etc). Up to ${maxRefsForTool}.`}
-                  </p>
-                  <p className="text-[10px] text-white/40">
-                    {uploadedExtras.length + (tool === "compose" ? composeRefs.length : 0)} / {maxRefsForTool + (tool === "compose" ? 4 : 0)}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {uploadedExtras.map((u, i) => (
-                      <div key={i} className="group relative h-12 w-12 overflow-hidden rounded-lg hairline">
-                        <img src={u} alt="" className="h-full w-full object-cover" />
-                        <button onClick={() => removeUploadedExtra(i)} className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100">×</button>
-                      </div>
-                    ))}
-                    {tool === "compose" && composeRefs.map((u, i) => (
-                      <div key={`g${i}`} className="group relative h-12 w-12 overflow-hidden rounded-lg ring-1 ring-white/30">
-                        <img src={u} alt="" className="h-full w-full object-cover" />
-                        <button onClick={() => toggleComposeRef(u)} className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100">×</button>
-                      </div>
-                    ))}
-                    {uploadedExtras.length < maxRefsForTool && (
-                      <button
-                        onClick={() => extraFileRef.current?.click()}
-                        title="Upload reference image"
-                        className="grid h-12 w-12 place-items-center rounded-lg border border-dashed border-white/15 text-white/40 hover:bg-white/5"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                  {tool === "compose" && (
-                    <p className="text-[10px] text-white/35">
-                      Tip: you can also tap gallery thumbnails in the History tab to use existing images as refs.
+                    <p className="mb-2 text-[10.5px] leading-snug text-white/50">
+                      {maskRequired ? "Paint over the area you want to change." : "Paint to limit the edit to a specific area, or leave empty for global."}
                     </p>
-                  )}
-                </div>
-              )}
 
-              {/* Quick ideas — one per line, full-width, truncate long text */}
-              {panel.chips && (
-                <div>
-                  <p className="kerned mb-1.5 text-white/40">Quick ideas</p>
-                  <div className="flex flex-col gap-1">
-                    {panel.chips.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setPrompt(c)}
-                        title={c}
-                        className="group flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-left text-[11px] text-white/75 transition hover:border-white/20 hover:bg-white/[0.07] hover:text-white"
-                      >
-                        <Sparkles className="h-3 w-3 shrink-0 text-white/30 group-hover:text-white/60" />
-                        <span className="flex-1 truncate">{c}</span>
+                    <div className="mb-2 flex flex-wrap gap-1">
+                      {([
+                        { id: "brush", icon: Brush, label: "Brush" },
+                        { id: "circle", icon: Maximize, label: "Circle" },
+                        { id: "rect", icon: Square, label: "Box" },
+                        { id: "eraser", icon: Eraser, label: "Eraser" },
+                      ] as { id: MaskTool; icon: typeof Brush; label: string }[]).map((t) => {
+                        const Icon = t.icon;
+                        return (
+                          <button
+                            key={t.id}
+                            onClick={() => setMaskTool(t.id)}
+                            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10.5px] transition ${maskTool === t.id ? "bg-white text-black" : "border border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08]"}`}
+                          >
+                            <Icon className="h-3 w-3" /> {t.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wider text-white/45">Size</span>
+                        <div className="flex items-center gap-0.5">
+                          {BRUSH_SIZES.map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => setBrushSize(s)}
+                              title={`${s}px`}
+                              className={`grid h-6 w-6 place-items-center rounded transition ${brushSize === s ? "bg-white/15 ring-1 ring-white/40" : "hover:bg-white/[0.06]"}`}
+                            >
+                              <span className="rounded-full bg-white/70" style={{ width: Math.max(2, s / 6), height: Math.max(2, s / 6) }} />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <button onClick={clearMask} className="text-[10px] text-rose-300/70 hover:text-rose-200">
+                        Clear
                       </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    </div>
+                  </section>
+                )}
 
-              {/* No-tool-specific-controls placeholder */}
-              {!isMaskMode && tool !== "restyle" && tool !== "logo" && !isExtrasMode && !panel.chips && (
-                <p className="text-[11px] text-white/40">Type a prompt below and hit Apply.</p>
-              )}
+                {/* Reference images (universal) */}
+                {isExtrasMode && (
+                  <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">References</h4>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-mono text-white/45">
+                          {uploadedExtras.length + (tool === "compose" ? composeRefs.length : 0)}/{maxRefsForTool + (tool === "compose" ? 4 : 0)}
+                        </span>
+                        <span className={`rounded px-1.5 py-px text-[9px] font-medium tracking-wide ${refRequired ? "bg-rose-400/15 text-rose-200" : "bg-white/[0.06] text-white/40"}`}>
+                          {refRequired ? "REQUIRED" : "OPTIONAL"}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mb-2 text-[10.5px] leading-snug text-white/50">
+                      {refRequired
+                        ? `Add up to ${maxRefsForTool} reference images to combine.`
+                        : `Upload images to guide style, background, subject. Up to ${maxRefsForTool}.`}
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {uploadedExtras.map((u, i) => (
+                        <div key={i} className="group relative h-11 w-11 overflow-hidden rounded-md hairline">
+                          <img src={u} alt="" className="h-full w-full object-cover" />
+                          <button onClick={() => removeUploadedExtra(i)} className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100">×</button>
+                        </div>
+                      ))}
+                      {tool === "compose" && composeRefs.map((u, i) => (
+                        <div key={`g${i}`} className="group relative h-11 w-11 overflow-hidden rounded-md ring-1 ring-white/30">
+                          <img src={u} alt="" className="h-full w-full object-cover" />
+                          <button onClick={() => toggleComposeRef(u)} className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100">×</button>
+                        </div>
+                      ))}
+                      {uploadedExtras.length < maxRefsForTool && (
+                        <button
+                          onClick={() => extraFileRef.current?.click()}
+                          title="Upload reference image"
+                          className="grid h-11 w-11 place-items-center rounded-md border border-dashed border-white/15 text-white/40 transition hover:border-white/30 hover:bg-white/[0.04] hover:text-white/70"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {tool === "compose" && (
+                      <p className="mt-1.5 text-[10px] text-white/35">
+                        Tip: tap gallery thumbnails in History tab to use existing images.
+                      </p>
+                    )}
+                  </section>
+                )}
+
+                {/* Restyle theme presets */}
+                {tool === "restyle" && (
+                  <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
+                    <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">Theme presets</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {THEME_PRESETS.map((p) => (
+                        <button
+                          key={p.label}
+                          onClick={() => setPrompt(p.prompt)}
+                          className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10.5px] text-white/75 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* Logo overlay controls */}
+                {tool === "logo" && (
+                  <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5 space-y-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-md border border-dashed border-white/15 bg-white/[0.02]">
+                        {logoData ? (
+                          <img src={logoData} alt="logo" className="h-full w-full object-contain" />
+                        ) : (
+                          <Stamp className="h-4 w-4 text-white/30" />
+                        )}
+                      </div>
+                      <div className="flex flex-1 flex-col gap-1">
+                        <button onClick={() => logoFileRef.current?.click()} className="inline-flex w-full items-center justify-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] transition hover:bg-white/[0.08]">
+                          <Plus className="h-3 w-3" /> {logoData ? "Replace logo" : "Upload logo"}
+                        </button>
+                        {logoData && (
+                          <button onClick={() => setLogoData(null)} className="text-[10px] text-white/40 hover:text-white/70">
+                            Remove
+                          </button>
+                        )}
+                        <input ref={logoFileRef} type="file" accept="image/*" onChange={onLogoFile} className="hidden" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">Position</p>
+                      <div className="grid w-fit grid-cols-3 gap-1">
+                        {LOGO_POSITIONS.map((p) => (
+                          <button
+                            key={p}
+                            onClick={() => setLogoPosition(p)}
+                            title={p.replace(/_/g, " ")}
+                            className={`grid h-7 w-7 place-items-center rounded transition ${logoPosition === p ? "bg-white" : "border border-white/10 bg-white/[0.04] hover:bg-white/[0.08]"}`}
+                          >
+                            <span className="block h-1.5 w-1.5 rounded-full" style={{ background: logoPosition === p ? "#000" : "rgba(255,255,255,0.55)" }} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="block">
+                        <div className="mb-1 flex items-baseline justify-between">
+                          <span className="text-[10px] uppercase tracking-wider text-white/45">Size</span>
+                          <span className="font-mono text-[10px] text-white/70">{logoSize}%</span>
+                        </div>
+                        <input type="range" min={5} max={50} value={logoSize} onChange={(e) => setLogoSize(Number(e.target.value))} className="w-full accent-white" />
+                      </label>
+                      <label className="block">
+                        <div className="mb-1 flex items-baseline justify-between">
+                          <span className="text-[10px] uppercase tracking-wider text-white/45">Opacity</span>
+                          <span className="font-mono text-[10px] text-white/70">{logoOpacity}%</span>
+                        </div>
+                        <input type="range" min={10} max={100} value={logoOpacity} onChange={(e) => setLogoOpacity(Number(e.target.value))} className="w-full accent-white" />
+                      </label>
+                    </div>
+                  </section>
+                )}
+
+                {/* Quick ideas — one per line, full-width, truncate */}
+                {panel.chips && (
+                  <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
+                    <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">Quick ideas</h4>
+                    <div className="flex flex-col gap-1">
+                      {panel.chips.map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => setPrompt(c)}
+                          title={c}
+                          className="group flex w-full items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.02] px-2 py-1.5 text-left text-[11px] text-white/70 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+                        >
+                          <Sparkles className="h-3 w-3 shrink-0 text-white/30 group-hover:text-white/60" />
+                          <span className="flex-1 truncate">{c}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* No-controls placeholder (Remove BG, Outpaint without chips) */}
+                {!isMaskMode && tool !== "restyle" && tool !== "logo" && !isExtrasMode && !panel.chips && (
+                  <p className="px-1 text-[11px] italic text-white/40">No extra controls — type a prompt below and hit Apply.</p>
+                )}
+              </div>
             </div>
           ) : (
             <>
