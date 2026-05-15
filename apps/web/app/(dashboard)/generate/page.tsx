@@ -850,170 +850,198 @@ type InspectorProps = {
 function Inspector(p: InspectorProps) {
   const styleOptions = ["Auto", ...styleList];
   return (
-    <div className="space-y-3">
-      <div className="glass-panel rounded-2xl p-3">
-        <p className="kerned mb-2 text-white/50">Type</p>
-        <button className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 p-2.5 text-left">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 overflow-hidden rounded-lg hairline">
+    <div className="glass-panel rounded-2xl p-3">
+      <header className="mb-2.5">
+        <h3 className="text-[13px] font-semibold tracking-tight text-white">Settings</h3>
+        <p className="mt-0.5 text-[11px] leading-snug text-white/55">Adjust type, style, aspect, and quality before generating.</p>
+      </header>
+
+      <div className="space-y-2">
+        {/* TYPE */}
+        <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">Type</h4>
+            <span className="font-mono text-[10px] text-white/55">{p.activeType.name}</span>
+          </div>
+          <div className="flex items-center gap-2.5 rounded-md border border-white/[0.08] bg-white/[0.02] p-2">
+            <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md hairline">
               <img src={p.activeType.samples[0]} alt="" className="h-full w-full object-cover" />
             </div>
-            <div>
-              <p className="text-sm font-medium">{p.activeType.name}</p>
-              <p className="kerned text-white/40">{p.activeType.tag}</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[12px] font-medium text-white">{p.activeType.name}</p>
+              <p className="truncate text-[10.5px] text-white/45">{p.activeType.tag}</p>
             </div>
           </div>
-          <ChevronDown className="h-4 w-4 text-white/40" />
-        </button>
-        <div className="mt-2 grid grid-cols-6 gap-1.5">
-          {types.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => p.setType(t.id)}
-              className={`overflow-hidden rounded-lg ${p.type === t.id ? "ring-2 ring-white" : "ring-1 ring-white/10"}`}
-              title={t.name}
-            >
-              <img src={t.samples[0]} alt={t.name} className="aspect-square h-full w-full object-cover" />
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="glass-panel rounded-2xl p-3">
-        <p className="kerned mb-2 text-white/50">Style</p>
-        <div className="flex flex-wrap gap-1">
-          {styleOptions.map((s) => (
-            <button
-              key={s}
-              onClick={() => p.setStyle(s)}
-              className={`rounded-full px-2.5 py-1 text-[11px] transition ${p.style === s ? "bg-white text-black" : "bg-white/5 text-white/70 hover:bg-white/10"}`}
-            >{s}</button>
-          ))}
-        </div>
-      </div>
-
-      <div className="glass-panel rounded-2xl p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="kerned text-white/50">Aspect</p>
-          <span className="font-mono text-[11px] text-white/60">{p.customMode ? "Custom" : p.ratio}</span>
-        </div>
-        <div className="no-scrollbar -mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1">
-          {ratios.map((r) => {
-            const active = !p.customMode && p.ratio === r.id;
-            const w = 26, h = 26;
-            const rw = r.vw >= r.vh ? w : (w * r.vw) / r.vh;
-            const rh = r.vh >= r.vw ? h : (h * r.vh) / r.vw;
-            return (
+          <div className="mt-2 grid grid-cols-3 gap-1">
+            {types.map((t) => (
               <button
-                key={r.id}
-                onClick={() => { p.setRatio(r.id); p.setCustomMode(false); }}
-                title={r.id}
-                className={`group flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border transition ${active ? "border-white/40 bg-white/10" : "border-white/10 bg-white/[0.03] hover:bg-white/5"}`}
+                key={t.id}
+                onClick={() => p.setType(t.id)}
+                className={`group relative overflow-hidden rounded-md transition ${p.type === t.id ? "ring-2 ring-white" : "ring-1 ring-white/[0.08] hover:ring-white/25"}`}
+                title={t.name}
               >
-                <span className="block rounded-[2px] border border-white/70" style={{ width: rw, height: rh }} />
-                <span className="font-mono text-[9px] text-white/55">{r.id}</span>
+                <img src={t.samples[0]} alt={t.name} className="aspect-square h-full w-full object-cover" />
+                <span className="absolute inset-x-0 bottom-0 truncate bg-linear-to-t from-black/85 via-black/40 to-transparent px-1 pt-3 pb-0.5 text-center text-[9px] font-medium text-white">
+                  {t.name}
+                </span>
               </button>
-            );
-          })}
-          <button
-            onClick={() => p.setCustomMode(true)}
-            title="Custom dimensions"
-            className={`group flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border transition ${p.customMode ? "border-white/40 bg-white/10" : "border-dashed border-white/15 bg-white/[0.03] hover:bg-white/5"}`}
-          >
-            <Settings2 className="h-4 w-4 text-white/55" />
-            <span className="font-mono text-[9px] text-white/55">Custom</span>
-          </button>
-        </div>
-        {p.customMode && (
-          <div className="mt-3 flex items-center gap-2">
-            <div className="flex-1">
-              <p className="kerned mb-1 text-white/40">Width</p>
-              <input
-                type="number"
-                min={256} max={4096} step={64}
-                value={p.customW}
-                onChange={(e) => p.setCustomW(Math.max(256, Math.min(4096, +e.target.value || 1024)))}
-                className="w-full rounded-lg border border-white/10 bg-black/20 p-1.5 font-mono text-xs outline-none focus:border-white/30"
-              />
-            </div>
-            <span className="mt-4 text-white/40">×</span>
-            <div className="flex-1">
-              <p className="kerned mb-1 text-white/40">Height</p>
-              <input
-                type="number"
-                min={256} max={4096} step={64}
-                value={p.customH}
-                onChange={(e) => p.setCustomH(Math.max(256, Math.min(4096, +e.target.value || 1024)))}
-                className="w-full rounded-lg border border-white/10 bg-black/20 p-1.5 font-mono text-xs outline-none focus:border-white/30"
-              />
-            </div>
+            ))}
           </div>
-        )}
-      </div>
+        </section>
 
-      <div className="glass-panel rounded-2xl p-3">
-        <p className="kerned mb-2 text-white/50">Quality</p>
-        <div className="grid grid-cols-3 gap-1.5">
-          {qualities.map((q) => (
+        {/* STYLE */}
+        <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">Style</h4>
+            <span className="font-mono text-[10px] text-white/55">{p.style}</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {styleOptions.map((s) => (
+              <button
+                key={s}
+                onClick={() => p.setStyle(s)}
+                className={`rounded-md px-2 py-1 text-[10.5px] transition ${p.style === s ? "bg-white text-black" : "border border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"}`}
+              >{s}</button>
+            ))}
+          </div>
+        </section>
+
+        {/* ASPECT */}
+        <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">Aspect</h4>
+            <span className="font-mono text-[10px] text-white/55">{p.customMode ? `${p.customW}×${p.customH}` : p.ratio}</span>
+          </div>
+          <div className="no-scrollbar -mx-2.5 flex gap-1 overflow-x-auto px-2.5 pb-0.5">
+            {ratios.map((r) => {
+              const active = !p.customMode && p.ratio === r.id;
+              const box = 22;
+              const rw = r.vw >= r.vh ? box : (box * r.vw) / r.vh;
+              const rh = r.vh >= r.vw ? box : (box * r.vh) / r.vw;
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => { p.setRatio(r.id); p.setCustomMode(false); }}
+                  title={r.id}
+                  className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border transition ${active ? "border-white/40 bg-white/[0.08]" : "border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05]"}`}
+                >
+                  <span className="block rounded-[1.5px] border border-white/70" style={{ width: rw, height: rh }} />
+                  <span className="font-mono text-[8.5px] text-white/55">{r.id}</span>
+                </button>
+              );
+            })}
             <button
-              key={q.id}
-              onClick={() => p.setQuality(q.id)}
-              className={`rounded-xl border py-3 text-center ${p.quality === q.id ? "border-white/40 bg-white/10" : "border-white/10 bg-white/[0.03] hover:bg-white/5"}`}
+              onClick={() => p.setCustomMode(true)}
+              title="Custom dimensions"
+              className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border transition ${p.customMode ? "border-white/40 bg-white/[0.08]" : "border-dashed border-white/15 bg-white/[0.02] hover:bg-white/[0.05]"}`}
             >
-              <p className="font-display text-base font-medium">{q.name}</p>
+              <Settings2 className="h-3.5 w-3.5 text-white/55" />
+              <span className="font-mono text-[8.5px] text-white/55">Custom</span>
             </button>
-          ))}
-        </div>
-        <div className="mt-3">
-          <div className="mb-1 flex items-center justify-between text-[11px] text-white/55">
-            <span className="kerned inline-flex items-center gap-1"><Gauge className="h-3 w-3" /> Guidance</span>
-            <span className="font-mono">{p.guidance.toFixed(1)}</span>
           </div>
-          <input
-            type="range" min={1} max={20} step={0.5}
-            value={p.guidance}
-            onChange={(e) => p.setGuidance(+e.target.value)}
-            className="w-full accent-white"
-          />
-        </div>
-      </div>
+          {p.customMode && (
+            <div className="mt-2 flex items-end gap-2">
+              <label className="flex-1 block">
+                <span className="mb-0.5 block text-[10px] uppercase tracking-wider text-white/45">Width</span>
+                <input
+                  type="number"
+                  min={256} max={4096} step={64}
+                  value={p.customW}
+                  onChange={(e) => p.setCustomW(Math.max(256, Math.min(4096, +e.target.value || 1024)))}
+                  className="w-full rounded-md border border-white/10 bg-black/30 p-1.5 font-mono text-[11px] outline-none focus:border-white/30"
+                />
+              </label>
+              <span className="pb-1.5 text-white/30">×</span>
+              <label className="flex-1 block">
+                <span className="mb-0.5 block text-[10px] uppercase tracking-wider text-white/45">Height</span>
+                <input
+                  type="number"
+                  min={256} max={4096} step={64}
+                  value={p.customH}
+                  onChange={(e) => p.setCustomH(Math.max(256, Math.min(4096, +e.target.value || 1024)))}
+                  className="w-full rounded-md border border-white/10 bg-black/30 p-1.5 font-mono text-[11px] outline-none focus:border-white/30"
+                />
+              </label>
+            </div>
+          )}
+        </section>
 
-      <button onClick={() => p.setShowAdvanced(!p.showAdvanced)} className="flex w-full items-center justify-between px-1 text-xs text-white/55 hover:text-white">
-        <span className="kerned">Advanced</span>
-        <ChevronDown className={`h-3.5 w-3.5 transition ${p.showAdvanced ? "rotate-180" : ""}`} />
-      </button>
-      {p.showAdvanced && (
-        <div className="glass-panel space-y-3 rounded-2xl p-3">
-          <div>
-            <p className="kerned mb-2 text-white/50">Negative prompt</p>
-            <textarea
-              value={p.negative}
-              onChange={(e) => p.setNegative(e.target.value)}
-              placeholder="blur, lowres, watermark…"
-              className="min-h-14 w-full resize-none rounded-lg border border-white/10 bg-black/20 p-2 font-mono text-xs outline-none focus:border-white/30"
+        {/* QUALITY */}
+        <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">Quality</h4>
+            <span className="font-mono text-[10px] text-white/55">{p.quality.toUpperCase()}</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {qualities.map((q) => (
+              <button
+                key={q.id}
+                onClick={() => p.setQuality(q.id)}
+                className={`rounded-md border py-2 text-center transition ${p.quality === q.id ? "border-white/40 bg-white/[0.1]" : "border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05]"}`}
+              >
+                <p className="font-display text-sm font-medium">{q.name}</p>
+              </button>
+            ))}
+          </div>
+          <div className="mt-2">
+            <div className="mb-1 flex items-baseline justify-between">
+              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-white/45">
+                <Gauge className="h-3 w-3" /> Guidance
+              </span>
+              <span className="font-mono text-[10px] text-white/70">{p.guidance.toFixed(1)}</span>
+            </div>
+            <input
+              type="range" min={1} max={20} step={0.5}
+              value={p.guidance}
+              onChange={(e) => p.setGuidance(+e.target.value)}
+              className="w-full accent-white"
             />
           </div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <Settings2 className="h-3.5 w-3.5 text-white/40" />
-              <span className="kerned text-white/50">Seed</span>
-              <span className="font-mono text-xs text-white/80">{p.seed}</span>
+        </section>
+
+        {/* ADVANCED */}
+        <button
+          onClick={() => p.setShowAdvanced(!p.showAdvanced)}
+          className="flex w-full items-center justify-between rounded-md px-1 py-1 text-[11px] text-white/55 transition hover:text-white"
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em]">Advanced</span>
+          <ChevronDown className={`h-3.5 w-3.5 transition ${p.showAdvanced ? "rotate-180" : ""}`} />
+        </button>
+        {p.showAdvanced && (
+          <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5 space-y-2.5">
+            <div>
+              <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">Negative prompt</h4>
+              <textarea
+                value={p.negative}
+                onChange={(e) => p.setNegative(e.target.value)}
+                placeholder="blur, lowres, watermark…"
+                className="min-h-14 w-full resize-none rounded-md border border-white/10 bg-black/30 p-2 font-mono text-[11px] outline-none placeholder:text-white/25 focus:border-white/30"
+              />
             </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => p.setLocked(!p.locked)}
-                className={`rounded-md p-1.5 ${p.locked ? "bg-white/15" : "bg-white/5"}`}
-                aria-label="Lock seed"
-              ><Lock className="h-3.5 w-3.5" /></button>
-              <button
-                onClick={() => p.setSeed(String(Math.floor(Math.random() * 999999)))}
-                className="rounded-md bg-white/5 p-1.5"
-                aria-label="Random seed"
-              ><Shuffle className="h-3.5 w-3.5" /></button>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Settings2 className="h-3 w-3 shrink-0 text-white/40" />
+                <span className="text-[10px] uppercase tracking-wider text-white/45">Seed</span>
+                <span className="truncate font-mono text-[11px] text-white/80">{p.seed}</span>
+              </div>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => p.setLocked(!p.locked)}
+                  className={`rounded p-1.5 transition ${p.locked ? "bg-white/15 text-white" : "bg-white/[0.04] text-white/60 hover:bg-white/10"}`}
+                  aria-label="Lock seed"
+                  title={p.locked ? "Seed locked — same image each time" : "Lock seed"}
+                ><Lock className="h-3 w-3" /></button>
+                <button
+                  onClick={() => p.setSeed(String(Math.floor(Math.random() * 999999)))}
+                  className="rounded bg-white/[0.04] p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                  aria-label="Random seed"
+                  title="Randomize seed"
+                ><Shuffle className="h-3 w-3" /></button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </section>
+        )}
+      </div>
     </div>
   );
 }
