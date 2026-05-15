@@ -35,7 +35,13 @@ const aiPipelineDir = path.join(root, "ai-pipeline");
 const existingPythonPath = process.env.PYTHONPATH || "";
 const pythonPathParts = existingPythonPath ? existingPythonPath.split(path.delimiter) : [];
 if (!pythonPathParts.includes(aiPipelineDir)) pythonPathParts.unshift(aiPipelineDir);
-let env = { ...process.env, PYTHONPATH: pythonPathParts.join(path.delimiter) };
+let env = {
+  ...process.env,
+  PYTHONPATH: pythonPathParts.join(path.delimiter),
+  // Force UTF-8 stdout/stderr so log messages with Unicode (✓, ✗, emojis) don't crash
+  // on Windows cp1252 console — `UnicodeEncodeError: 'charmap' codec can't encode...`
+  PYTHONIOENCODING: process.env.PYTHONIOENCODING || "utf-8",
+};
 
 // Load .env.local into process env so API keys are available even when uvicorn
 // doesn't support --env-file (older versions) — read the file ourselves and inject.

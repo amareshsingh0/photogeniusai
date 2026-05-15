@@ -8,11 +8,27 @@ DELETE /api/admin/users - Delete user
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Dict, Any
-from prisma import Prisma
 import logging
+
+# Lazy prisma import — missing prisma client should not crash API startup.
+# Routes that need it will raise 500 with a clear message instead.
+try:
+    from prisma import Prisma  # type: ignore
+    _PRISMA_AVAILABLE = True
+except ImportError:
+    Prisma = None  # type: ignore
+    _PRISMA_AVAILABLE = False
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _require_prisma() -> None:
+    if not _PRISMA_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Prisma Python client not installed. Run: pip install prisma && prisma generate",
+        )
 
 # Models
 class UserResponse(BaseModel):
@@ -47,6 +63,7 @@ async def get_users(
     search: Optional[str] = Query(None)
 ):
     """Get all users with pagination and search"""
+    _require_prisma()
     try:
         prisma = Prisma()
         await prisma.connect()
@@ -108,6 +125,7 @@ async def get_users(
 @router.patch("/admin/users")
 async def update_user(body: UpdateUserRequest):
     """Update user"""
+    _require_prisma()
     try:
         prisma = Prisma()
         await prisma.connect()
@@ -145,6 +163,7 @@ async def update_user(body: UpdateUserRequest):
 @router.delete("/admin/users")
 async def delete_user(userId: str = Query(...)):
     """Delete user"""
+    _require_prisma()
     try:
         prisma = Prisma()
         await prisma.connect()
