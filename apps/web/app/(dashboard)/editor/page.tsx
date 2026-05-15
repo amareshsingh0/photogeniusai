@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { brandedImageUrl } from "@/lib/image-url";
 import {
   Brush, Eraser, Square, Layers as LayersIcon, Wand2, Undo2, Redo2,
   Image as ImageIcon, Type, Shapes, Stamp, UserRoundCog, Scissors,
@@ -850,7 +851,7 @@ export default function Editor() {
               <div className={`relative inline-flex ${zoom === "fit" ? "max-h-full max-w-full" : ""}`}>
                 <img
                   ref={imgRef}
-                  src={current}
+                  src={brandedImageUrl(current)}
                   alt="Edit canvas"
                   className={`block ${zoom === "fit" ? "max-h-full max-w-full object-contain" : ""} transition`}
                   style={zoom === "fit"
@@ -1348,7 +1349,7 @@ export default function Editor() {
                         title={g.prompt}
                         className={`group relative aspect-square overflow-hidden rounded-lg hairline ${current === g.url ? "ring-2 ring-white" : ""}`}
                       >
-                        <img src={g.url} alt="" className="h-full w-full object-cover transition group-hover:scale-105" />
+                        <img src={brandedImageUrl(g.url)} alt="" className="h-full w-full object-cover transition group-hover:scale-105" />
                       </button>
                     ))}
                   </div>
@@ -1366,7 +1367,7 @@ export default function Editor() {
                         className={`flex w-full items-center gap-2 rounded-xl border p-2 text-left transition ${i === histIdx ? "border-white/30 bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/[0.08]"}`}
                       >
                         <div className="h-10 w-10 overflow-hidden rounded-md hairline">
-                          <img src={h} alt="" className="h-full w-full object-cover" />
+                          <img src={brandedImageUrl(h)} alt="" className="h-full w-full object-cover" />
                         </div>
                         <div className="flex-1">
                           <p className="text-xs">{i === 0 ? "Original" : `Edit ${i}`}</p>
@@ -1420,7 +1421,7 @@ export default function Editor() {
                               : isCurrent ? "ring-2 ring-white" : ""
                           }`}
                         >
-                          <img src={s.src} alt="" className="aspect-square h-full w-full object-cover" />
+                          <img src={brandedImageUrl(s.src)} alt="" className="aspect-square h-full w-full object-cover" />
                           {tool === "compose" && isRef && (
                             <span className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] font-medium text-white">
                               {refIdx + 1}

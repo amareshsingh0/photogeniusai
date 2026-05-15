@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Search, Filter, SlidersHorizontal, Trash2, Star, Clock, Image as ImageIcon } from "lucide-react";
+import { brandedImageUrl } from "@/lib/image-url";
 
 interface Generation {
   id: string;
@@ -349,7 +350,7 @@ export default function GenerationsTable() {
                   {gen.thumbnailUrl || gen.selectedOutputUrl ? (
                     <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-zinc-700">
                       <Image
-                        src={gen.thumbnailUrl || gen.selectedOutputUrl || ""}
+                        src={brandedImageUrl(gen.thumbnailUrl || gen.selectedOutputUrl || "")}
                         alt="Generation"
                         fill
                         className="object-cover"

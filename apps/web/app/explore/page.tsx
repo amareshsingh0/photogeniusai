@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Loader2 } from "lucide-react";
 import { samples, styles } from "@/lib/pixium/samples";
+import { brandedImageUrl } from "@/lib/image-url";
 
 interface GalleryItem {
   id: string;
@@ -106,7 +107,7 @@ export default function Explore() {
           {items.map((s) => (
             <Link href={`/showcase/${s.id}`} key={s.id} className="group mb-3 block break-inside-avoid overflow-hidden rounded-2xl hairline sm:mb-4">
               <div className="relative">
-                <img src={s.src} alt={s.prompt} loading="lazy" className="w-full transition duration-700 group-hover:scale-[1.03]" />
+                <img src={brandedImageUrl(s.src)} alt={s.prompt} loading="lazy" className="w-full transition duration-700 group-hover:scale-[1.03]" />
                 <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/85 via-transparent p-3 opacity-0 transition group-hover:opacity-100">
                   <p className="line-clamp-2 font-mono text-[10px] text-white/90">{s.prompt}</p>
                   <p className="kerned mt-1 text-white/50">{s.author}{s.model ? ` · ${s.model}` : ""}</p>

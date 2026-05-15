@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Star, Clock, Download } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { brandedImageUrl } from "@/lib/image-url";
 
 interface Rating {
   rating: number;
@@ -201,7 +202,7 @@ export default function ModelRatingsModal({
                         {/* Image Thumbnail */}
                         <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-zinc-700 shrink-0">
                           <Image
-                            src={rating.image_url}
+                            src={brandedImageUrl(rating.image_url)}
                             alt="Generated"
                             fill
                             className="object-cover"

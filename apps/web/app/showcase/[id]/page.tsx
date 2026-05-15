@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, notFound } from "next/navigation";
 import { samples } from "@/lib/pixium/samples";
+import { brandedImageUrl } from "@/lib/image-url";
 import { ArrowLeft, Download, Heart, Share2, Wand2, Copy, Check } from "lucide-react";
 import { useState } from "react";
 
@@ -57,7 +58,7 @@ export default function Showcase() {
           }}
         >
           <img
-            src={sample.src}
+            src={brandedImageUrl(sample.src)}
             alt={sample.prompt}
             className="block max-h-[calc(100vh-160px)] max-w-full object-contain"
           />
@@ -84,7 +85,7 @@ export default function Showcase() {
               <Wand2 className="h-3.5 w-3.5" /> Remix
             </Link>
             <a
-              href={sample.src}
+              href={brandedImageUrl(sample.src)}
               download
               className="glass-panel inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs hover:bg-white/10"
             >
@@ -150,7 +151,7 @@ export default function Showcase() {
               title={r.prompt}
             >
               <img
-                src={r.src}
+                src={brandedImageUrl(r.src)}
                 alt={r.prompt}
                 loading="lazy"
                 className="h-full w-full object-cover transition duration-500 group-hover:scale-105"

@@ -11,6 +11,7 @@ import {
   UserRoundCog, Package, Stamp, Users,
 } from "lucide-react";
 import { samples, types, styles as styleList } from "@/lib/pixium/samples";
+import { brandedImageUrl } from "@/lib/image-url";
 
 // ─── Domain types ─────────────────────────────────────────────────────────────
 interface GenerationResult {
@@ -680,7 +681,7 @@ export default function Generate() {
                     ) : tileUrl ? (
                       <>
                         <img
-                          src={tileUrl}
+                          src={brandedImageUrl(tileUrl)}
                           alt={prompt || tile.enhanced_prompt || ""}
                           loading="lazy"
                           onClick={() => setFocused(i)}
@@ -728,7 +729,7 @@ export default function Generate() {
               >
                 <img
                   ref={focusImgRef}
-                  src={visibleTiles[focused]?.image_url}
+                  src={brandedImageUrl(visibleTiles[focused]?.image_url)}
                   alt=""
                   className={focusZoom === "fit" ? "max-h-full max-w-full object-contain" : "block"}
                   style={focusZoom === "fit"
@@ -747,7 +748,7 @@ export default function Generate() {
                   <Link href={`/editor?image=${encodeURIComponent(visibleTiles[focused]?.image_url || "")}`} className="glass-panel inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"><Pencil className="h-3.5 w-3.5" /> Edit</Link>
                   <Link href={`/editor?tool=logo&image=${encodeURIComponent(visibleTiles[focused]?.image_url || "")}`} className="glass-panel inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"><Wand className="h-3.5 w-3.5" /> Logo</Link>
                   <Link href={`/editor?tool=upscale&image=${encodeURIComponent(visibleTiles[focused]?.image_url || "")}`} className="glass-panel inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"><ArrowUpToLine className="h-3.5 w-3.5" /> Upscale</Link>
-                  <a href={visibleTiles[focused]?.image_url} download className="glass-panel inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"><Download className="h-3.5 w-3.5" /></a>
+                  <a href={brandedImageUrl(visibleTiles[focused]?.image_url)} download className="glass-panel inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"><Download className="h-3.5 w-3.5" /></a>
                 </div>
                 {/* Zoom HUD */}
                 <div className="glass-panel absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full p-1 text-xs">
@@ -762,7 +763,7 @@ export default function Generate() {
                 <div className="flex shrink-0 gap-2">
                   {visibleTiles.map((s, i) => (
                     <button key={i} onClick={() => { setFocused(i); setFocusZoom("fit"); }} className={`relative h-14 w-14 overflow-hidden rounded-lg ${focused === i ? "ring-2 ring-white" : "ring-1 ring-white/10"}`}>
-                      <img src={s.image_url} alt="" className="h-full w-full object-cover" />
+                      <img src={brandedImageUrl(s.image_url)} alt="" className="h-full w-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -817,7 +818,7 @@ export default function Generate() {
                       title={h.prompt}
                       className="group relative aspect-square overflow-hidden rounded-md hairline"
                     >
-                      <img src={h.url} alt="" loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />
+                      <img src={brandedImageUrl(h.url)} alt="" loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />
                     </button>
                   ))}
                 </div>

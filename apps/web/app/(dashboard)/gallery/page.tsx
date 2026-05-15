@@ -16,6 +16,7 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { brandedImageUrl } from "@/lib/image-url"
 
 interface Generation {
   id: string
@@ -305,7 +306,7 @@ export default function GalleryPage() {
               onClick={() => setSelectedImage(img)}
             >
               {img.url ? (
-                <img src={img.url} alt={img.prompt || "Generated image"} className="w-full" />
+                <img src={brandedImageUrl(img.url)} alt={img.prompt || "Generated image"} className="w-full" />
               ) : (
                 <div className="flex aspect-square w-full items-center justify-center bg-white/[0.02]">
                   <ImageIcon className="h-8 w-8 text-white/40" />
