@@ -648,25 +648,40 @@ export default function Generate() {
           )}
         </section>
 
-        {/* RIGHT PANEL — controls, or History grid when toggled */}
+        {/* RIGHT PANEL — Settings ↔ History tabbed inspector */}
         <aside className="no-scrollbar hidden min-h-0 space-y-3 overflow-y-auto pr-1 lg:block">
+          {/* Tab toggle pill — matches editor */}
+          <div className="glass-panel flex items-center gap-1 rounded-full p-1">
+            <button
+              onClick={() => setShowHistory(false)}
+              className={`flex-1 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${!showHistory ? "bg-white text-black" : "text-white/60 hover:bg-white/5"}`}
+            >
+              Settings
+            </button>
+            <button
+              onClick={() => setShowHistory(true)}
+              className={`flex-1 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${showHistory ? "bg-white text-black" : "text-white/60 hover:bg-white/5"}`}
+            >
+              History
+            </button>
+          </div>
+
           {showHistory ? (
             <div className="glass-panel rounded-2xl p-3">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="kerned text-white/50">History</p>
-                <button
-                  onClick={() => setShowHistory(false)}
-                  className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-white/70 hover:bg-white/10"
-                >
-                  Back to settings
-                </button>
-              </div>
+              <header className="mb-2.5">
+                <h3 className="text-[13px] font-semibold tracking-tight text-white">History</h3>
+                <p className="mt-0.5 text-[11px] leading-snug text-white/55">Your recent renders. Click any to load it as the current result.</p>
+              </header>
               {historyLoading ? (
-                <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-white/30" /></div>
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-white/30" />
+                </div>
               ) : history.length === 0 ? (
-                <p className="px-1 text-sm text-white/40">No generations yet — your renders will appear here.</p>
+                <div className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-4 text-center">
+                  <p className="text-[11px] text-white/45">No generations yet — your renders will appear here.</p>
+                </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-1.5">
                   {history.map((h) => (
                     <button
                       key={h.id}
@@ -677,7 +692,7 @@ export default function Generate() {
                         setShowHistory(false);
                       }}
                       title={h.prompt}
-                      className="group relative aspect-square overflow-hidden rounded-xl hairline"
+                      className="group relative aspect-square overflow-hidden rounded-md hairline"
                     >
                       <img src={h.url} alt="" loading="lazy" className="h-full w-full object-cover transition group-hover:scale-105" />
                     </button>
