@@ -226,7 +226,7 @@ export default function Editor() {
   const [tool, setTool] = useState<ToolId>("bg");
   const [prompt, setPrompt] = useState("");
   const [quality, setQuality] = useState("1k");
-  const [upscaleScale, setUpscaleScale] = useState(4);
+  const [upscaleScale, setUpscaleScale] = useState<number | null>(null);
   // Right inspector tab: "controls" shows tool settings, "history" shows history+sources
   const [inspectorTab, setInspectorTab] = useState<"controls" | "history">("controls");
   // Past generations (cross-session) for History tab
@@ -622,7 +622,7 @@ export default function Editor() {
 
   // Upscale uses the dedicated /api/generate/upscale endpoint (scale 2/4/8/16)
   const runUpscale = useCallback(async () => {
-    if (!current || applying) return;
+    if (!current || applying || upscaleScale === null) return;
     setApplying(true);
     setError(null);
     try {
@@ -892,12 +892,13 @@ export default function Editor() {
                   </button>
                 );
               })}
-              {/* Upscale quick action — runs its own endpoint with an inline scale picker */}
+              {/* Upscale quick action — pick a scale first, then click Upscale */}
               <div className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] py-0.5 pl-2.5 pr-0.5 text-[10px] text-white/75">
                 <ArrowUpToLine className="h-3 w-3" />
                 <button
                   onClick={runUpscale}
-                  disabled={!current || applying}
+                  disabled={!current || applying || upscaleScale === null}
+                  title={upscaleScale === null ? "Pick 2× or 4× first" : `Upscale ${upscaleScale}×`}
                   className="hover:text-white disabled:opacity-40"
                 >
                   Upscale
@@ -906,7 +907,7 @@ export default function Editor() {
                 {UPSCALE_SCALES.map((x) => (
                   <button
                     key={x}
-                    onClick={() => setUpscaleScale(x)}
+                    onClick={() => setUpscaleScale((cur) => (cur === x ? null : x))}
                     className={`rounded-full px-1.5 py-0.5 transition ${upscaleScale === x ? "bg-white text-black" : "text-white/60 hover:text-white"}`}
                   >
                     {x}×
