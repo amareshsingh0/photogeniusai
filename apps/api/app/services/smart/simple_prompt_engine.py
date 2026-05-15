@@ -2785,6 +2785,7 @@ def _build_user_message(
     brand_kit: Optional[Dict[str, Any]],
     style_reference_description: Optional[str] = None,
     recipe: Optional[Dict[str, Any]] = None,
+    reference_roles: Optional[Dict[str, int]] = None,
 ) -> str:
     parts = [f"USER REQUEST:\n{user_prompt.strip()}"]
     bucket_hint = _BUCKET_HINTS.get(bucket)
@@ -2833,6 +2834,44 @@ def _build_user_message(
         if brand_kit.get("font_style"):    bk_bits.append(f"font_style={brand_kit['font_style']}")
         if bk_bits:
             parts.append("BRAND KIT: " + ", ".join(bk_bits))
+
+    # Slotted multi-image references (May 16 2026) — tell Haiku how many references
+    # exist per role so it can craft a structured prompt like "hero people (2 refs,
+    # match faces of both), product variants (3 refs, feature all three together)".
+    # The image model receives the actual pixels via reference_image_url +
+    # extra_image_urls; this block just gives Haiku the *labels* and counts so it
+    # knows what each numbered reference is.
+    if reference_roles:
+        role_bits = []
+        n_people   = int(reference_roles.get("people")   or 0)
+        n_products = int(reference_roles.get("products") or 0)
+        n_logos    = int(reference_roles.get("logos")    or 0)
+        n_extras   = int(reference_roles.get("extras")   or 0)
+        if n_people:
+            if n_people == 1:
+                role_bits.append("1 person reference (hero subject — match face/look)")
+            elif n_people == 2:
+                role_bits.append("2 people references (likely couple / pair — match both faces, place together in scene)")
+            else:
+                role_bits.append(f"{n_people} people references (group / ensemble — match all faces, frame all together)")
+        if n_products:
+            if n_products == 1:
+                role_bits.append("1 product reference (feature this exact item)")
+            else:
+                role_bits.append(f"{n_products} product references (variants / lineup — show all together unless prompt says otherwise)")
+        if n_logos:
+            if n_logos == 1:
+                role_bits.append("1 logo reference (brand mark — place subtly)")
+            else:
+                role_bits.append(f"{n_logos} logo references (primary + secondary brand marks)")
+        if n_extras:
+            role_bits.append(f"{n_extras} other reference(s) (background / mood / style — see user prompt for role)")
+        if role_bits:
+            parts.append(
+                "REFERENCE IMAGES PROVIDED (numbered in this order — match identity / appearance):\n"
+                "  " + "\n  ".join(f"- {b}" for b in role_bits)
+            )
+
     parts.append("Now produce the JSON object. Output JSON only.")
     return "\n\n".join(parts)
 
@@ -3227,6 +3266,7 @@ class SimplePromptEngine:
         style: Optional[str] = None,
         brand_kit: Optional[Dict[str, Any]] = None,
         style_reference_description: Optional[str] = None,
+        reference_roles: Optional[Dict[str, int]] = None,
     ) -> Dict[str, Any]:
         """Enrich a user prompt into a production-ready image-gen prompt.
 
@@ -3263,6 +3303,7 @@ class SimplePromptEngine:
                 user_prompt, effective_bucket, tier, width, height, style, brand_kit,
                 style_reference_description=style_reference_description,
                 recipe=recipe,
+                reference_roles=reference_roles,
             )
             # Instructor returns a validated Pydantic instance (or raises after
             # max_retries exhausts). No more loose-JSON parsing.

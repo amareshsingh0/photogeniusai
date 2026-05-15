@@ -283,6 +283,15 @@ class StreamRequest(BaseModel):
     # when the underlying provider supports them. Models that don't support
     # multi-reference silently ignore this field.
     extra_image_urls: Optional[List[str]] = Field(default=None)
+    # Slotted multi-image references (May 16 2026). When provided, lets the
+    # prompt engine build a role-labeled prompt ("hero people: 2 refs, product
+    # variant: 3 refs, logo: 1 ref") instead of a flat "use these references".
+    # The flat reference_image_url + extra_image_urls are still computed by the
+    # frontend for backward compat with provider clients that only know unlabeled
+    # references. Either set may be empty — handler is defensive.
+    reference_people: Optional[List[str]] = Field(default=None)
+    reference_products: Optional[List[str]] = Field(default=None)
+    reference_logos: Optional[List[str]] = Field(default=None)
     negative_prompt: Optional[str] = Field(default=None)
     brand_kit: Optional[dict] = Field(default=None)
     prompt_dna: Optional[dict] = Field(default=None)   # User.preferences.prompt_dna from Next.js
@@ -710,6 +719,20 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                     logger.warning("[stream][%s] style-extractor failed (non-fatal): %s",
                                    trace_id, _se_err)
 
+            # Build the slot-count map so Haiku knows what each reference is.
+            # Counts only — actual image data is sent to the model separately via
+            # reference_image_url + extra_image_urls. Haiku just needs the labels.
+            ref_roles = {
+                "people":   len(req.reference_people)   if req.reference_people   else 0,
+                "products": len(req.reference_products) if req.reference_products else 0,
+                "logos":    len(req.reference_logos)    if req.reference_logos    else 0,
+            }
+            # Anything in extra_image_urls that isn't already in a named slot is
+            # an "other" / extras reference.
+            named_count = ref_roles["people"] + ref_roles["products"] + ref_roles["logos"]
+            total_count = (1 if req.reference_image_url else 0) + (len(req.extra_image_urls) if req.extra_image_urls else 0)
+            ref_roles["extras"] = max(0, total_count - named_count)
+
             simple_out = await simple_engine.enrich(
                 user_prompt=req.prompt,
                 bucket=bucket,
@@ -719,6 +742,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                 style=req.style,
                 brand_kit=req.brand_kit,
                 style_reference_description=style_reference_description or None,
+                reference_roles=ref_roles if any(ref_roles.values()) else None,
             )
             logger.info(
                 "[stream][%s] SimpleEngine done in %.2fs intent=%s aspect=%s",
