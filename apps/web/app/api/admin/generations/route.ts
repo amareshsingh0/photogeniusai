@@ -69,6 +69,7 @@ export async function GET(req: Request) {
           bucket: true,
           selectedOutputUrl: true,
           thumbnailUrl: true,
+          outputUrls: true,
           userRating: true,
           generationTimeSeconds: true,
           overallScore: true,

@@ -16,6 +16,7 @@ interface Generation {
   bucket: string | null;
   selectedOutputUrl: string | null;
   thumbnailUrl: string | null;
+  outputUrls: string[] | null;
   userRating: number | null;
   userReason: string | null;
   generationTimeSeconds: number | null;
@@ -347,21 +348,24 @@ export default function GenerationsTable() {
               <div className="flex gap-4">
                 {/* Thumbnail */}
                 <div className="shrink-0">
-                  {gen.thumbnailUrl || gen.selectedOutputUrl ? (
-                    <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-zinc-700">
-                      <Image
-                        src={brandedImageUrl(gen.thumbnailUrl || gen.selectedOutputUrl || "")}
-                        alt="Generation"
-                        fill
-                        className="object-cover"
-                        unoptimized
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-24 h-24 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center">
-                      <ImageIcon className="w-8 h-8 text-zinc-600" />
-                    </div>
-                  )}
+                  {(() => {
+                    const url = gen.thumbnailUrl || gen.selectedOutputUrl || (gen.outputUrls && gen.outputUrls[0]) || "";
+                    return url ? (
+                      <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-zinc-700">
+                        <Image
+                          src={brandedImageUrl(url)}
+                          alt="Generation"
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-24 h-24 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+                        <ImageIcon className="w-8 h-8 text-zinc-600" />
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Details */}

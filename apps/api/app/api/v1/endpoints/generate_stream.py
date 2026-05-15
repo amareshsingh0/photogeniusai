@@ -1838,7 +1838,11 @@ async def _generate_with_model(
                     "guidanceScale": _MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
                     "width": req.width,
                     "height": req.height,
-                    "outputUrls": json.dumps([result.get("image_url")]),  # JSON string
+                    # outputUrls is a Prisma Json (JSONB) column — pass a real array.
+                    # Wrapping in json.dumps() writes a double-encoded string which then
+                    # reads back as a JSON-string (not a JS array) and the admin grid's
+                    # outputUrls[0] returns a single character instead of the URL.
+                    "outputUrls": [u for u in [result.get("image_url")] if u],
                     "selectedOutputUrl": result.get("image_url"),
                     "creditsUsed": 0,  # Testing mode = free
                     "qualityTierUsed": effective_quality,

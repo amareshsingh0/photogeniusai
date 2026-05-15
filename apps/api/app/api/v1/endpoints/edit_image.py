@@ -129,7 +129,8 @@ async def _save_edit_to_db(
                     "guidanceScale": 7.0,
                     "width": 1024,
                     "height": 1024,
-                    "outputUrls": json.dumps([image_url]),
+                    # outputUrls is a JSONB column — pass a real array, not a string-encoded array.
+                    "outputUrls": [image_url] if image_url else [],
                     "selectedOutputUrl": image_url,
                     "creditsUsed": 0,
                     "qualityTierUsed": quality,
