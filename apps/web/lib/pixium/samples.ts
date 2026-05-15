@@ -82,20 +82,20 @@ export const samples: Sample[] = [
   // — Artistic (painterly, surreal) —
   { id: "ar-lion",      src: artisticLion,         prompt: "Painterly lion in dramatic chiaroscuro lighting",              author: "@pixium", model: "Vista",    style: "Surreal",     ratio: "portrait" },
 
-  // — Original showcase set —
-  { id: "p1",  src: portrait,     prompt: "Iridescent holographic portrait, electric violet rim light, 85mm",  author: "@kira",   model: "Aurora XL", style: "Cinematic",     ratio: "portrait"  },
-  { id: "a1",  src: architecture, prompt: "Floating crystalline citadel above pastel clouds",                  author: "@noor",   model: "Vista",     style: "Architectural", ratio: "portrait"  },
-  { id: "an1", src: anime,        prompt: "Shoujo girl beneath cherry blossoms, painterly",                    author: "@hana",   model: "Sakura",    style: "Anime",         ratio: "portrait"  },
-  { id: "pr1", src: product,      prompt: "Luxury black perfume bottle, golden rim light",                     author: "@studio", model: "Aurora XL", style: "Product",       ratio: "square"    },
-  { id: "ab1", src: abstractImg,  prompt: "Liquid metal in zero gravity, oil-slick chroma",                    author: "@flux",   model: "Prism",     style: "Abstract",      ratio: "portrait"  },
-  { id: "f1",  src: fashion,      prompt: "Avant-garde silver couture, neon backlight",                        author: "@vogue",  model: "Aurora XL", style: "Fashion",       ratio: "portrait"  },
-  { id: "s1",  src: scifi,        prompt: "Cyberpunk Tokyo, rain reflections, neon kanji",                     author: "@blade",  model: "Neon",      style: "Sci-fi",        ratio: "landscape" },
-  { id: "su1", src: surreal,      prompt: "Giant pearl moon over still ocean, painterly",                      author: "@dream",  model: "Vista",     style: "Surreal",       ratio: "portrait"  },
-  { id: "fd1", src: food,         prompt: "Panna cotta on dark stone, michelin top-down",                      author: "@chef",   model: "Studio",    style: "Food",          ratio: "square"    },
-  { id: "il1", src: illustration, prompt: "Fox in enchanted forest with glowing mushrooms",                    author: "@ink",    model: "Storybook", style: "Illustration",  ratio: "portrait"  },
-  { id: "ls1", src: landscape,    prompt: "Aurora borealis over Iceland black sand beach",                     author: "@nord",   model: "Vista",     style: "Landscape",     ratio: "landscape" },
-  { id: "td1", src: jelly,        prompt: "Translucent bioluminescent jelly creature",                         author: "@octane", model: "Render3D",  style: "3D",            ratio: "portrait"  },
-  { id: "cn1", src: cinematic,    prompt: "Vintage car in desert at golden hour, symmetric",                   author: "@reel",   model: "Cinema",    style: "Cinematic",     ratio: "landscape" },
+  // — Replaced May 16 2026: 4 of these were updated to richer typography ad creatives —
+  { id: "ty-velourveil", src: portrait,     prompt: "VelourVeil luminous setting powder launch ad, soft beige tones, 'Blur the lines. Not your glow.'", author: "@pixium", model: "Studio", style: "Product", ratio: "portrait" },
+  { id: "a1",            src: architecture, prompt: "Floating crystalline citadel above pastel clouds",                                                 author: "@noor",   model: "Vista",  style: "Architectural", ratio: "portrait" },
+  { id: "an1",           src: anime,        prompt: "Shoujo girl beneath cherry blossoms, painterly",                                                   author: "@hana",   model: "Sakura", style: "Anime",         ratio: "portrait" },
+  { id: "ty-glamour",    src: product,      prompt: "Glamour Banarasi saree heritage launch ad, rich gold and saffron, 'Timeless. Elegant. You.'",      author: "@pixium", model: "Studio", style: "Fashion",       ratio: "square"   },
+  { id: "ab1",           src: abstractImg,  prompt: "Liquid metal in zero gravity, oil-slick chroma",                                                   author: "@flux",   model: "Prism",  style: "Abstract",      ratio: "portrait" },
+  { id: "ty-maharani",   src: fashion,      prompt: "Maharani bridal couture ad, opulent red lehenga, 'Your perfect day — begin with the things of your dreams.'", author: "@pixium", model: "Studio", style: "Fashion", ratio: "portrait" },
+  { id: "s1",            src: scifi,        prompt: "Cyberpunk Tokyo, rain reflections, neon kanji",                                                    author: "@blade",  model: "Neon",   style: "Sci-fi",        ratio: "landscape" },
+  { id: "su1",           src: surreal,      prompt: "Giant pearl moon over still ocean, painterly",                                                     author: "@dream",  model: "Vista",  style: "Surreal",       ratio: "portrait" },
+  { id: "ty-embersage",  src: food,         prompt: "Ember & Sage restaurant grand-opening ad, free dessert offer, warm editorial layout",              author: "@pixium", model: "Studio", style: "Food",          ratio: "portrait" },
+  { id: "il1",           src: illustration, prompt: "Fox in enchanted forest with glowing mushrooms",                                                   author: "@ink",    model: "Storybook", style: "Illustration", ratio: "portrait" },
+  { id: "ls1",           src: landscape,    prompt: "Aurora borealis over Iceland black sand beach",                                                    author: "@nord",   model: "Vista",  style: "Landscape",     ratio: "landscape" },
+  { id: "td1",           src: jelly,        prompt: "Translucent bioluminescent jelly creature",                                                        author: "@octane", model: "Render3D", style: "3D",          ratio: "portrait" },
+  { id: "cn1",           src: cinematic,    prompt: "Vintage car in desert at golden hour, symmetric",                                                  author: "@reel",   model: "Cinema", style: "Cinematic",     ratio: "landscape" },
 ];
 
 export const styles = ["Cinematic", "Anime", "Photoreal", "Illustration", "3D", "Abstract", "Fashion", "Product", "Sci-fi", "Surreal", "Architectural", "Food", "Storybook"];
@@ -119,14 +119,14 @@ export const types: CapabilityType[] = [
     name: "Photorealism",
     tag: "Lifelike imagery",
     description: "Portraits, products, environments — indistinguishable from a camera.",
-    samples: [realismLion, realismPeacock, portrait, fashion],
+    samples: [realismLion, realismPeacock, cinematic, scifi],
   },
   {
     id: "typography",
     name: "Typography",
     tag: "Posters & ads with text",
     description: "Headlines, lockups, ad creatives — perfect spelling, real layouts.",
-    samples: [alcoholTypo, newCollectionTypo, sunscreenTypo, tigerShampooTypo],
+    samples: [portrait, fashion, product, food], // VelourVeil, Maharani, Glamour, Ember & Sage
   },
   {
     id: "anime",
@@ -147,14 +147,14 @@ export const types: CapabilityType[] = [
     name: "Vector",
     tag: "Logos & icons",
     description: "Clean SVG marks, brand logos, infographics.",
-    samples: [abstractImg, product, illustration, jelly],
+    samples: [abstractImg, illustration, jelly, glowTypo],
   },
   {
     id: "fast",
     name: "Fast",
     tag: "Quick drafts",
     description: "Sub-5-second generations for rapid ideation.",
-    samples: [landscape, food, scifi, anime],
+    samples: [landscape, scifi, anime, illustration],
   },
 ];
 
