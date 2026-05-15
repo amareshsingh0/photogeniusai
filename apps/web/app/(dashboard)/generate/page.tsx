@@ -8,6 +8,7 @@ import {
   ChevronDown, Image as ImageIcon, Layers, Plus, Settings2,
   Palette, Type, Clock, X, ArrowLeft, ArrowUpToLine, Pencil,
   Wand, Gauge, SlidersHorizontal, Megaphone, Loader2, AlertCircle,
+  UserRoundCog, Package, Stamp,
 } from "lucide-react";
 import { samples, types, styles as styleList } from "@/lib/pixium/samples";
 
@@ -99,7 +100,23 @@ export default function Generate() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
-  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  // Slotted references: named slots (subject/product/logo) + extras pool.
+  // The flat `referenceImages` is derived from these and sent to backend in slot order
+  // (subject first, then product, logo, extras). Backend treats reference_image[0] as primary.
+  const [refSubject, setRefSubject] = useState<string | null>(null);
+  const [refProduct, setRefProduct] = useState<string | null>(null);
+  const [refLogo, setRefLogo] = useState<string | null>(null);
+  const [refExtras, setRefExtras] = useState<string[]>([]);
+  // Slot the file picker should fill on the next change event. null = legacy flat add.
+  const [pendingRefSlot, setPendingRefSlot] = useState<"subject" | "product" | "logo" | "extras" | null>(null);
+  const referenceImages = useMemo<string[]>(() => {
+    const list: string[] = [];
+    if (refSubject) list.push(refSubject);
+    if (refProduct) list.push(refProduct);
+    if (refLogo) list.push(refLogo);
+    list.push(...refExtras);
+    return list;
+  }, [refSubject, refProduct, refLogo, refExtras]);
 
   // ── Generation lifecycle ──────────────────────────────────────────────────
   const [isGenerating, setIsGenerating] = useState(false);
@@ -130,19 +147,51 @@ export default function Generate() {
   const handleRefSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (referenceImages.length >= MAX_REFS) {
+    // Reject if total refs at cap and we're trying to add an extra
+    const slot = pendingRefSlot ?? "extras";
+    if (slot === "extras" && referenceImages.length >= MAX_REFS) {
       setError(`Max ${MAX_REFS} reference images`);
+      e.target.value = "";
       return;
     }
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
-      setReferenceImages((prev) => [...prev, dataUrl]);
+      if (slot === "subject") setRefSubject(dataUrl);
+      else if (slot === "product") setRefProduct(dataUrl);
+      else if (slot === "logo") setRefLogo(dataUrl);
+      else setRefExtras((prev) => [...prev, dataUrl]);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
+    setPendingRefSlot(null);
     setRefsOpen(false);
-  }, [referenceImages.length]);
+  }, [referenceImages.length, pendingRefSlot]);
+
+  // Helper to trigger upload for a specific slot
+  const triggerSlotUpload = useCallback((slot: "subject" | "product" | "logo" | "extras") => {
+    setPendingRefSlot(slot);
+    refFileInput.current?.click();
+  }, []);
+
+  // Remove a reference by its index in the flat referenceImages array.
+  // Maps the index back to the correct slot (subject/product/logo/extras[i]).
+  const removeReferenceAt = useCallback((flatIdx: number) => {
+    let i = flatIdx;
+    if (refSubject) {
+      if (i === 0) { setRefSubject(null); return; }
+      i -= 1;
+    }
+    if (refProduct) {
+      if (i === 0) { setRefProduct(null); return; }
+      i -= 1;
+    }
+    if (refLogo) {
+      if (i === 0) { setRefLogo(null); return; }
+      i -= 1;
+    }
+    setRefExtras((prev) => prev.filter((_, idx) => idx !== i));
+  }, [refSubject, refProduct, refLogo]);
 
   // ── Detect admin (enables parallel multi-model testing mode on the backend) ──
   useEffect(() => {
@@ -218,6 +267,10 @@ export default function Generate() {
         style: style !== "Auto" ? style : undefined,
         reference_image: referenceImages[0] || undefined,
         extra_reference_images: referenceImages.length > 1 ? referenceImages.slice(1) : undefined,
+        // Slotted references — backend can compose a structured prompt from these
+        reference_subject: refSubject || undefined,
+        reference_product: refProduct || undefined,
+        reference_logo: refLogo || undefined,
         negative_prompt: negative.trim() || undefined,
         capability_bucket: activeType !== "fast" ? activeType : undefined,
         testing_mode: isAdmin,
@@ -272,7 +325,7 @@ export default function Generate() {
       }
     }
     return final;
-  }, [prompt, activeRatio, activeQuality, style, referenceImages, negative, activeType, customMode, customW, customH, locked, seed, isAdmin]);
+  }, [prompt, activeRatio, activeQuality, style, referenceImages, refSubject, refProduct, refLogo, negative, activeType, customMode, customW, customH, locked, seed, isAdmin]);
 
   // ── Real generation: Pixium SSE pipeline (single or batch) ──────────────────────────────────
   const generate = useCallback(async () => {
@@ -341,6 +394,9 @@ export default function Generate() {
           style: style !== "Auto" ? style : undefined,
           reference_image: referenceImages[0] || undefined,
           extra_reference_images: referenceImages.length > 1 ? referenceImages.slice(1) : undefined,
+          reference_subject: refSubject || undefined,
+          reference_product: refProduct || undefined,
+          reference_logo: refLogo || undefined,
           negative_prompt: negative.trim() || undefined,
           capability_bucket: activeType !== "fast" ? activeType : undefined,
           testing_mode: isAdmin,
@@ -430,7 +486,7 @@ export default function Generate() {
       clearTimeout(timeoutId);
       setIsGenerating(false);
     }
-  }, [prompt, isGenerating, activeRatio, activeQuality, style, referenceImages, negative, activeType, locked, customMode, customW, customH, batch, runOneGeneration, activeModel, isAdmin]);
+  }, [prompt, isGenerating, activeRatio, activeQuality, style, referenceImages, refSubject, refProduct, refLogo, negative, activeType, locked, customMode, customW, customH, batch, runOneGeneration, activeModel, isAdmin]);
 
   // ── Visible tiles: real result(s) > one placeholder sample matching aspect ──
   const visibleTiles = useMemo<GenerationResult[]>(() => {
@@ -583,7 +639,7 @@ export default function Generate() {
                 <div key={i} className="group relative h-12 w-12 overflow-hidden rounded-lg hairline">
                   <img src={url} alt="" className="h-full w-full object-cover" />
                   <button
-                    onClick={() => setReferenceImages((p) => p.filter((_, idx) => idx !== i))}
+                    onClick={() => removeReferenceAt(i)}
                     className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100"
                   >
                     ×
@@ -742,9 +798,17 @@ export default function Generate() {
               seed={seed} setSeed={setSeed}
               locked={locked} setLocked={setLocked}
               showAdvanced={showAdvanced} setShowAdvanced={setShowAdvanced}
-              referenceImages={referenceImages}
-              onAddReference={() => refFileInput.current?.click()}
-              onRemoveReference={(i) => setReferenceImages((prev) => prev.filter((_, idx) => idx !== i))}
+              refSubject={refSubject}
+              refProduct={refProduct}
+              refLogo={refLogo}
+              refExtras={refExtras}
+              onSlotUpload={triggerSlotUpload}
+              onSlotClear={(s) => {
+                if (s === "subject") setRefSubject(null);
+                else if (s === "product") setRefProduct(null);
+                else if (s === "logo") setRefLogo(null);
+              }}
+              onExtraRemove={(idx) => setRefExtras((prev) => prev.filter((_, i) => i !== idx))}
             />
           )}
         </aside>
@@ -863,9 +927,17 @@ export default function Generate() {
               seed={seed} setSeed={setSeed}
               locked={locked} setLocked={setLocked}
               showAdvanced={showAdvanced} setShowAdvanced={setShowAdvanced}
-              referenceImages={referenceImages}
-              onAddReference={() => refFileInput.current?.click()}
-              onRemoveReference={(i) => setReferenceImages((prev) => prev.filter((_, idx) => idx !== i))}
+              refSubject={refSubject}
+              refProduct={refProduct}
+              refLogo={refLogo}
+              refExtras={refExtras}
+              onSlotUpload={triggerSlotUpload}
+              onSlotClear={(s) => {
+                if (s === "subject") setRefSubject(null);
+                else if (s === "product") setRefProduct(null);
+                else if (s === "logo") setRefLogo(null);
+              }}
+              onExtraRemove={(idx) => setRefExtras((prev) => prev.filter((_, i) => i !== idx))}
             />
           </div>
         </div>
@@ -891,10 +963,14 @@ type InspectorProps = {
   seed: string; setSeed: (v: string) => void;
   locked: boolean; setLocked: (v: boolean) => void;
   showAdvanced: boolean; setShowAdvanced: (v: boolean) => void;
-  // References (product / logo / model / actor photos for image generation)
-  referenceImages: string[];
-  onAddReference: () => void; // opens file picker
-  onRemoveReference: (i: number) => void;
+  // Slotted references — named primary slots + freeform extras
+  refSubject: string | null;
+  refProduct: string | null;
+  refLogo: string | null;
+  refExtras: string[];
+  onSlotUpload: (slot: "subject" | "product" | "logo" | "extras") => void;
+  onSlotClear: (slot: "subject" | "product" | "logo") => void;
+  onExtraRemove: (idx: number) => void;
 };
 
 function Inspector(p: InspectorProps) {
@@ -907,42 +983,86 @@ function Inspector(p: InspectorProps) {
       </header>
 
       <div className="space-y-2">
-        {/* REFERENCES — multi-purpose (product, logo, model/actor photo) */}
+        {/* REFERENCES — named slots (Subject / Product / Logo) + freeform extras */}
         <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">References</h4>
-            <span className="font-mono text-[10px] text-white/55">{p.referenceImages.length}/{MAX_REFS}</span>
+            <span className="font-mono text-[10px] text-white/55">
+              {(p.refSubject ? 1 : 0) + (p.refProduct ? 1 : 0) + (p.refLogo ? 1 : 0) + p.refExtras.length}
+            </span>
           </div>
           <p className="mb-2 text-[10.5px] leading-snug text-white/50">
-            Upload a product, logo, model/actor photo, or any visual reference. The AI will use it as guidance.
+            Drop images into the right slot so the AI knows what each one is.
           </p>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {p.referenceImages.map((url, i) => (
-              <div key={i} className="group relative h-12 w-12 overflow-hidden rounded-md hairline">
-                <img src={url} alt={`Reference ${i + 1}`} className="h-full w-full object-cover" />
-                <span className="absolute left-0.5 top-0.5 rounded bg-black/60 px-1 text-[9px] font-mono text-white/90">
-                  {i + 1}
-                </span>
-                <button
-                  onClick={() => p.onRemoveReference(i)}
-                  className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100"
-                  aria-label="Remove reference"
-                >×</button>
-              </div>
-            ))}
-            {p.referenceImages.length < MAX_REFS && (
+
+          {/* Named slots — 3 columns */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {([
+              { key: "subject", label: "Subject", hint: "Person / model / actor", value: p.refSubject, Icon: UserRoundCog },
+              { key: "product", label: "Product", hint: "Item to feature", value: p.refProduct, Icon: Package },
+              { key: "logo",    label: "Logo",    hint: "Brand mark",        value: p.refLogo,    Icon: Stamp },
+            ] as const).map((s) => (
               <button
-                onClick={p.onAddReference}
-                title="Upload reference image (product, logo, person, etc.)"
-                className="grid h-12 w-12 place-items-center rounded-md border border-dashed border-white/15 text-white/40 transition hover:border-white/30 hover:bg-white/[0.04] hover:text-white/70"
+                key={s.key}
+                onClick={() => p.onSlotUpload(s.key)}
+                title={`${s.label} — ${s.hint}${s.value ? " (click to replace)" : ""}`}
+                className={`group relative aspect-square overflow-hidden rounded-md transition ${
+                  s.value ? "ring-2 ring-white" : "ring-1 ring-white/[0.08] hover:ring-white/25 border border-dashed border-white/15"
+                }`}
               >
-                <Plus className="h-4 w-4" />
+                {s.value ? (
+                  <>
+                    <img src={s.value} alt={s.label} className="h-full w-full object-cover" />
+                    <span className="absolute inset-x-0 bottom-0 truncate bg-linear-to-t from-black/85 via-black/40 to-transparent px-1 pt-3 pb-0.5 text-center text-[9px] font-medium text-white">
+                      {s.label}
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); p.onSlotClear(s.key); }}
+                      className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100"
+                      aria-label={`Clear ${s.label}`}
+                    >×</button>
+                  </>
+                ) : (
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-white/[0.02] p-1 transition group-hover:bg-white/[0.05]">
+                    <s.Icon className="h-4 w-4 text-white/40 group-hover:text-white/70" />
+                    <span className="text-[9px] font-medium text-white/55 group-hover:text-white/85">{s.label}</span>
+                    <span className="hidden text-[8.5px] text-white/30 sm:block">+ Add</span>
+                  </div>
+                )}
               </button>
-            )}
+            ))}
           </div>
-          <p className="mt-1.5 text-[10px] text-white/35">
-            Tip: clear, well-lit photos work best. First image is the primary reference.
-          </p>
+
+          {/* Extras pool */}
+          <div className="mt-2">
+            <p className="mb-1 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-white/45">
+              More references {p.refExtras.length > 0 && <span className="font-mono text-white/35">({p.refExtras.length})</span>}
+            </p>
+            <p className="mb-1.5 text-[10px] text-white/40">
+              Background, mood board, style — describe each in your prompt.
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {p.refExtras.map((url, i) => (
+                <div key={i} className="group relative h-10 w-10 overflow-hidden rounded-md hairline">
+                  <img src={url} alt={`Extra ${i + 1}`} className="h-full w-full object-cover" />
+                  <button
+                    onClick={() => p.onExtraRemove(i)}
+                    className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100"
+                    aria-label="Remove"
+                  >×</button>
+                </div>
+              ))}
+              {p.refExtras.length < 2 && (
+                <button
+                  onClick={() => p.onSlotUpload("extras")}
+                  title="Add another reference"
+                  className="grid h-10 w-10 place-items-center rounded-md border border-dashed border-white/15 text-white/40 transition hover:border-white/30 hover:bg-white/[0.04] hover:text-white/70"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
         </section>
 
         {/* STYLE — visual thumbnail grid */}
