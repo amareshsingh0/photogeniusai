@@ -246,6 +246,9 @@ export default function Editor() {
   const [prompt, setPrompt] = useState("");
   const [quality, setQuality] = useState("1k");
   const [upscaleScale, setUpscaleScale] = useState<number | null>(null);
+  // Pending quick action — staged when user clicks a quick-action chip; fires on Apply.
+  // Values: null | "enhance" | "clean_bg" | "fix_faces" | "upscale"
+  const [pendingQuickAction, setPendingQuickAction] = useState<string | null>(null);
   // Right inspector tab: "controls" shows tool settings, "history" shows history+sources
   const [inspectorTab, setInspectorTab] = useState<"controls" | "history">("controls");
   // Past generations (cross-session) for History tab
@@ -406,22 +409,47 @@ export default function Editor() {
     const mask = maskCanvasRef.current;
     const display = displayCanvasRef.current;
     if (!img || !mask || !display) return;
-    const w = Math.round(img.clientWidth || img.getBoundingClientRect().width);
-    const h = Math.round(img.clientHeight || img.getBoundingClientRect().height);
-    if (!w || !h) {
-      // Image not laid out yet — retry next frame
+
+    // The <img> element may be wider/taller than the actual rendered bitmap when
+    // object-contain is used (letterbox bars). Compute the bitmap's rendered rect
+    // using naturalWidth/Height and the img element's clientRect so the mask
+    // canvas aligns to the visible image pixels only.
+    const elW = img.clientWidth || img.getBoundingClientRect().width;
+    const elH = img.clientHeight || img.getBoundingClientRect().height;
+    const natW = img.naturalWidth || elW;
+    const natH = img.naturalHeight || elH;
+
+    if (!elW || !elH || !natW || !natH) {
       requestAnimationFrame(() => setupMaskCanvas());
       return;
     }
-    if (mask.width !== w || mask.height !== h) {
-      mask.width = w; mask.height = h;
-      display.width = w; display.height = h;
+
+    // Scale factor to fit natural image inside element (object-contain math)
+    const scale = Math.min(elW / natW, elH / natH);
+    const renderedW = Math.round(natW * scale);
+    const renderedH = Math.round(natH * scale);
+    const offsetX = Math.round((elW - renderedW) / 2);
+    const offsetY = Math.round((elH - renderedH) / 2);
+
+    if (mask.width !== renderedW || mask.height !== renderedH) {
+      mask.width = renderedW;
+      mask.height = renderedH;
+      display.width = renderedW;
+      display.height = renderedH;
       const mCtx = mask.getContext("2d");
       if (!mCtx) return;
       mCtx.fillStyle = "black";
-      mCtx.fillRect(0, 0, w, h);
+      mCtx.fillRect(0, 0, renderedW, renderedH);
       setHasMask(false);
     }
+
+    // Position the visible canvas exactly over the rendered image rect (not the <img> element)
+    display.style.position = "absolute";
+    display.style.left = `${offsetX}px`;
+    display.style.top = `${offsetY}px`;
+    display.style.width = `${renderedW}px`;
+    display.style.height = `${renderedH}px`;
+
     redrawMaskOverlay();
   }, [redrawMaskOverlay]);
 
@@ -835,8 +863,8 @@ export default function Editor() {
                     <canvas ref={maskCanvasRef} className="hidden" />
                     <canvas
                       ref={displayCanvasRef}
-                      className="absolute inset-0 h-full w-full touch-none"
-                      style={{ cursor: maskTool === "eraser" ? "cell" : "crosshair" }}
+                      className="touch-none"
+                      style={{ cursor: maskTool === "eraser" ? "cell" : "crosshair", position: "absolute" }}
                       onMouseDown={onMaskDown}
                       onMouseMove={onMaskMove}
                       onMouseUp={onMaskUp}
@@ -910,38 +938,69 @@ export default function Editor() {
             <div className="no-scrollbar mt-1.5 flex items-center gap-1.5 overflow-x-auto pb-0.5">
               {QUICK_ACTIONS.map((qa) => {
                 const Icon = qa.icon;
+                const isSelected = pendingQuickAction === qa.id;
                 return (
                   <button
                     key={qa.id}
-                    onClick={() => runQuickAction(qa)}
+                    onClick={() => setPendingQuickAction((cur) => (cur === qa.id ? null : qa.id))}
                     disabled={!current || applying}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] px-2.5 py-0.5 text-[10px] text-white/75 hover:bg-white/10 disabled:opacity-40"
+                    title={`Stage ${qa.label} — click Apply to run`}
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] transition disabled:opacity-40 ${
+                      isSelected
+                        ? "bg-white text-black"
+                        : "border border-white/10 bg-white/[0.02] text-white/75 hover:bg-white/10"
+                    }`}
                   >
                     <Icon className="h-3 w-3" /> {qa.label}
                   </button>
                 );
               })}
-              {/* Upscale quick action — pick a scale first, then click Upscale */}
-              <div className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] py-0.5 pl-2.5 pr-0.5 text-[10px] text-white/75">
+              {/* Upscale quick action — pick scale, then click Apply to run */}
+              <div className={`inline-flex shrink-0 items-center gap-1 rounded-full py-0.5 pl-2.5 pr-0.5 text-[10px] transition ${
+                pendingQuickAction === "upscale"
+                  ? "bg-white text-black"
+                  : "border border-white/10 bg-white/[0.02] text-white/75"
+              }`}>
                 <ArrowUpToLine className="h-3 w-3" />
                 <button
-                  onClick={runUpscale}
+                  onClick={() => {
+                    if (upscaleScale === null) return;
+                    setPendingQuickAction((cur) => (cur === "upscale" ? null : "upscale"));
+                  }}
                   disabled={!current || applying || upscaleScale === null}
-                  title={upscaleScale === null ? "Pick 2× or 4× first" : `Upscale ${upscaleScale}×`}
-                  className="hover:text-white disabled:opacity-40"
+                  title={upscaleScale === null ? "Pick 2× or 4× first" : `Stage Upscale ${upscaleScale}× — click Apply to run`}
+                  className="hover:opacity-80 disabled:opacity-40"
                 >
                   Upscale
                 </button>
-                <span className="mx-1 h-3 w-px bg-white/10" />
-                {UPSCALE_SCALES.map((x) => (
-                  <button
-                    key={x}
-                    onClick={() => setUpscaleScale((cur) => (cur === x ? null : x))}
-                    className={`rounded-full px-1.5 py-0.5 transition ${upscaleScale === x ? "bg-white text-black" : "text-white/60 hover:text-white"}`}
-                  >
-                    {x}×
-                  </button>
-                ))}
+                <span className={`mx-1 h-3 w-px ${pendingQuickAction === "upscale" ? "bg-black/20" : "bg-white/10"}`} />
+                {UPSCALE_SCALES.map((x) => {
+                  const isPicked = upscaleScale === x;
+                  const parentWhite = pendingQuickAction === "upscale";
+                  return (
+                    <button
+                      key={x}
+                      onClick={() => {
+                        setUpscaleScale((cur) => (cur === x ? null : x));
+                        // Picking a scale shouldn't auto-stage; user must still click Upscale chip.
+                        if (pendingQuickAction === "upscale" && upscaleScale === x) {
+                          setPendingQuickAction(null);
+                        }
+                      }}
+                      className={`rounded-full px-1.5 py-0.5 transition ${
+                        isPicked
+                          ? parentWhite
+                            ? "bg-black/85 text-white"
+                            : "bg-white text-black"
+                          : parentWhite
+                            ? "text-black/55 hover:text-black"
+                            : "text-white/60 hover:text-white"
+                      }`}
+                    >
+                      {x}×
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -968,13 +1027,42 @@ export default function Editor() {
                 </div>
               )}
               <button
-                onClick={tool === "logo" ? runLogoOverlay : applyEdit}
-                disabled={!current || applying || (tool === "logo" ? !logoData : !isAiTool)}
+                onClick={() => {
+                  if (tool === "logo") return runLogoOverlay();
+                  if (pendingQuickAction === "upscale") {
+                    runUpscale();
+                    setPendingQuickAction(null);
+                    return;
+                  }
+                  if (pendingQuickAction) {
+                    const qa = QUICK_ACTIONS.find((q) => q.id === pendingQuickAction);
+                    if (qa) {
+                      runQuickAction(qa);
+                      setPendingQuickAction(null);
+                      return;
+                    }
+                  }
+                  applyEdit();
+                }}
+                disabled={
+                  !current || applying ||
+                  (tool === "logo" ? !logoData :
+                    pendingQuickAction === "upscale" ? upscaleScale === null :
+                    pendingQuickAction ? false :
+                    !isAiTool)
+                }
                 className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-4 text-xs font-medium text-black disabled:opacity-50"
                 style={{ background: "var(--gradient-aurora)" }}
               >
-                {applying ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : tool === "logo" ? <Stamp className="h-3.5 w-3.5" aria-hidden /> : <Wand2 className="h-3.5 w-3.5" aria-hidden />}
-                {applying ? "Applying…" : (tool === "logo" ? "Apply logo" : "Apply")}
+                {applying ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> :
+                  tool === "logo" ? <Stamp className="h-3.5 w-3.5" aria-hidden /> :
+                  pendingQuickAction === "upscale" ? <ArrowUpToLine className="h-3.5 w-3.5" aria-hidden /> :
+                  <Wand2 className="h-3.5 w-3.5" aria-hidden />}
+                {applying ? "Applying…" :
+                  tool === "logo" ? "Apply logo" :
+                  pendingQuickAction === "upscale" ? `Upscale ${upscaleScale ?? ""}×` :
+                  pendingQuickAction ? `Apply ${QUICK_ACTIONS.find(q => q.id === pendingQuickAction)?.label ?? ""}` :
+                  "Apply"}
               </button>
             </div>
 
