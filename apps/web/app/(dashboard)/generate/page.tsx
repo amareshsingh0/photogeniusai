@@ -95,6 +95,9 @@ export default function Generate() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [mode, setMode] = useState<string>("poster");
   const [focused, setFocused] = useState<number | null>(null);
+  // Zoom for the focused-result view. "fit" = contain to viewport, number = percentage of natural size.
+  const [focusZoom, setFocusZoom] = useState<"fit" | number>("fit");
+  const focusImgRef = useRef<HTMLImageElement | null>(null);
   const [showHistory, setShowHistory] = useState(false); // toggles the right panel: controls ↔ history
   const [history, setHistory] = useState<{ id: string; url: string; prompt?: string }[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -710,20 +713,55 @@ export default function Generate() {
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col gap-2">
-              <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-2xl hairline bg-white/[0.02]" style={{ minHeight: 160 }}>
-                <img src={visibleTiles[focused]?.image_url} alt="" className="max-h-full max-w-full object-contain" />
-                <button onClick={() => setFocused(null)} className="glass-panel absolute left-3 top-3 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"><ArrowLeft className="h-3.5 w-3.5" /> Back</button>
+              <div
+                className={`relative flex flex-1 items-center justify-center rounded-2xl hairline bg-white/[0.02] ${focusZoom === "fit" ? "overflow-hidden" : "overflow-auto"}`}
+                style={{ minHeight: 160 }}
+                onWheel={(e) => {
+                  if (!e.ctrlKey && !e.metaKey) return; // require Ctrl/Cmd to zoom (don't trap normal page scroll)
+                  e.preventDefault();
+                  setFocusZoom((cur) => {
+                    const base = cur === "fit" ? 100 : cur;
+                    const next = e.deltaY < 0 ? base + 25 : base - 25;
+                    return Math.max(25, Math.min(400, next));
+                  });
+                }}
+              >
+                <img
+                  ref={focusImgRef}
+                  src={visibleTiles[focused]?.image_url}
+                  alt=""
+                  className={focusZoom === "fit" ? "max-h-full max-w-full object-contain" : "block"}
+                  style={focusZoom === "fit"
+                    ? undefined
+                    : {
+                        width: focusImgRef.current?.naturalWidth
+                          ? `${(focusImgRef.current.naturalWidth * focusZoom) / 100}px`
+                          : `${focusZoom}%`,
+                        height: "auto",
+                        maxWidth: "none",
+                        maxHeight: "none",
+                      }}
+                />
+                <button onClick={() => { setFocused(null); setFocusZoom("fit"); }} className="glass-panel absolute left-3 top-3 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"><ArrowLeft className="h-3.5 w-3.5" /> Back</button>
                 <div className="absolute right-3 top-3 flex gap-1">
                   <Link href={`/editor?image=${encodeURIComponent(visibleTiles[focused]?.image_url || "")}`} className="glass-panel inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"><Pencil className="h-3.5 w-3.5" /> Edit</Link>
                   <Link href={`/editor?tool=logo&image=${encodeURIComponent(visibleTiles[focused]?.image_url || "")}`} className="glass-panel inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"><Wand className="h-3.5 w-3.5" /> Logo</Link>
                   <Link href={`/editor?tool=upscale&image=${encodeURIComponent(visibleTiles[focused]?.image_url || "")}`} className="glass-panel inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"><ArrowUpToLine className="h-3.5 w-3.5" /> Upscale</Link>
                   <a href={visibleTiles[focused]?.image_url} download className="glass-panel inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs"><Download className="h-3.5 w-3.5" /></a>
                 </div>
+                {/* Zoom HUD */}
+                <div className="glass-panel absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full p-1 text-xs">
+                  <button onClick={() => setFocusZoom("fit")} aria-pressed={focusZoom === "fit"} className={`grid h-7 w-7 place-items-center rounded-full ${focusZoom === "fit" ? "bg-white/15" : "hover:bg-white/10"}`} aria-label="Fit"><Maximize2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => setFocusZoom((cur) => Math.max(25, (cur === "fit" ? 100 : cur) - 25))} className="grid h-7 w-7 place-items-center rounded-full hover:bg-white/10" aria-label="Zoom out">−</button>
+                  <span className="kerned px-1.5 font-mono text-[11px] text-white/70">{focusZoom === "fit" ? "Fit" : `${focusZoom}%`}</span>
+                  <button onClick={() => setFocusZoom((cur) => Math.min(400, (cur === "fit" ? 100 : cur) + 25))} className="grid h-7 w-7 place-items-center rounded-full hover:bg-white/10" aria-label="Zoom in">+</button>
+                  <button onClick={() => setFocusZoom(100)} aria-pressed={focusZoom === 100} className={`rounded-full px-2 py-1 ${focusZoom === 100 ? "bg-white/15" : "hover:bg-white/10"}`}>100%</button>
+                </div>
               </div>
               {visibleTiles.length > 1 && (
                 <div className="flex shrink-0 gap-2">
                   {visibleTiles.map((s, i) => (
-                    <button key={i} onClick={() => setFocused(i)} className={`relative h-14 w-14 overflow-hidden rounded-lg ${focused === i ? "ring-2 ring-white" : "ring-1 ring-white/10"}`}>
+                    <button key={i} onClick={() => { setFocused(i); setFocusZoom("fit"); }} className={`relative h-14 w-14 overflow-hidden rounded-lg ${focused === i ? "ring-2 ring-white" : "ring-1 ring-white/10"}`}>
                       <img src={s.image_url} alt="" className="h-full w-full object-cover" />
                     </button>
                   ))}

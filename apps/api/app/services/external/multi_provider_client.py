@@ -868,12 +868,31 @@ class MultiProviderClient:
                 continue
 
             header = url[:comma].lower()
-            if "png" in header:
+            # Cover all image types we might receive — from generation outputs
+            # (PNG/JPEG/WEBP/SVG mostly) or from user reference uploads (HEIC from
+            # iPhone, AVIF from modern cameras, GIF, BMP, TIFF, ICO).
+            if "svg" in header:
+                mime, ext = "image/svg+xml", "svg"
+            elif "png" in header:
                 mime, ext = "image/png", "png"
             elif "jpeg" in header or "jpg" in header:
                 mime, ext = "image/jpeg", "jpg"
             elif "webp" in header:
                 mime, ext = "image/webp", "webp"
+            elif "heic" in header:
+                mime, ext = "image/heic", "heic"
+            elif "heif" in header:
+                mime, ext = "image/heif", "heif"
+            elif "avif" in header:
+                mime, ext = "image/avif", "avif"
+            elif "gif" in header:
+                mime, ext = "image/gif", "gif"
+            elif "bmp" in header:
+                mime, ext = "image/bmp", "bmp"
+            elif "tiff" in header or "tif" in header:
+                mime, ext = "image/tiff", "tiff"
+            elif "x-icon" in header or "vnd.microsoft.icon" in header:
+                mime, ext = "image/x-icon", "ico"
             else:
                 mime, ext = "image/png", "png"
 
@@ -1261,12 +1280,27 @@ class MultiProviderClient:
             if comma == -1:
                 raise ValueError("Malformed data URI")
             header = image_url[:comma].lower()
-            if "png" in header:
+            # Comprehensive — references can come in any image format
+            if "svg" in header:
+                mime = "image/svg+xml"
+            elif "png" in header:
                 mime = "image/png"
             elif "jpeg" in header or "jpg" in header:
                 mime = "image/jpeg"
             elif "webp" in header:
                 mime = "image/webp"
+            elif "heic" in header:
+                mime = "image/heic"
+            elif "heif" in header:
+                mime = "image/heif"
+            elif "avif" in header:
+                mime = "image/avif"
+            elif "gif" in header:
+                mime = "image/gif"
+            elif "bmp" in header:
+                mime = "image/bmp"
+            elif "tiff" in header or "tif" in header:
+                mime = "image/tiff"
             else:
                 mime = "image/png"
             return base64.b64decode(image_url[comma + 1:]), mime

@@ -841,21 +841,31 @@ export default function Editor() {
         {/* Canvas */}
         <section aria-label="Canvas" className="glass-panel order-2 flex min-h-0 min-w-0 flex-col gap-2 rounded-3xl p-2 sm:p-3">
           <div
-            className={`relative flex min-h-0 w-full flex-1 items-center justify-center rounded-2xl ${zoom === "fit" || zoom === 100 ? "overflow-hidden" : "overflow-auto"}`}
+            className={`relative flex min-h-0 w-full flex-1 items-center justify-center rounded-2xl ${zoom === "fit" ? "overflow-hidden" : "overflow-auto"}`}
             style={{
               background: "repeating-conic-gradient(oklch(0.16 0 0) 0% 25%, oklch(0.12 0 0) 0% 50%) 50% / 18px 18px",
             }}
           >
             {current ? (
-              <div className="relative inline-flex max-h-full max-w-full">
+              <div className={`relative inline-flex ${zoom === "fit" ? "max-h-full max-w-full" : ""}`}>
                 <img
                   ref={imgRef}
                   src={current}
                   alt="Edit canvas"
-                  className="block max-h-full max-w-full object-contain transition"
-                  style={zoom === "fit" || zoom === 100
+                  className={`block ${zoom === "fit" ? "max-h-full max-w-full object-contain" : ""} transition`}
+                  style={zoom === "fit"
                     ? undefined
-                    : { transform: `scale(${zoom / 100})`, transformOrigin: "center center" }}
+                    : {
+                        // At 100% show image at its natural pixel size; at other
+                        // zoom levels scale proportionally. Container is overflow-auto
+                        // so the user can scroll/pan around when zoomed in past viewport.
+                        width: imgRef.current?.naturalWidth
+                          ? `${(imgRef.current.naturalWidth * zoom) / 100}px`
+                          : `${zoom}%`,
+                        height: "auto",
+                        maxWidth: "none",
+                        maxHeight: "none",
+                      }}
                 />
                 {/* Mask drawing overlay — only interactive in mask modes */}
                 {isMaskMode && (
