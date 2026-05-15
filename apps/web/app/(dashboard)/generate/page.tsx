@@ -48,6 +48,21 @@ const qualities = [
 ];
 
 const batches = [1, 2, 4];
+const MAX_REFS = 5;
+
+// Map each style to a sample image so the Style picker shows visual thumbnails.
+// Picks the first sample whose `style` matches; falls back to a generic image.
+const STYLE_PREVIEWS: Record<string, string> = (() => {
+  const out: Record<string, string> = {};
+  for (const s of samples) {
+    if (!out[s.style]) out[s.style] = s.src;
+  }
+  // explicit fallbacks for styles without a sample
+  if (!out["Photoreal"]) out["Photoreal"] = samples[0]?.src ?? "";
+  if (!out["Landscape"]) out["Landscape"] = samples.find((s) => s.style === "Landscape")?.src ?? samples[0]?.src ?? "";
+  return out;
+})();
+const STYLE_FALLBACK = samples[0]?.src ?? "";
 
 const RAIL = [
   { id: "image",  icon: ImageIcon, label: "Image" },
@@ -85,7 +100,6 @@ export default function Generate() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
-  const MAX_REFS = 5;
 
   // ── Generation lifecycle ──────────────────────────────────────────────────
   const [isGenerating, setIsGenerating] = useState(false);
@@ -490,10 +504,24 @@ export default function Generate() {
         {/* CENTER */}
         <section className="flex min-h-0 min-w-0 flex-col">
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 py-2">
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex min-w-0 items-center gap-2 text-sm">
               <span className="kerned text-white/40">Studio</span>
               <span className="text-white/20">/</span>
               <span className="font-display">Create</span>
+              <span className="text-white/20">·</span>
+              {/* Type pills inline — replaces Inspector Type panel */}
+              <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
+                {types.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveType(t.id)}
+                    title={t.name}
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${activeType === t.id ? "bg-white text-black" : "border border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.08] hover:text-white"}`}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 text-xs lg:hidden">
@@ -689,7 +717,7 @@ export default function Generate() {
                         setResult({ success: true, image_url: h.url, enhanced_prompt: h.prompt });
                         setMultiResults([]);
                         setFocused(0);
-                        setShowHistory(false);
+                        // stay on History tab — user can keep browsing
                       }}
                       title={h.prompt}
                       className="group relative aspect-square overflow-hidden rounded-md hairline"
@@ -703,7 +731,6 @@ export default function Generate() {
           ) : (
             <Inspector
               activeType={activeTypeMeta}
-              type={activeType} setType={setActiveType}
               style={style} setStyle={setStyle}
               ratio={ratio} setRatio={setRatio}
               customMode={customMode} setCustomMode={setCustomMode}
@@ -715,6 +742,9 @@ export default function Generate() {
               seed={seed} setSeed={setSeed}
               locked={locked} setLocked={setLocked}
               showAdvanced={showAdvanced} setShowAdvanced={setShowAdvanced}
+              referenceImages={referenceImages}
+              onAddReference={() => refFileInput.current?.click()}
+              onRemoveReference={(i) => setReferenceImages((prev) => prev.filter((_, idx) => idx !== i))}
             />
           )}
         </aside>
@@ -822,7 +852,6 @@ export default function Generate() {
             </div>
             <Inspector
               activeType={activeTypeMeta}
-              type={activeType} setType={setActiveType}
               style={style} setStyle={setStyle}
               ratio={ratio} setRatio={setRatio}
               customMode={customMode} setCustomMode={setCustomMode}
@@ -834,6 +863,9 @@ export default function Generate() {
               seed={seed} setSeed={setSeed}
               locked={locked} setLocked={setLocked}
               showAdvanced={showAdvanced} setShowAdvanced={setShowAdvanced}
+              referenceImages={referenceImages}
+              onAddReference={() => refFileInput.current?.click()}
+              onRemoveReference={(i) => setReferenceImages((prev) => prev.filter((_, idx) => idx !== i))}
             />
           </div>
         </div>
@@ -848,7 +880,6 @@ export default function Generate() {
 // ─────────────────────────────────────────────────────────────────────────────
 type InspectorProps = {
   activeType: typeof types[number];
-  type: string; setType: (v: string) => void;
   style: string; setStyle: (v: string) => void;
   ratio: string; setRatio: (v: string) => void;
   customMode: boolean; setCustomMode: (v: boolean) => void;
@@ -860,6 +891,10 @@ type InspectorProps = {
   seed: string; setSeed: (v: string) => void;
   locked: boolean; setLocked: (v: boolean) => void;
   showAdvanced: boolean; setShowAdvanced: (v: boolean) => void;
+  // References (product / logo / model / actor photos for image generation)
+  referenceImages: string[];
+  onAddReference: () => void; // opens file picker
+  onRemoveReference: (i: number) => void;
 };
 
 function Inspector(p: InspectorProps) {
@@ -868,56 +903,84 @@ function Inspector(p: InspectorProps) {
     <div className="glass-panel rounded-2xl p-3">
       <header className="mb-2.5">
         <h3 className="text-[13px] font-semibold tracking-tight text-white">Settings</h3>
-        <p className="mt-0.5 text-[11px] leading-snug text-white/55">Adjust type, style, aspect, and quality before generating.</p>
+        <p className="mt-0.5 text-[11px] leading-snug text-white/55">Upload references, pick a style, set aspect & quality.</p>
       </header>
 
       <div className="space-y-2">
-        {/* TYPE */}
+        {/* REFERENCES — multi-purpose (product, logo, model/actor photo) */}
         <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">Type</h4>
-            <span className="font-mono text-[10px] text-white/55">{p.activeType.name}</span>
+            <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">References</h4>
+            <span className="font-mono text-[10px] text-white/55">{p.referenceImages.length}/{MAX_REFS}</span>
           </div>
-          <div className="flex items-center gap-2.5 rounded-md border border-white/[0.08] bg-white/[0.02] p-2">
-            <div className="h-8 w-8 shrink-0 overflow-hidden rounded-md hairline">
-              <img src={p.activeType.samples[0]} alt="" className="h-full w-full object-cover" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[12px] font-medium text-white">{p.activeType.name}</p>
-              <p className="truncate text-[10.5px] text-white/45">{p.activeType.tag}</p>
-            </div>
-          </div>
-          <div className="mt-2 grid grid-cols-3 gap-1">
-            {types.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => p.setType(t.id)}
-                className={`group relative overflow-hidden rounded-md transition ${p.type === t.id ? "ring-2 ring-white" : "ring-1 ring-white/[0.08] hover:ring-white/25"}`}
-                title={t.name}
-              >
-                <img src={t.samples[0]} alt={t.name} className="aspect-square h-full w-full object-cover" />
-                <span className="absolute inset-x-0 bottom-0 truncate bg-linear-to-t from-black/85 via-black/40 to-transparent px-1 pt-3 pb-0.5 text-center text-[9px] font-medium text-white">
-                  {t.name}
+          <p className="mb-2 text-[10.5px] leading-snug text-white/50">
+            Upload a product, logo, model/actor photo, or any visual reference. The AI will use it as guidance.
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {p.referenceImages.map((url, i) => (
+              <div key={i} className="group relative h-12 w-12 overflow-hidden rounded-md hairline">
+                <img src={url} alt={`Reference ${i + 1}`} className="h-full w-full object-cover" />
+                <span className="absolute left-0.5 top-0.5 rounded bg-black/60 px-1 text-[9px] font-mono text-white/90">
+                  {i + 1}
                 </span>
-              </button>
+                <button
+                  onClick={() => p.onRemoveReference(i)}
+                  className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100"
+                  aria-label="Remove reference"
+                >×</button>
+              </div>
             ))}
+            {p.referenceImages.length < MAX_REFS && (
+              <button
+                onClick={p.onAddReference}
+                title="Upload reference image (product, logo, person, etc.)"
+                className="grid h-12 w-12 place-items-center rounded-md border border-dashed border-white/15 text-white/40 transition hover:border-white/30 hover:bg-white/[0.04] hover:text-white/70"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            )}
           </div>
+          <p className="mt-1.5 text-[10px] text-white/35">
+            Tip: clear, well-lit photos work best. First image is the primary reference.
+          </p>
         </section>
 
-        {/* STYLE */}
+        {/* STYLE — visual thumbnail grid */}
         <section className="rounded-lg border border-white/[0.08] bg-white/[0.015] p-2.5">
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">Style</h4>
             <span className="font-mono text-[10px] text-white/55">{p.style}</span>
           </div>
-          <div className="flex flex-wrap gap-1">
-            {styleOptions.map((s) => (
-              <button
-                key={s}
-                onClick={() => p.setStyle(s)}
-                className={`rounded-md px-2 py-1 text-[10.5px] transition ${p.style === s ? "bg-white text-black" : "border border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"}`}
-              >{s}</button>
-            ))}
+          <div className="grid grid-cols-3 gap-1">
+            {/* "Auto" tile uses a gradient placeholder */}
+            <button
+              onClick={() => p.setStyle("Auto")}
+              title="Auto — let the AI pick"
+              className={`group relative aspect-square overflow-hidden rounded-md transition ${p.style === "Auto" ? "ring-2 ring-white" : "ring-1 ring-white/[0.08] hover:ring-white/25"}`}
+            >
+              <div className="grid h-full w-full place-items-center" style={{ background: "var(--gradient-aurora)" }}>
+                <Wand className="h-4 w-4 text-black/70" />
+              </div>
+              <span className="absolute inset-x-0 bottom-0 truncate bg-linear-to-t from-black/85 via-black/40 to-transparent px-1 pt-3 pb-0.5 text-center text-[9px] font-medium text-white">
+                Auto
+              </span>
+            </button>
+            {styleList.map((s) => {
+              const src = STYLE_PREVIEWS[s] || STYLE_FALLBACK;
+              return (
+                <button
+                  key={s}
+                  onClick={() => p.setStyle(s)}
+                  title={s}
+                  className={`group relative aspect-square overflow-hidden rounded-md transition ${p.style === s ? "ring-2 ring-white" : "ring-1 ring-white/[0.08] hover:ring-white/25"}`}
+                >
+                  <img src={src} alt={s} className="h-full w-full object-cover transition group-hover:scale-105" />
+                  <span className="absolute inset-x-0 bottom-0 truncate bg-linear-to-t from-black/85 via-black/40 to-transparent px-1 pt-3 pb-0.5 text-center text-[9px] font-medium text-white">
+                    {s}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </section>
 
