@@ -94,11 +94,30 @@ const THEME_PRESETS: { label: string; prompt: string }[] = [
 
 const BRUSH_SIZES = [8, 16, 28, 44];
 const MAX_EXTRAS = 3;
+const MAX_COMPOSE_REFS = 4;
 type MaskTool = "brush" | "circle" | "rect" | "eraser";
-// Tools that paint a mask on the canvas. Only Inpaint uses it (mask + prompt).
-const MASK_TOOLS: ToolId[] = ["inpaint"];
-// Tools that accept uploaded reference images (separate from picked-from-gallery refs)
-const EXTRAS_TOOLS: ToolId[] = ["object", "compose"];
+
+// Per-tool capability matrix: which universal features (mask, reference, prompt) are available
+// and whether each is "required" (must use before Apply) or "optional" (helpful but skippable).
+// "off" means hide that section entirely for this tool.
+type CapLevel = "off" | "optional" | "required";
+const TOOL_CAPS: Record<ToolId, { mask: CapLevel; reference: CapLevel; prompt: CapLevel; maxRefs?: number }> = {
+  brush:     { mask: "required", reference: "off",      prompt: "off" },
+  erase:     { mask: "required", reference: "off",      prompt: "off" },
+  rect:      { mask: "required", reference: "off",      prompt: "off" },
+  inpaint:   { mask: "required", reference: "optional", prompt: "required" },
+  bg:        { mask: "optional", reference: "optional", prompt: "required" },
+  removebg:  { mask: "off",      reference: "off",      prompt: "optional" },
+  person:    { mask: "optional", reference: "optional", prompt: "required" },
+  restyle:   { mask: "off",      reference: "optional", prompt: "required" },
+  expand:    { mask: "off",      reference: "off",      prompt: "required" },
+  color:     { mask: "off",      reference: "optional", prompt: "required" },
+  text:      { mask: "optional", reference: "optional", prompt: "required" },
+  object:    { mask: "optional", reference: "optional", prompt: "required" },
+  logo:      { mask: "off",      reference: "off",      prompt: "off" }, // logo uses its own upload + position UI
+  removeobj: { mask: "required", reference: "off",      prompt: "required" },
+  compose:   { mask: "off",      reference: "required", prompt: "required", maxRefs: MAX_COMPOSE_REFS },
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TOOL_GROUPS: { label: string; tools: { id: ToolId; icon: any; label: string }[] }[] = [
@@ -135,14 +154,14 @@ const TOOL_PANELS: Record<ToolId, { title: string; hint: string; chips?: string[
   brush:    { title: "Brush",          hint: "Paint a mask over the area you want to change. (Mask-aware editing is applied to your instruction.)" },
   erase:    { title: "Erase",          hint: "Erase parts of the mask." },
   rect:     { title: "Region",         hint: "Drag a rectangular selection." },
-  inpaint:  { title: "Inpaint",        hint: "Describe what should replace the masked region.", chips: [
+  inpaint:  { title: "Inpaint",        hint: "Paint a mask over an area, then describe what should replace it. Optionally upload a reference for the fill.", chips: [
     "A wooden table surface with soft natural shadows",
     "A modern marble countertop with subtle veining",
     "Lush green grass with a few scattered wildflowers",
     "A clean studio backdrop in matching tones",
     "Smooth concrete floor with subtle texture",
   ], placeholder: "Fill the masked area with a wooden table surface" },
-  bg:       { title: "Background",     hint: "Describe the new scene behind the subject.", chips: [
+  bg:       { title: "Background",     hint: "Describe the new scene behind the subject. Optionally upload a reference image of the background you want.", chips: [
     "A cinematic mountain lake at golden-hour sunrise",
     "Neon-lit Tokyo street at dusk, shallow depth of field",
     "Vast Sahara desert dunes with long shadows",
@@ -155,14 +174,14 @@ const TOOL_PANELS: Record<ToolId, { title: string; hint: string; chips?: string[
     "Solid black background, high-contrast cutout",
     "Light gradient (light gray to white) for product shots",
   ], placeholder: "Remove the background, keep the subject on a clean white studio backdrop" },
-  person:   { title: "Swap person",    hint: "Describe the new subject.", chips: [
+  person:   { title: "Swap person",    hint: "Describe the new subject. Optionally upload a reference photo of the person/look you want.", chips: [
     "A woman in her 30s, freckles, candid smile, natural light",
     "A businessman in his 40s, crisp suit, confident posture",
     "An elderly grandmother with warm smile and silver hair",
     "A teenager in casual streetwear, urban setting",
     "A toddler with curly hair, joyful expression",
   ], placeholder: "Replace the person with a woman in her 30s, freckles, candid smile, natural light" },
-  restyle:  { title: "Restyle",        hint: "Apply a new visual language.", chips: [
+  restyle:  { title: "Restyle",        hint: "Apply a new visual language. Optionally upload a reference image whose style you want to match.", chips: [
     "Wong Kar-wai cinematic — saturated neon and rain",
     "Studio Ghibli hand-painted animation style",
     "Annie Leibovitz editorial portrait — dramatic light",
@@ -176,7 +195,7 @@ const TOOL_PANELS: Record<ToolId, { title: string; hint: string; chips?: string[
     "Reveal more of the environment behind the subject",
     "Widen to a cinematic 16:9 frame, preserving composition",
   ], placeholder: "Extend the scene to the left and right, continuing the environment naturally" },
-  color:    { title: "Color grade",    hint: "Adjust mood with a cinematic grade.", chips: [
+  color:    { title: "Color grade",    hint: "Adjust mood with a cinematic grade. Optionally upload a reference image whose color palette you want to match.", chips: [
     "Teal and orange Hollywood blockbuster grade",
     "Bleach bypass — desaturated, high-contrast film look",
     "Warm Kodachrome film grain with vintage tones",
@@ -198,7 +217,7 @@ const TOOL_PANELS: Record<ToolId, { title: string; hint: string; chips?: string[
     "A glowing neon sign on the wall behind the subject",
   ], placeholder: "Add a weathered leather satchel on the desk" },
   logo:     { title: "Logo overlay",   hint: "Upload a logo (PNG/SVG, transparent recommended), then place & scale it on the image." },
-  removeobj:{ title: "Remove object",  hint: "Name the object to remove cleanly.", chips: [
+  removeobj:{ title: "Remove object",  hint: "Paint a mask over the object, then describe what to remove (so the AI knows what to keep, e.g. background).", chips: [
     "Remove the person on the left and fill in naturally",
     "Remove the watermark in the bottom-right corner",
     "Remove the lamp post on the right side of the frame",
@@ -273,9 +292,13 @@ export default function Editor() {
   const canUndo = histIdx > 0;
   const canRedo = histIdx >= 0 && histIdx < history.length - 1;
   const isAiTool = !!TOOL_EDIT_MODE[tool];
-  const isMaskMode = MASK_TOOLS.includes(tool);
-  const isExtrasMode = EXTRAS_TOOLS.includes(tool);
+  const caps = TOOL_CAPS[tool] ?? { mask: "off", reference: "off", prompt: "off" };
+  const isMaskMode = caps.mask !== "off";
+  const isExtrasMode = caps.reference !== "off";
   const isInpaint = tool === "inpaint";
+  const maskRequired = caps.mask === "required";
+  const refRequired = caps.reference === "required";
+  const maxRefsForTool = caps.maxRefs ?? MAX_EXTRAS;
 
   // Set initial source from ?image= and initial tool from ?tool=
   useEffect(() => {
@@ -515,12 +538,13 @@ export default function Editor() {
     return mask.toDataURL("image/png");
   };
 
-  // ── Uploaded reference images (object/logo/compose) ───────────────────────
+  // ── Uploaded reference images (any tool with reference cap !== "off") ──
   const addUploadedExtras = useCallback(async (files: FileList | null) => {
     if (!files) return;
+    const cap = maxRefsForTool;
     const urls: string[] = [];
     for (const f of Array.from(files)) {
-      if (uploadedExtras.length + urls.length >= MAX_EXTRAS) break;
+      if (uploadedExtras.length + urls.length >= cap) break;
       if (!f.type.startsWith("image/")) continue;
       const du = await new Promise<string>((res, rej) => {
         const r = new FileReader();
@@ -530,8 +554,8 @@ export default function Editor() {
       });
       urls.push(du);
     }
-    if (urls.length) setUploadedExtras((prev) => [...prev, ...urls].slice(0, MAX_EXTRAS));
-  }, [uploadedExtras.length]);
+    if (urls.length) setUploadedExtras((prev) => [...prev, ...urls].slice(0, cap));
+  }, [uploadedExtras.length, maxRefsForTool]);
 
   const removeUploadedExtra = (i: number) => setUploadedExtras((prev) => prev.filter((_, idx) => idx !== i));
 
@@ -598,23 +622,28 @@ export default function Editor() {
       setError("Pick an AI tool to apply a model edit. (Brush / Erase / Region just paint a mask.)");
       return;
     }
-    // Inpaint: require a mask
-    if (isInpaint && !hasMask) {
+    // Enforce required mask (Inpaint, Remove Object)
+    if (maskRequired && !hasMask) {
       setError("Paint a mask over the area to change first (Brush / Region).");
       return;
     }
-    // Compose: require at least one reference (picked or uploaded)
-    const refs = [...composeRefs, ...(tool === "compose" || tool === "object" || tool === "logo" ? uploadedExtras : [])];
-    if (tool === "compose" && refs.length === 0) {
-      setError("Add at least one reference image for Compose.");
+    // Build reference list — uploaded refs available for any tool with reference !== "off"
+    const refs = [
+      ...composeRefs,
+      ...(isExtrasMode ? uploadedExtras : []),
+    ];
+    if (refRequired && refs.length === 0) {
+      setError("Add at least one reference image for this tool.");
       return;
     }
+    // Mask data — send if user painted one, regardless of tool (backend ignores if not applicable)
+    const maskData = hasMask ? (buildMaskDataUrl() ?? undefined) : undefined;
     const ok = await runEdit(editMode, prompt, {
       extraImageUrls: refs.length ? refs : undefined,
-      maskData: isInpaint ? (buildMaskDataUrl() ?? undefined) : undefined,
+      maskData,
     });
     if (ok) setPrompt("");
-  }, [tool, prompt, composeRefs, uploadedExtras, isInpaint, hasMask, runEdit]);
+  }, [tool, prompt, composeRefs, uploadedExtras, hasMask, maskRequired, refRequired, isExtrasMode, runEdit]);
 
   const runQuickAction = useCallback(async (qa: typeof QUICK_ACTIONS[number]) => {
     await runEdit(qa.mode, qa.instruction);
@@ -986,10 +1015,20 @@ export default function Editor() {
                 <p className="mt-1 text-[11px] leading-relaxed text-white/55">{panel.hint}</p>
               </div>
 
-              {/* Mask toolbar */}
+              {/* Mask painting (universal) */}
               {isMaskMode && (
-                <div className="space-y-2">
-                  <p className="kerned text-white/40">Mask tool</p>
+                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="kerned text-white/55">Paint mask</p>
+                    <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${maskRequired ? "bg-rose-400/15 text-rose-200" : "bg-white/5 text-white/45"}`}>
+                      {maskRequired ? "REQUIRED" : "OPTIONAL"}
+                    </span>
+                  </div>
+                  <p className="text-[10px] leading-snug text-white/45">
+                    {maskRequired
+                      ? "Paint over the area you want to change."
+                      : "Optional — paint to focus the edit on a specific area, or leave empty to apply globally."}
+                  </p>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {([
                       { id: "brush", icon: Brush, label: "Brush" },
@@ -1096,11 +1135,22 @@ export default function Editor() {
                 </div>
               )}
 
-              {/* Uploaded reference images — Object / Compose */}
+              {/* Reference images (universal) */}
               {isExtrasMode && (
-                <div>
-                  <p className="kerned mb-1 text-white/40">
-                    {tool === "compose" ? "Reference images" : "Object reference"} ({uploadedExtras.length + (tool === "compose" ? composeRefs.length : 0)}/{MAX_EXTRAS + (tool === "compose" ? 4 : 0)})
+                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="kerned text-white/55">Reference images</p>
+                    <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${refRequired ? "bg-rose-400/15 text-rose-200" : "bg-white/5 text-white/45"}`}>
+                      {refRequired ? "REQUIRED" : "OPTIONAL"}
+                    </span>
+                  </div>
+                  <p className="text-[10px] leading-snug text-white/45">
+                    {refRequired
+                      ? `Add up to ${maxRefsForTool} reference images to combine.`
+                      : `Optional — upload images to guide the look (style, background, subject, etc). Up to ${maxRefsForTool}.`}
+                  </p>
+                  <p className="text-[10px] text-white/40">
+                    {uploadedExtras.length + (tool === "compose" ? composeRefs.length : 0)} / {maxRefsForTool + (tool === "compose" ? 4 : 0)}
                   </p>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {uploadedExtras.map((u, i) => (
@@ -1115,15 +1165,21 @@ export default function Editor() {
                         <button onClick={() => toggleComposeRef(u)} className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 transition group-hover:opacity-100">×</button>
                       </div>
                     ))}
-                    {uploadedExtras.length < MAX_EXTRAS && (
+                    {uploadedExtras.length < maxRefsForTool && (
                       <button
                         onClick={() => extraFileRef.current?.click()}
+                        title="Upload reference image"
                         className="grid h-12 w-12 place-items-center rounded-lg border border-dashed border-white/15 text-white/40 hover:bg-white/5"
                       >
                         <Plus className="h-4 w-4" />
                       </button>
                     )}
                   </div>
+                  {tool === "compose" && (
+                    <p className="text-[10px] text-white/35">
+                      Tip: you can also tap gallery thumbnails in the History tab to use existing images as refs.
+                    </p>
+                  )}
                 </div>
               )}
 
