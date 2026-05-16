@@ -119,21 +119,21 @@ export const types: CapabilityType[] = [
     name: "Photorealism",
     tag: "Lifelike imagery",
     description: "Portraits, products, environments — indistinguishable from a camera.",
-    samples: [realismLion, realismPeacock, cinematic, scifi],
+    samples: [realismLion, realismPeacock, cinematic, landscape],
   },
   {
     id: "typography",
     name: "Typography",
     tag: "Posters & ads with text",
     description: "Headlines, lockups, ad creatives — perfect spelling, real layouts.",
-    samples: [portrait, fashion, product, food], // VelourVeil, Maharani, Glamour, Ember & Sage
+    samples: [alcoholTypo, newCollectionTypo, sunscreenTypo, medicalTypo],
   },
   {
     id: "anime",
     name: "Anime",
     tag: "Illustration & manga",
     description: "Studio-grade anime, manga panels, cel-shaded characters.",
-    samples: [anime, illustration, surreal, abstractImg],
+    samples: [anime, illustration, jelly, surreal],
   },
   {
     id: "artistic",
@@ -147,14 +147,14 @@ export const types: CapabilityType[] = [
     name: "Vector",
     tag: "Logos & icons",
     description: "Clean SVG marks, brand logos, infographics.",
-    samples: [abstractImg, illustration, jelly, glowTypo],
+    samples: [glowTypo, songLaunchTypo, tigerShampooTypo, liquidDetergentTypo],
   },
   {
     id: "fast",
     name: "Fast",
     tag: "Quick drafts",
     description: "Sub-5-second generations for rapid ideation.",
-    samples: [landscape, scifi, anime, illustration],
+    samples: [architecture, scifi, anime, illustration],
   },
 ];
 

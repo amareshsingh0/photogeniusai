@@ -311,9 +311,15 @@ export default function Editor() {
       setHistory([q]);
       setHistIdx(0);
     }
-    const t = search?.get("tool") as ToolId | null;
-    if (t && TOOL_GROUPS.some((g) => g.tools.some((x) => x.id === t))) {
-      setTool(t);
+    const t = search?.get("tool") as string | null;
+    // Special case: ?tool=upscale isn't a real tool anymore (upscale moved to
+    // quick-actions bar). Pre-stage the upscale quick action with default 4×
+    // so the user just has to click Apply.
+    if (t === "upscale") {
+      setPendingQuickAction("upscale");
+      setUpscaleScale(4);
+    } else if (t && TOOL_GROUPS.some((g) => g.tools.some((x) => x.id === t))) {
+      setTool(t as ToolId);
     }
   }, [search]);
 

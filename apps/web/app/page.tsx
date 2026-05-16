@@ -133,8 +133,7 @@ function LivingWall() {
     samples.map((s, i) => ({ src: s.src, key: `sample-${i}` }))
   );
   const [tick, setTick] = useState(0); // forces re-shuffle of a random tile
-  const [mouse, setMouse] = useState({ x: 0, y: 0 });
-  const rafRef = useRef<number | null>(null);
+  // Mouse parallax removed — see comment in the useEffect below.
 
   // Try to enrich pool with real public gallery generations (non-blocking)
   useEffect(() => {
@@ -198,20 +197,10 @@ function LivingWall() {
     return () => clearInterval(id);
   }, []);
 
-  // Mouse parallax — smoothed via rAF
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      const x = (e.clientX / window.innerWidth - 0.5) * 2;  // -1..1
-      const y = (e.clientY / window.innerHeight - 0.5) * 2;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => setMouse({ x, y }));
-    };
-    window.addEventListener("mousemove", onMove, { passive: true });
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
+  // Mouse parallax disabled — was repainting on every mousemove and causing
+  // scroll lag. The constant-speed marquee scroll already gives plenty of motion.
+  // To re-enable selectively: only attach the listener on hover of the wall,
+  // throttle to 16ms or coarser, and only transform a single will-change layer.
 
   return (
     <>
@@ -245,10 +234,7 @@ function LivingWall() {
 
       <div
         className="pointer-events-none absolute inset-0 grid grid-cols-3 gap-2 overflow-hidden p-2 sm:grid-cols-4 sm:gap-3 sm:p-3 lg:grid-cols-6"
-        style={{
-          transform: `translate3d(${mouse.x * -8}px, ${mouse.y * -6}px, 0) scale(1.04)`,
-          transition: "transform 600ms cubic-bezier(0.22, 0.61, 0.36, 1)",
-        }}
+        style={{ transform: "scale(1.04)" }}
       >
         {cols.map((col, ci) => {
           const speed = COL_SPEEDS[ci] || 50;
@@ -493,26 +479,17 @@ function ShowcaseGrid() {
           from { opacity: 0; filter: blur(14px); transform: translateY(18px) scale(0.98); }
           to   { opacity: 1; filter: blur(0);    transform: translateY(0)    scale(1);    }
         }
-        @keyframes sgDrift {
-          0%, 100% { transform: translate3d(0, 0, 0); }
-          50%      { transform: translate3d(0, -3px, 0); }
-        }
         .sg-tile {
           opacity: 0;
-          will-change: transform, filter, opacity;
         }
         .sg-tile.sg-in {
           animation: sgIn 1s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+          will-change: auto; /* drop will-change once entrance is done so the
+                                browser can stop reserving a GPU layer per tile */
         }
-        /* After entrance settles, gently drift forever. Delay set inline per-tile. */
-        .sg-tile.sg-in .sg-inner {
-          animation-name: sgDrift;
-          animation-duration: 9s;
-          animation-timing-function: ease-in-out;
-          animation-iteration-count: infinite;
-          animation-fill-mode: both;
-        }
-        .sg-tile:hover .sg-inner { animation-play-state: paused; }
+        /* Per-tile drift animation removed — 32 simultaneous infinite transforms
+           caused noticeable scroll jank on lower-end machines. The entrance
+           blur-up still gives a sense of motion. */
         .sg-glow {
           position: absolute; inset: -1px; border-radius: 1rem; pointer-events: none;
           background: var(--gradient-aurora);

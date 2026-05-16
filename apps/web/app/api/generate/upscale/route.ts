@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import axios from "axios";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// 4× upscale of a 2K image can take 60-90s; 180s gives comfortable headroom
+// to avoid spurious 504 timeouts that surfaced as "Upscale not working".
+export const maxDuration = 180;
 
 export async function POST(req: Request) {
   try {
@@ -16,7 +18,7 @@ export async function POST(req: Request) {
     const res = await axios.post(
       `${apiBase}/api/v1/upscale`,
       { image_url, scale },
-      { timeout: 60_000, headers: { "Content-Type": "application/json" }, validateStatus: null }
+      { timeout: 170_000, headers: { "Content-Type": "application/json" }, validateStatus: null }
     );
 
     if (res.status >= 400) {
