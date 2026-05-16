@@ -67,8 +67,8 @@ export default function Explore() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24">
-      {/* Compact header — matches editor / video / generate */}
-      <div className="flex items-center gap-2 py-3 text-sm">
+      {/* Header hidden on desktop for max content space; visible on mobile/tablet */}
+      <div className="flex items-center gap-2 py-3 text-sm lg:hidden">
         <span className="kerned text-white/40">Gallery</span>
         <span className="text-white/20">/</span>
         <span className="font-display">Explore</span>

@@ -100,6 +100,7 @@ export default function Generate() {
   const [focusZoom, setFocusZoom] = useState<"fit" | number>("fit");
   const focusImgRef = useRef<HTMLImageElement | null>(null);
   const [showHistory, setShowHistory] = useState(false); // toggles the right panel: controls ↔ history
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false); // mobile-only bottom sheet for Settings/History
   const [history, setHistory] = useState<{ id: string; url: string; prompt?: string }[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -525,7 +526,7 @@ export default function Generate() {
         className="hidden"
         onChange={handleRefSelect}
       />
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[64px_minmax(0,1fr)_360px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 lg:grid-cols-[64px_minmax(0,1fr)_520px]">
         {/* LEFT ICON RAIL — scrollable */}
         <aside className="no-scrollbar hidden flex-col items-center gap-1 overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.02] p-2 lg:flex">
           {RAIL.map((r) => {
@@ -557,32 +558,29 @@ export default function Generate() {
 
         {/* CENTER */}
         <section className="flex min-h-0 min-w-0 flex-col">
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 py-2">
+          {/* Top header — mobile/tablet only. Desktop is header-less for max canvas space;
+              History tab lives inside the right inspector (Settings ↔ History pill). */}
+          <div className="flex shrink-0 items-center justify-between gap-2 py-1 lg:hidden">
             <div className="flex min-w-0 items-center gap-2 text-sm">
               <span className="font-display text-base font-medium">Create</span>
-              {/* Type pills moved into right Inspector for a cleaner header.
-                  Mobile fallback row still rendered below where the right panel is hidden. */}
-              <div className="no-scrollbar hidden items-center gap-1 overflow-x-auto pl-2 md:flex lg:hidden">
-                <button
-                  onClick={() => setActiveType("auto")}
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${activeType === "auto" ? "bg-white text-black" : "border border-white/10 bg-white/[0.03] text-white/65"}`}
-                >Auto</button>
-                {types.filter((t) => t.id !== "fast").map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setActiveType(t.id)}
-                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${activeType === t.id ? "bg-white text-black" : "border border-white/10 bg-white/[0.03] text-white/65"}`}
-                  >{t.name}</button>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 text-xs lg:hidden">
+              <div className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 text-xs md:flex">
                 {RAIL.slice(0, 3).map((r) => (
                   <button key={r.id} onClick={() => setMode(r.id)} className={`rounded-full px-2.5 py-1 ${mode === r.id ? "bg-white text-black" : "text-white/65"}`}>{r.label}</button>
                 ))}
               </div>
-              <button onClick={() => setShowHistory((v) => !v)} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition ${showHistory ? "bg-white text-black" : "glass-panel"}`}>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setMobileSheetOpen(true)}
+                className="glass-panel inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:hidden"
+                aria-label="Open settings"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" /> Settings
+              </button>
+              <button
+                onClick={() => setShowHistory((v) => !v)}
+                className={`hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition md:inline-flex ${showHistory ? "bg-white text-black" : "glass-panel"}`}
+              >
                 <Clock className="h-3.5 w-3.5" /> History
               </button>
             </div>
@@ -846,8 +844,106 @@ export default function Generate() {
         </aside>
       </div>
 
+      {/* ── MOBILE BOTTOM SHEET — Settings / History ── */}
+      {mobileSheetOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            aria-label="Close"
+            onClick={() => setMobileSheetOpen(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <div
+            className="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-y-auto rounded-t-3xl border-t border-white/10 p-3"
+            style={{ background: "var(--ink-soft)" }}
+          >
+            <div className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-white/20" />
+            {/* Settings/History tab pill — matches desktop */}
+            <div className="glass-panel mb-3 flex items-center gap-1 rounded-full p-1">
+              <button
+                onClick={() => setShowHistory(false)}
+                className={`flex-1 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${!showHistory ? "bg-white text-black" : "text-white/60"}`}
+              >Settings</button>
+              <button
+                onClick={() => setShowHistory(true)}
+                className={`flex-1 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${showHistory ? "bg-white text-black" : "text-white/60"}`}
+              >History</button>
+            </div>
+            {/* Mobile: Type pills row above settings (always visible) */}
+            {!showHistory && (
+              <div className="no-scrollbar mb-3 flex items-center gap-1 overflow-x-auto">
+                <button
+                  onClick={() => setActiveType("auto")}
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${activeType === "auto" ? "bg-white text-black" : "border border-white/10 bg-white/[0.03] text-white/65"}`}
+                >Auto</button>
+                {types.filter((t) => t.id !== "fast").map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveType(t.id)}
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${activeType === t.id ? "bg-white text-black" : "border border-white/10 bg-white/[0.03] text-white/65"}`}
+                  >{t.name}</button>
+                ))}
+              </div>
+            )}
+            {showHistory ? (
+              <div className="glass-panel rounded-2xl p-3">
+                <p className="kerned mb-2 text-white/55">History</p>
+                {historyLoading ? (
+                  <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-white/30" /></div>
+                ) : history.length === 0 ? (
+                  <p className="text-[11px] text-white/45">No generations yet.</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {history.map((h) => (
+                      <button
+                        key={h.id}
+                        onClick={() => {
+                          setResult({ success: true, image_url: h.url, enhanced_prompt: h.prompt });
+                          setMultiResults([]);
+                          setFocused(0);
+                          setMobileSheetOpen(false);
+                        }}
+                        title={h.prompt}
+                        className="group relative aspect-square overflow-hidden rounded-md hairline"
+                      >
+                        <img src={brandedImageUrl(h.url)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Inspector
+                activeType={activeTypeMeta}
+                style={style} setStyle={setStyle}
+                ratio={ratio} setRatio={setRatio}
+                customMode={customMode} setCustomMode={setCustomMode}
+                customW={customW} setCustomW={setCustomW}
+                customH={customH} setCustomH={setCustomH}
+                quality={quality} setQuality={setQuality}
+                guidance={guidance} setGuidance={setGuidance}
+                negative={negative} setNegative={setNegative}
+                seed={seed} setSeed={setSeed}
+                locked={locked} setLocked={setLocked}
+                showAdvanced={showAdvanced} setShowAdvanced={setShowAdvanced}
+                refPeople={refPeople}
+                refProducts={refProducts}
+                refLogos={refLogos}
+                refExtras={refExtras}
+                onSlotUpload={triggerSlotUpload}
+                onSlotItemRemove={(slot, idx) => {
+                  if (slot === "people") setRefPeople((p) => p.filter((_, i) => i !== idx));
+                  else if (slot === "products") setRefProducts((p) => p.filter((_, i) => i !== idx));
+                  else if (slot === "logos") setRefLogos((p) => p.filter((_, i) => i !== idx));
+                  else setRefExtras((p) => p.filter((_, i) => i !== idx));
+                }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── STICKY PROMPT BAR ── */}
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 backdrop-blur-xl" style={{ background: "color-mix(in oklab, var(--ink) 88%, transparent)" }}>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 pb-[88px] backdrop-blur-xl lg:pb-0" style={{ background: "color-mix(in oklab, var(--ink) 88%, transparent)" }}>
         <div className="mx-auto max-w-[1480px] px-2 py-2.5 sm:px-4">
           {suggestions.length > 0 && !isGenerating && (
             <div className="mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1">

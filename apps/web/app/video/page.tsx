@@ -7,8 +7,8 @@ export default function Video() {
   const presets = ["Slow zoom in", "Push", "Orbit", "Parallax", "Dolly", "Aerial"];
   return (
     <div className="mx-auto flex h-[calc(100vh-5rem)] max-w-7xl flex-col px-4 pb-4">
-      {/* Compact header */}
-      <div className="flex shrink-0 items-center gap-2 py-2 text-sm">
+      {/* Header hidden on desktop for max content space; visible on mobile/tablet */}
+      <div className="flex shrink-0 items-center gap-2 py-2 text-sm lg:hidden">
         <span className="kerned text-white/40">Studio</span>
         <span className="text-white/20">/</span>
         <span className="font-display">Image to Video</span>

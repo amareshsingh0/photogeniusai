@@ -7,8 +7,8 @@ import { ArrowRight } from "lucide-react";
 export default function Types() {
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24">
-      {/* Compact header (matches editor / video) */}
-      <div className="flex items-center gap-2 py-3 text-sm">
+      {/* Header hidden on desktop for max content space; visible on mobile/tablet */}
+      <div className="flex items-center gap-2 py-3 text-sm lg:hidden">
         <span className="kerned text-white/40">Studio</span>
         <span className="text-white/20">/</span>
         <span className="font-display">Types</span>

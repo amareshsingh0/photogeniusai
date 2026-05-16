@@ -763,11 +763,12 @@ export default function Editor() {
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-5rem)] max-w-7xl flex-col px-3 sm:px-4">
+    <div className="mx-auto flex h-[calc(100vh-9rem)] max-w-7xl flex-col px-3 pb-[88px] sm:px-4 lg:h-[calc(100vh-5rem)] lg:pb-0">
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
 
-      {/* Compact header */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 py-2">
+      {/* Top header — mobile/tablet only. Desktop is header-less; Upload + Export
+          live as floating buttons over the canvas top-right (rendered further down). */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 py-1 lg:hidden">
         <div className="flex items-center gap-2 text-sm">
           <span className="kerned text-white/40">Studio</span>
           <span className="text-white/20">/</span>
@@ -799,7 +800,7 @@ export default function Editor() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 pb-3 lg:grid-cols-[88px_minmax(0,1fr)_360px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 pb-2 lg:grid-cols-[88px_minmax(0,1fr)_520px]">
         {/* Tool rail */}
         <aside
           aria-label="Editing tools"
@@ -1092,10 +1093,10 @@ export default function Editor() {
           </div>
         </section>
 
-        {/* Right inspector — Controls ↔ History tabs */}
+        {/* Right inspector — Controls ↔ History tabs (desktop only; mobile uses bottom sheet) */}
         <aside
           aria-label="Inspector"
-          className="no-scrollbar order-3 min-h-0 space-y-3 overflow-y-auto pr-1"
+          className="no-scrollbar order-3 hidden min-h-0 space-y-3 overflow-y-auto pr-1 lg:block"
         >
           {/* Tab toggle */}
           <div className="glass-panel flex items-center gap-1 rounded-full p-1">
