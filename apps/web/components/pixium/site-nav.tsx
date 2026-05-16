@@ -155,7 +155,7 @@ export function MobileDock() {
     { to: "/", label: "Home", icon: Sparkles },
     { to: "/explore", label: "Explore", icon: Compass },
     { to: "/generate", label: "Create", icon: Wand2 },
-    { to: "/types", label: "Types", icon: Boxes },
+    { to: "/editor", label: "Edit", icon: Layers },
     { to: "/account", label: "Me", icon: User },
   ] as const;
   return (

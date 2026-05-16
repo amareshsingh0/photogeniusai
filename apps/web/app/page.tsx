@@ -40,7 +40,7 @@ function Hero() {
   };
 
   return (
-    <section className="relative -mt-20 min-h-[88vh] overflow-hidden">
+    <section className="relative -mt-20 min-h-[72vh] overflow-hidden sm:min-h-[88vh]">
       {/* Living image wall — cinematic marquee + blur-up shuffle + parallax */}
       <LivingWall />
 
@@ -49,7 +49,7 @@ function Hero() {
       <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(60% 50% at 50% 45%, rgba(0,0,0,0.4), transparent)" }} />
 
       {/* Foreground */}
-      <div className="relative z-10 mx-auto flex min-h-[88vh] max-w-3xl flex-col items-center justify-center px-4 pt-28 pb-16 text-center">
+      <div className="relative z-10 mx-auto flex min-h-[72vh] max-w-3xl flex-col items-center justify-center px-4 pt-24 pb-10 text-center sm:min-h-[88vh] sm:pt-28 sm:pb-16">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="glass-panel mb-6 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
           <span className="kerned text-white/75">Real-time AI studio · live</span>
@@ -233,7 +233,7 @@ function LivingWall() {
       `}</style>
 
       <div
-        className="pointer-events-none absolute inset-0 grid grid-cols-3 gap-2 overflow-hidden p-2 sm:grid-cols-4 sm:gap-3 sm:p-3 lg:grid-cols-6"
+        className="pointer-events-none absolute inset-0 grid grid-cols-2 gap-2 overflow-hidden p-2 sm:grid-cols-4 sm:gap-3 sm:p-3 lg:grid-cols-6"
         style={{ transform: "scale(1.04)" }}
       >
         {cols.map((col, ci) => {
