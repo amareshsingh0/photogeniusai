@@ -120,10 +120,26 @@
     border-color: var(--color-border);
   }
 
-  :where(a, button, [role="button"], input, textarea, select, summary, [tabindex]):focus-visible {
+  /* Keyboard focus ring — only on interactive controls where it's needed
+     for accessibility. Excluded: text inputs/textareas/selects, because the
+     border color already changes on focus and the aurora glow read as a
+     'mistake / white outline' on the prompt boxes. */
+  :where(a, button, [role="button"], summary, [tabindex]):focus-visible {
     outline: 2px solid transparent;
     box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px color-mix(in oklab, var(--aurora-1) 70%, var(--aurora-2));
     border-radius: 10px;
+  }
+  /* Kill any default user-agent focus outline on text fields — explicit border
+     transitions already convey focus. Applies even when the input has
+     focus (not just focus-visible). */
+  input:focus,
+  textarea:focus,
+  select:focus,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
   }
 
   .skip-link {
