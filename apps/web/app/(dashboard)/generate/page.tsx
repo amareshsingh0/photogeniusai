@@ -101,6 +101,11 @@ export default function Generate() {
   const focusImgRef = useRef<HTMLImageElement | null>(null);
   const [showHistory, setShowHistory] = useState(false); // toggles the right panel: controls ↔ history
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false); // mobile-only bottom sheet for Settings/History
+  // Sticky prompt bar height — measured so the page's pb matches exactly, no
+  // overlap on the canvas card or columns regardless of how tall the bar grows
+  // (suggestions row + reference previews + chips can all add height).
+  const stickyBarRef = useRef<HTMLDivElement | null>(null);
+  const [stickyBarHeight, setStickyBarHeight] = useState(120);
   const [history, setHistory] = useState<{ id: string; url: string; prompt?: string }[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -189,6 +194,24 @@ export default function Generate() {
     i -= refLogos.length;
     setRefExtras((prev) => prev.filter((_, idx) => idx !== i));
   }, [refPeople.length, refProducts.length, refLogos.length]);
+
+  // ── Sticky prompt bar height observer ──────────────────────────────────────
+  // The bar grows when the user adds references / sees prompt suggestions /
+  // hits an error banner. Observe its rendered height and feed it back as the
+  // page's bottom padding so the canvas card never gets overlapped.
+  useEffect(() => {
+    const el = stickyBarRef.current;
+    if (!el) return;
+    const measure = () => setStickyBarHeight(el.getBoundingClientRect().height + 8);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
 
   // ── Detect admin (enables parallel multi-model testing mode on the backend) ──
   useEffect(() => {
@@ -518,7 +541,10 @@ export default function Generate() {
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-5rem)] max-w-[1480px] flex-col px-2 pb-[88px] sm:px-4">
+    <div
+      className="mx-auto flex h-[calc(100vh-5rem)] max-w-[1480px] flex-col px-2 sm:px-4"
+      style={{ paddingBottom: `${stickyBarHeight}px` }}
+    >
       <input
         ref={refFileInput}
         type="file"
@@ -943,7 +969,7 @@ export default function Generate() {
       )}
 
       {/* ── STICKY PROMPT BAR ── */}
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 pb-[88px] backdrop-blur-xl lg:pb-0" style={{ background: "color-mix(in oklab, var(--ink) 88%, transparent)" }}>
+      <div ref={stickyBarRef} className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 pb-[88px] backdrop-blur-xl lg:pb-0" style={{ background: "color-mix(in oklab, var(--ink) 88%, transparent)" }}>
         <div className="mx-auto max-w-[1480px] px-2 py-2.5 sm:px-4">
           {suggestions.length > 0 && !isGenerating && (
             <div className="mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1">

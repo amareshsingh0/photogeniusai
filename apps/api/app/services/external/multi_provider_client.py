@@ -1417,17 +1417,17 @@ class MultiProviderClient:
             img_bytes, img_mime = await self._fetch_image_bytes(reference_image_url)
             ext = "png" if "png" in img_mime else "jpg"
 
-            # OpenAI /v1/images/edits accepts multiple images via REPEATED
-            # `image` form-field name (not `image[]` — that's a PHP/httpx
-            # convention OpenAI doesn't honor). Each image is a separate file
-            # part with the same field name. Primary first, then extras.
-            # Cap at 15 total per OpenAI's documented limit for gpt-image-2.
-            files = [("image", (f"image.{ext}", img_bytes, img_mime))]
+            # OpenAI /v1/images/edits: single image uses field name "image";
+            # multiple images MUST use array syntax "image[]" (OpenAI returns
+            # HTTP 400 "Duplicate parameter: 'image'" otherwise). Cap 15 total.
+            has_extras = bool(extra_image_urls)
+            field = "image[]" if has_extras else "image"
+            files = [(field, (f"image.{ext}", img_bytes, img_mime))]
             for idx, extra_url in enumerate((extra_image_urls or [])[:14]):
                 try:
                     eb, em = await self._fetch_image_bytes(extra_url)
                     eext = "png" if "png" in em else "jpg"
-                    files.append(("image", (f"image_{idx+1}.{eext}", eb, em)))
+                    files.append((field, (f"image_{idx+1}.{eext}", eb, em)))
                 except Exception as fetch_exc:
                     logger.warning("[openai_edit] skip extra %d (%s): %s", idx, extra_url[:80], fetch_exc)
             if mask_url:
@@ -1443,7 +1443,7 @@ class MultiProviderClient:
             }
             headers = {"Authorization": f"Bearer {api_key}"}
 
-            _img_count = sum(1 for f in files if f[0] == "image")
+            _img_count = sum(1 for f in files if f[0] in ("image", "image[]"))
             logger.info("[PAYLOAD][openai_edit] model=gpt-image-2 size=%s mask=%s images_sent=%d (primary + %d extras)",
                         size, bool(mask_url), _img_count, len(extra_image_urls or []))
             async with httpx.AsyncClient(timeout=300.0) as client:

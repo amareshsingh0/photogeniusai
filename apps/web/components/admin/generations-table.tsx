@@ -16,7 +16,9 @@ interface Generation {
   bucket: string | null;
   selectedOutputUrl: string | null;
   thumbnailUrl: string | null;
-  outputUrls: string[] | null;
+  // JSONB column — may come back as string[], a JSON-encoded string (legacy),
+  // a single string, or null. Defensive extractor handles all cases.
+  outputUrls: string[] | string | null;
   userRating: number | null;
   userReason: string | null;
   generationTimeSeconds: number | null;
@@ -349,7 +351,26 @@ export default function GenerationsTable() {
                 {/* Thumbnail */}
                 <div className="shrink-0">
                   {(() => {
-                    const url = gen.thumbnailUrl || gen.selectedOutputUrl || (gen.outputUrls && gen.outputUrls[0]) || "";
+                    // Legacy rows may have outputUrls stored as a JSON-encoded
+                    // string instead of a real array (Python json.dumps([url])
+                    // pre-May 16 fix). Parse defensively.
+                    let urls: string[] = [];
+                    const raw = gen.outputUrls;
+                    if (Array.isArray(raw)) {
+                      urls = raw.filter((u): u is string => typeof u === "string" && u.length > 0);
+                    } else if (typeof raw === "string") {
+                      try {
+                        const parsed = JSON.parse(raw);
+                        if (Array.isArray(parsed)) urls = parsed.filter((u: unknown): u is string => typeof u === "string" && u.length > 0);
+                      } catch { /* not JSON — ignore */ }
+                    }
+                    const isValidHttpUrl = (s: string) => /^(https?:|data:|blob:|\/)/.test(s);
+                    const fromArray = urls.find(isValidHttpUrl);
+                    const url =
+                      (gen.thumbnailUrl && isValidHttpUrl(gen.thumbnailUrl) ? gen.thumbnailUrl : "") ||
+                      (gen.selectedOutputUrl && isValidHttpUrl(gen.selectedOutputUrl) ? gen.selectedOutputUrl : "") ||
+                      fromArray ||
+                      "";
                     return url ? (
                       <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-zinc-700">
                         <Image

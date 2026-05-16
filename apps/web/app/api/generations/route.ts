@@ -78,11 +78,27 @@ export async function GET(req: Request) {
       },
     });
 
+    // Normalize the JSONB outputUrls column. Legacy rows have it stored as a
+    // JSON-encoded string instead of a real array (Python json.dumps([url])
+    // pre-May 16 fix). Parse defensively so every consumer downstream gets a
+    // clean string[] regardless of source-row format.
+    const normalizeOutputUrls = (raw: unknown): string[] => {
+      if (Array.isArray(raw)) return raw.filter((u): u is string => typeof u === "string" && u.length > 0);
+      if (typeof raw === "string") {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed.filter((u: unknown): u is string => typeof u === "string" && u.length > 0);
+        } catch { /* not JSON — single URL value */ }
+        if (raw.startsWith("http") || raw.startsWith("data:") || raw.startsWith("/")) return [raw];
+      }
+      return [];
+    };
+
     const generations = rows.map((g: typeof rows[number]) => ({
       id: g.id,
       prompt: g.originalPrompt,
       mode: g.mode,
-      outputUrls: g.outputUrls,
+      outputUrls: normalizeOutputUrls(g.outputUrls),
       selectedUrl: g.selectedOutputUrl ?? undefined,
       previewUrl: g.thumbnailUrl ?? undefined,
       createdAt: g.createdAt.toISOString(),
