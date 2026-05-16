@@ -525,7 +525,7 @@ export default function Generate() {
         className="hidden"
         onChange={handleRefSelect}
       />
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[64px_minmax(0,1fr)_320px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[64px_minmax(0,1fr)_360px]">
         {/* LEFT ICON RAIL — scrollable */}
         <aside className="no-scrollbar hidden flex-col items-center gap-1 overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.02] p-2 lg:flex">
           {RAIL.map((r) => {
@@ -559,28 +559,20 @@ export default function Generate() {
         <section className="flex min-h-0 min-w-0 flex-col">
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 py-2">
             <div className="flex min-w-0 items-center gap-2 text-sm">
-              <span className="kerned text-white/40">Studio</span>
-              <span className="text-white/20">/</span>
-              <span className="font-display">Create</span>
-              <span className="text-white/20">·</span>
-              {/* Type pills inline — Auto first (default), Fast hidden from picker */}
-              <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
+              <span className="font-display text-base font-medium">Create</span>
+              {/* Type pills moved into right Inspector for a cleaner header.
+                  Mobile fallback row still rendered below where the right panel is hidden. */}
+              <div className="no-scrollbar hidden items-center gap-1 overflow-x-auto pl-2 md:flex lg:hidden">
                 <button
                   onClick={() => setActiveType("auto")}
-                  title="Auto — let the AI pick the best bucket from your prompt"
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${activeType === "auto" ? "bg-white text-black" : "border border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.08] hover:text-white"}`}
-                >
-                  Auto
-                </button>
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${activeType === "auto" ? "bg-white text-black" : "border border-white/10 bg-white/[0.03] text-white/65"}`}
+                >Auto</button>
                 {types.filter((t) => t.id !== "fast").map((t) => (
                   <button
                     key={t.id}
                     onClick={() => setActiveType(t.id)}
-                    title={t.name}
-                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${activeType === t.id ? "bg-white text-black" : "border border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.08] hover:text-white"}`}
-                  >
-                    {t.name}
-                  </button>
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition ${activeType === t.id ? "bg-white text-black" : "border border-white/10 bg-white/[0.03] text-white/65"}`}
+                  >{t.name}</button>
                 ))}
               </div>
             </div>

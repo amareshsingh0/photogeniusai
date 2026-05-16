@@ -509,7 +509,10 @@ function ShowcaseGrid() {
         <Link href="/explore" className="text-sm text-white/55 hover:text-white">See more →</Link>
       </div>
       <div ref={containerRef} className="columns-2 gap-3 sm:columns-3 sm:gap-4 lg:columns-4">
-        {[...samples, ...samples].map((s, i) => (
+        {/* Show each sample only once — doubling was producing visible duplicate
+            pairs in the "Made with Pixium" grid. With 24 distinct samples the
+            masonry already fills the viewport on most screens. */}
+        {samples.map((s, i) => (
           <Link
             href={`/showcase/${s.id}`}
             key={`${s.id}-${i}`}

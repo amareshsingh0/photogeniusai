@@ -799,7 +799,7 @@ export default function Editor() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 pb-3 lg:grid-cols-[88px_minmax(0,1fr)_300px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 pb-3 lg:grid-cols-[88px_minmax(0,1fr)_360px]">
         {/* Tool rail */}
         <aside
           aria-label="Editing tools"
