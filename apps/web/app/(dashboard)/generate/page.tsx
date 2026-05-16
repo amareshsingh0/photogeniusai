@@ -518,7 +518,7 @@ export default function Generate() {
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-5rem)] max-w-[1480px] flex-col px-2 pt-2 pb-[88px] sm:px-4 lg:pb-[88px]">
+    <div className="mx-auto flex h-[calc(100vh-5rem)] max-w-[1480px] flex-col px-2 pb-[88px] sm:px-4">
       <input
         ref={refFileInput}
         type="file"
@@ -1026,7 +1026,11 @@ export default function Generate() {
 
           <div className="mt-1.5 flex items-center justify-between gap-2 px-2 text-[10px] text-white/45">
             <span className="kerned truncate">
-              {activeType === "auto" ? "Auto" : activeTypeMeta.name} · {style} · {ratio} · {activeQuality.name}
+              {[
+                style !== "Auto" ? style : null,
+                ratio,
+                activeQuality.name,
+              ].filter(Boolean).join(" · ")}
             </span>
           </div>
         </div>
