@@ -115,13 +115,16 @@ async def _save_edit_to_db(
     so the edit response still reaches the client."""
     try:
         import json
-        from prisma import Prisma
+        from prisma import Prisma, Json
         prisma = Prisma()
         await prisma.connect()
         try:
             await prisma.generation.create(
                 data={
-                    "userId": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c",  # DEV_USER UUID
+                    # prisma-client-python 0.15+ requires relation syntax for
+                    # required relations (scalar userId rejected with
+                    # "data.user: A value is required but not set").
+                    "user": {"connect": {"id": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c"}},  # DEV_USER UUID
                     "mode": "REALISM",
                     "originalPrompt": (instruction or f"[edit:{edit_mode}]")[:1000],
                     "enhancedPrompt": instruction or "",
@@ -129,15 +132,16 @@ async def _save_edit_to_db(
                     "guidanceScale": 7.0,
                     "width": 1024,
                     "height": 1024,
-                    # outputUrls is a JSONB column — pass a real array, not a string-encoded array.
-                    "outputUrls": [image_url] if image_url else [],
+                    # outputUrls is a JSONB column — wrap in Json() so the client
+                    # writes a real JSON array, not a string-encoded array.
+                    "outputUrls": Json([image_url] if image_url else []),
                     "selectedOutputUrl": image_url,
                     "creditsUsed": 0,
                     "qualityTierUsed": quality,
                     "modelUsed": model_key,
                     "bucket": f"edit_{edit_mode}",
                     "generationTimeSeconds": elapsed,
-                    "metadata": json.dumps({
+                    "metadata": Json({
                         "edit_mode": edit_mode,
                         "original_url": original_url,
                     }),

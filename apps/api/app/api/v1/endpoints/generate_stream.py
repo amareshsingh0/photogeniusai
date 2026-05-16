@@ -1755,7 +1755,7 @@ async def _generate_with_model(
 
     try:
         from app.services.external.multi_provider_client import multi_client
-        from prisma import Prisma
+        from prisma import Prisma, Json
         from app.services.smart.config import detect_capability_bucket
         from app.services.smart.simple_prompt_engine import classify_intent
 
@@ -1823,14 +1823,17 @@ async def _generate_with_model(
             raw_prompt = getattr(req, "_raw_user_prompt", req.prompt) or req.prompt
             original_prompt = raw_prompt[:1000]
 
-            # Prisma Python client: scalar `userId` works (verified Apr 17 2026
-            # in bugs-and-fixes.md - "userId vs user.connect syntax: Both work,
-            # but direct userId is simpler"). Nullable Json `metadata` does
-            # need a value (not None) - pass empty dict if no validation data.
+            # prisma-client-python 0.15+ requires required relations to be set
+            # via `user: {connect: {id}}` instead of the scalar `userId` (older
+            # versions accepted both; current validator rejects scalar-only with
+            # "data.user: A value is required but not set"). outputUrls is a
+            # required Json column — pass a real list (never empty / None).
             _meta_payload = {"text_validation": text_validation} if text_validation else {}
+            _image_url = result.get("image_url")
+            _output_urls = [_image_url] if _image_url else []
             generation = await prisma.generation.create(
                 data={
-                    "userId": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c",  # DEV_USER UUID
+                    "user": {"connect": {"id": "ee10a6d4-a124-4fea-ac1f-395d4f3adb6c"}},  # DEV_USER UUID
                     "mode": "REALISM",  # Default mode
                     "originalPrompt": original_prompt,
                     "enhancedPrompt": prompt_for_model,
@@ -1838,18 +1841,15 @@ async def _generate_with_model(
                     "guidanceScale": _MODEL_GUIDANCE.get(model_id, _DEFAULT_GUIDANCE),
                     "width": req.width,
                     "height": req.height,
-                    # outputUrls is a Prisma Json (JSONB) column — pass a real array.
-                    # Wrapping in json.dumps() writes a double-encoded string which then
-                    # reads back as a JSON-string (not a JS array) and the admin grid's
-                    # outputUrls[0] returns a single character instead of the URL.
-                    "outputUrls": [u for u in [result.get("image_url")] if u],
-                    "selectedOutputUrl": result.get("image_url"),
+                    # Real array (not json.dumps) — admin grid reads outputUrls[0].
+                    "outputUrls": Json(_output_urls),
+                    "selectedOutputUrl": _image_url,
                     "creditsUsed": 0,  # Testing mode = free
                     "qualityTierUsed": effective_quality,
                     "modelUsed": model_id,
                     "bucket": bucket,
                     "generationTimeSeconds": latency,
-                    "metadata": json.dumps(_meta_payload),
+                    "metadata": Json(_meta_payload),
                 }
             )
 
