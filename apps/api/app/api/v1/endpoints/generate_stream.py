@@ -250,6 +250,11 @@ _IMG2IMG_CAPABLE_MODELS = {
     "seedream_4_5",   # → fal-ai/bytedance/seedream/v4/edit
     "ideogram_v3",    # → fal-ai/ideogram/v3/remix
     "gpt_image_2_edit",  # OpenAI GPT Image 2 edit endpoint (1K only)
+    # Edit-variant models registered May 17 2026 as first-class admin entries.
+    # gpt_image_2 (non-edit) auto-routes to gpt_image_2_edit when a ref is
+    # attached, so it's also capable from the picker's perspective.
+    "gpt_image_2",
+    "gemini_flash_edit",  # Google nano-banana (gemini-2.5-flash-image)
 }
 
 
