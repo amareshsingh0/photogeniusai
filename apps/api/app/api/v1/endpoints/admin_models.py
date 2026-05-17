@@ -165,7 +165,9 @@ DEFAULT_MODELS = [
         "modelId": "imagen_4_ultra",
         "provider": "google.ai",
         "displayName": "Imagen 4 Ultra",
-        "buckets": ["photorealism", "typography", "humans", "image_to_image"],
+        # Raw Imagen text-to-image; reference images are dropped by the
+        # provider client. Only gemini_flash_edit accepts refs on Google side.
+        "buckets": ["photorealism", "typography", "humans"],
         "costPerImage": 0.18,
         "isActive": True,
         "isTestingEnabled": True,
@@ -211,7 +213,8 @@ DEFAULT_MODELS = [
         "modelId": "imagen_4_fast",
         "provider": "google.ai",
         "displayName": "Imagen 4 Fast",
-        "buckets": ["photorealism", "typography", "humans", "image_to_image"],
+        # Raw Imagen text-to-image; ref images dropped at provider layer.
+        "buckets": ["photorealism", "typography", "humans"],
         "costPerImage": 0.06,
         "isActive": True,
         "isTestingEnabled": True,
@@ -220,7 +223,9 @@ DEFAULT_MODELS = [
         "modelId": "gemini_3_imagen",
         "provider": "google.ai",
         "displayName": "Gemini 3 Imagen",
-        "buckets": ["photorealism", "artistic", "typography", "image_to_image"],
+        # Imagen text-to-image variant — ref images dropped at provider layer.
+        # For ref-driven generation use gemini_flash_edit instead.
+        "buckets": ["photorealism", "artistic", "typography"],
         "costPerImage": 0.035,
         "isActive": True,
         "isTestingEnabled": True,
@@ -229,7 +234,8 @@ DEFAULT_MODELS = [
         "modelId": "gemini_3_1_imagen",
         "provider": "google.ai",
         "displayName": "Gemini 3.1 Imagen",
-        "buckets": ["photorealism", "artistic", "typography", "image_to_image"],
+        # Imagen text-to-image variant — ref images dropped at provider layer.
+        "buckets": ["photorealism", "artistic", "typography"],
         "costPerImage": 0.07,
         "isActive": True,
         "isTestingEnabled": True,
