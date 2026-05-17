@@ -70,7 +70,9 @@ DEFAULT_MODELS = [
         "modelId": "flux_2_pro",
         "provider": "kie.ai",
         "displayName": "Flux 2 Pro",
-        "buckets": ["typography", "photorealism", "artistic", "humans"],
+        # img2img-capable at fal provider layer; gets image_to_image flag so it
+        # participates in admin testing whenever a reference image is attached.
+        "buckets": ["typography", "photorealism", "artistic", "humans", "image_to_image"],
         "costPerImage": 0.025,
         "isActive": True,
         "isTestingEnabled": True,
@@ -79,7 +81,8 @@ DEFAULT_MODELS = [
         "modelId": "flux_2_max",
         "provider": "api.bfl.ai",
         "displayName": "Flux 2 Max",
-        "buckets": ["photorealism", "artistic", "humans"],
+        # img2img-capable via fal Flux 2 family endpoints.
+        "buckets": ["photorealism", "artistic", "humans", "image_to_image"],
         "costPerImage": 0.055,
         "isActive": True,
         "isTestingEnabled": True,
@@ -106,7 +109,8 @@ DEFAULT_MODELS = [
         "modelId": "ideogram_v3",
         "provider": "fal.ai",
         "displayName": "Ideogram v3 Quality",
-        "buckets": ["typography"],
+        # Ideogram v3 remix endpoint accepts a reference image for img2img.
+        "buckets": ["typography", "image_to_image"],
         "costPerImage": 0.09,
         "isActive": True,
         "isTestingEnabled": True,
@@ -142,7 +146,8 @@ DEFAULT_MODELS = [
         "modelId": "seedream_4_5",
         "provider": "fal.ai",
         "displayName": "Seedream 4.5",
-        "buckets": ["character_consistency", "photorealism", "typography", "multi_reference", "humans"],
+        # Seedream v4 edit endpoint accepts a primary + extra reference images.
+        "buckets": ["character_consistency", "photorealism", "typography", "multi_reference", "humans", "image_to_image"],
         "costPerImage": 0.06,
         "isActive": True,
         "isTestingEnabled": True,
@@ -169,7 +174,8 @@ DEFAULT_MODELS = [
         "modelId": "flux_2_flex",
         "provider": "fal.ai",
         "displayName": "Flux 2 Flex",
-        "buckets": ["photorealism", "artistic", "typography"],
+        # img2img-capable via fal Flux 2 family endpoints.
+        "buckets": ["photorealism", "artistic", "typography", "image_to_image"],
         "costPerImage": 0.04,
         "isActive": True,
         "isTestingEnabled": True,
@@ -232,7 +238,10 @@ DEFAULT_MODELS = [
         "modelId": "gpt_image_2",
         "provider": "openai.com",
         "displayName": "GPT Image 2",
-        "buckets": ["photorealism", "artistic", "fast", "typography", "vector"],
+        # When a reference image is attached, runtime auto-routes to the
+        # gpt_image_2_edit variant which accepts img2img — surface that path
+        # via the image_to_image bucket flag.
+        "buckets": ["photorealism", "artistic", "fast", "typography", "vector", "image_to_image"],
         "costPerImage": 0.053,
         "isActive": True,
         "isTestingEnabled": True,
