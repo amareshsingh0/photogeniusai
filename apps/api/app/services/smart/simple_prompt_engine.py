@@ -428,7 +428,7 @@ def _format_recipe_for_prompt(rec: Dict[str, Any]) -> str:
     return "\n".join(bits)
 
 _CLAUDE_MODEL = os.getenv("SIMPLE_ENGINE_MODEL", "claude-haiku-4-5-20251001")
-_MAX_TOKENS   = int(os.getenv("SIMPLE_ENGINE_MAX_TOKENS", "2200"))
+_MAX_TOKENS   = int(os.getenv("SIMPLE_ENGINE_MAX_TOKENS", "4000"))
 _TEMPERATURE  = float(os.getenv("SIMPLE_ENGINE_TEMPERATURE", "0.7"))
 
 # Self-critique pass (Gap C, May 3 2026). When ON, ad prompts run a 2nd
@@ -611,7 +611,7 @@ class VisualDirection(BaseModel):
         "Examples: ['icy condensation drops on the bottle', 'embossed gold foil label', 'wet wood grain reflecting amber light', 'subtle ocean mist rolling across the deck']. "
         "Each entry 3-8 words, photographable specificity. Skip generic adjectives ('beautiful', 'premium')."
     ))
-    depicted_subject: str = Field(default="", max_length=400, description=(
+    depicted_subject: str = Field(default="", max_length=800, description=(
         "MANDATORY for ads - the CONCRETE photographable noun phrase you'd describe to a photographer. "
         "Extract from the user's words. Rules: "
         "(1) MUST be a physical thing (bottle, can, box, garment, device, food item, person, room). "
