@@ -733,6 +733,34 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             total_count = (1 if req.reference_image_url else 0) + (len(req.extra_image_urls) if req.extra_image_urls else 0)
             ref_roles["extras"] = max(0, total_count - named_count)
 
+            # Reference caption pass (May 17 2026) — Gemini Vision extracts
+            # role-tagged descriptors so the image-gen prompt can carry explicit
+            # "preserve THIS, ignore THAT" invariants. This is the ChatGPT-web
+            # pre-pass that closes the pose-copy gap on GPT Image 2 /edits.
+            # Fully async-parallel — total wall time ~= max(individual call).
+            # Non-fatal: caption failure returns {} so the pipeline still ships.
+            reference_captions: Dict[str, List[str]] = {}
+            ref_caption_input = {
+                "people":   req.reference_people   or [],
+                "products": req.reference_products or [],
+                "logos":    req.reference_logos    or [],
+            }
+            if any(ref_caption_input.values()):
+                try:
+                    from app.services.smart.reference_captioner import caption_references
+                    reference_captions = await caption_references(ref_caption_input)
+                    if reference_captions:
+                        cap_summary = ", ".join(
+                            f"{r}={len(c)}" for r, c in reference_captions.items()
+                        )
+                        logger.info(
+                            "[stream][%s] ref-captioner produced %s",
+                            trace_id, cap_summary,
+                        )
+                except Exception as _rc_err:
+                    logger.warning("[stream][%s] ref-captioner failed (non-fatal): %s",
+                                   trace_id, _rc_err)
+
             simple_out = await simple_engine.enrich(
                 user_prompt=req.prompt,
                 bucket=bucket,
@@ -743,6 +771,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                 brand_kit=req.brand_kit,
                 style_reference_description=style_reference_description or None,
                 reference_roles=ref_roles if any(ref_roles.values()) else None,
+                reference_captions=reference_captions or None,
             )
             logger.info(
                 "[stream][%s] SimpleEngine done in %.2fs intent=%s aspect=%s",

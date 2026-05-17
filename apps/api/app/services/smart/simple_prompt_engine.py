@@ -2786,6 +2786,7 @@ def _build_user_message(
     style_reference_description: Optional[str] = None,
     recipe: Optional[Dict[str, Any]] = None,
     reference_roles: Optional[Dict[str, int]] = None,
+    reference_captions: Optional[Dict[str, List[str]]] = None,
 ) -> str:
     parts = [f"USER REQUEST:\n{user_prompt.strip()}"]
     bucket_hint = _BUCKET_HINTS.get(bucket)
@@ -2877,6 +2878,37 @@ def _build_user_message(
                 "joyful laugh, eyes closed in delight, free hand gesturing'). NEVER write 'same pose as "
                 "reference', 'preserve pose', 'in the pose shown', or any phrasing that copies the "
                 "reference's stance. Treat the reference like a headshot, not a storyboard."
+            )
+
+    # Vision-extracted captions for each reference (May 17 2026). When present,
+    # these are the role-tagged descriptors Gemini Vision pulled from the
+    # uploaded images BEFORE Haiku runs - they let Haiku write `depicted_subject`
+    # with concrete facial/packaging anchors instead of generic "model from the
+    # reference photo". Mirrors the GPT-4o pre-pass that ChatGPT web runs on
+    # every uploaded image.
+    if reference_captions:
+        cap_lines: list = []
+        role_labels = {
+            "people":   "PERSON",
+            "products": "PRODUCT",
+            "logos":    "LOGO",
+            "extras":   "OTHER",
+        }
+        for role, caps in reference_captions.items():
+            label = role_labels.get(role, role.upper())
+            for i, cap in enumerate(caps):
+                if not cap or not cap.strip():
+                    continue
+                if len(caps) == 1:
+                    cap_lines.append(f"- {label}: {cap.strip()}")
+                else:
+                    cap_lines.append(f"- {label} #{i+1}: {cap.strip()}")
+        if cap_lines:
+            parts.append(
+                "REFERENCE DESCRIPTORS (Vision-extracted from the uploaded images - use these "
+                "as the concrete anchors for what to PRESERVE; the descriptors deliberately "
+                "skip pose / expression / outfit / background for people refs so those are "
+                "free for you to invent):\n" + "\n".join(cap_lines)
             )
 
     parts.append("Now produce the JSON object. Output JSON only.")
@@ -3274,6 +3306,7 @@ class SimplePromptEngine:
         brand_kit: Optional[Dict[str, Any]] = None,
         style_reference_description: Optional[str] = None,
         reference_roles: Optional[Dict[str, int]] = None,
+        reference_captions: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Any]:
         """Enrich a user prompt into a production-ready image-gen prompt.
 
@@ -3311,6 +3344,7 @@ class SimplePromptEngine:
                 style_reference_description=style_reference_description,
                 recipe=recipe,
                 reference_roles=reference_roles,
+                reference_captions=reference_captions,
             )
             # Instructor returns a validated Pydantic instance (or raises after
             # max_retries exhausts). No more loose-JSON parsing.
@@ -3392,6 +3426,12 @@ class SimplePromptEngine:
                 # GPT Image 2 /edits defaults to pose-copy without explicit
                 # instruction to vary).
                 "reference_roles":      dict(reference_roles) if reference_roles else None,
+                # Per-reference captions extracted by Gemini Vision in the
+                # caption pre-pass (May 17 2026). Role-keyed dict of caption
+                # lists. Formatter uses these to write explicit "preserve
+                # facial features X, ignore pose/outfit" invariants — the same
+                # technique ChatGPT web uses to avoid pose-copy on /edits.
+                "reference_captions":   dict(reference_captions) if reference_captions else None,
                 "_recipe_key":          (recipe or {}).get("key"),
                 "_elapsed":             time.time() - start,
                 "_source":              "simple_engine",

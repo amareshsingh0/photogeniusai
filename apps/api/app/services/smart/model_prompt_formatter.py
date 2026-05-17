@@ -335,8 +335,32 @@ def _format_for_gpt_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
     ref_roles_payload_s = payload.get("reference_roles") or {}
     n_people_ref_s   = int(ref_roles_payload_s.get("people")   or 0) if isinstance(ref_roles_payload_s, dict) else 0
     n_products_ref_s = int(ref_roles_payload_s.get("products") or 0) if isinstance(ref_roles_payload_s, dict) else 0
+    ref_caps_s = payload.get("reference_captions") or {}
+    if not isinstance(ref_caps_s, dict):
+        ref_caps_s = {}
     if n_people_ref_s or n_products_ref_s:
         ref_bits_s: list[str] = []
+        people_caps_s = ref_caps_s.get("people") or []
+        product_caps_s = ref_caps_s.get("products") or []
+        invariants_s: list[str] = []
+        for i, cap in enumerate(people_caps_s):
+            if not cap or not cap.strip():
+                continue
+            label = "person in image 1" if len(people_caps_s) == 1 else f"person in image {i+1}"
+            invariants_s.append(
+                f"- PRESERVE the {label}: {cap.strip()} "
+                f"IGNORE its pose, expression, gaze, hands, outfit, hairstyling, and background."
+            )
+        for i, cap in enumerate(product_caps_s):
+            if not cap or not cap.strip():
+                continue
+            offset = len(people_caps_s)
+            invariants_s.append(
+                f"- PRESERVE the product in image {offset + i + 1}: {cap.strip()} "
+                f"IGNORE its background and lighting; integrate into the new scene."
+            )
+        if invariants_s:
+            ref_bits_s.extend(invariants_s)
         if n_people_ref_s == 1:
             ref_bits_s.append(
                 "- The PERSON reference is an IDENTITY ANCHOR ONLY (face, skin tone, hair, "
@@ -489,6 +513,9 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     ref_roles_payload = payload.get("reference_roles") or {}
     n_people_ref   = int(ref_roles_payload.get("people")   or 0) if isinstance(ref_roles_payload, dict) else 0
     n_products_ref = int(ref_roles_payload.get("products") or 0) if isinstance(ref_roles_payload, dict) else 0
+    ref_captions_payload = payload.get("reference_captions") or {}
+    if not isinstance(ref_captions_payload, dict):
+        ref_captions_payload = {}
 
     persona_specialty = {
         "beauty":      "luxury beauty and cosmetics campaigns",
@@ -548,6 +575,54 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     # about. Force identity-only + scene-driven pose + prompt-driven wardrobe.
     if n_people_ref or n_products_ref:
         ref_bits: list[str] = []
+
+        # Vision-extracted descriptors (May 17 2026 caption pass). When present,
+        # these are concrete role-scoped descriptors (face features for people,
+        # packaging for products, mark for logos) — Gemini Vision deliberately
+        # skipped pose / outfit / background for people refs so we can write
+        # explicit "preserve THIS, ignore THAT" invariants. This is the same
+        # pattern ChatGPT web uses internally to defeat /edits pose-copy.
+        people_caps = ref_captions_payload.get("people") or []
+        product_caps = ref_captions_payload.get("products") or []
+        logo_caps = ref_captions_payload.get("logos") or []
+        invariants: list[str] = []
+        for i, cap in enumerate(people_caps):
+            if not cap or not cap.strip():
+                continue
+            label = "person in image 1" if len(people_caps) == 1 else f"person in image {i+1}"
+            invariants.append(
+                f"- PRESERVE the {label}: {cap.strip()} "
+                f"IGNORE everything else about that image — its pose, expression, head tilt, "
+                f"gaze, hand position, body angle, outfit, jewelry, makeup, hairstyling, and "
+                f"background MUST NOT carry over into the output."
+            )
+        for i, cap in enumerate(product_caps):
+            if not cap or not cap.strip():
+                continue
+            offset = len(people_caps)
+            label = f"product in image {offset + i + 1}"
+            invariants.append(
+                f"- PRESERVE the {label}: {cap.strip()} "
+                f"IGNORE its background, surface, lighting, and any hands or props in that "
+                f"image — place the product in the new scene as described below."
+            )
+        for i, cap in enumerate(logo_caps):
+            if not cap or not cap.strip():
+                continue
+            offset = len(people_caps) + len(product_caps)
+            label = f"logo in image {offset + i + 1}"
+            invariants.append(
+                f"- PRESERVE the {label}: {cap.strip()} "
+                f"Render the wordmark verbatim with correct spelling; place naturally in the new layout."
+            )
+        if invariants:
+            ref_bits.append(
+                "PRESERVE-vs-IGNORE INVARIANTS (these are the only attributes from each "
+                "reference that should carry into the output — everything else must be "
+                "regenerated fresh from the scene description):"
+            )
+            ref_bits.extend(invariants)
+
         if n_people_ref == 1:
             ref_bits.append(
                 "- The PERSON reference is an IDENTITY ANCHOR ONLY. Match the face, "
