@@ -1661,6 +1661,50 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
         raw_user_prompt = req.prompt
         try:
             from app.services.smart.simple_prompt_engine import simple_engine
+
+            # Parity with the non-parallel `use_simple` path (May 17 2026):
+            # parallel testing was bypassing the full enrich context — refs,
+            # captions, style anchor, brand kit — so /edits got a generic
+            # prompt and copied the reference pose verbatim. Plumb the same
+            # signals through here.
+            _par_ref_roles = {
+                "people":   len(req.reference_people)   if req.reference_people   else 0,
+                "products": len(req.reference_products) if req.reference_products else 0,
+                "logos":    len(req.reference_logos)    if req.reference_logos    else 0,
+            }
+            _par_named = _par_ref_roles["people"] + _par_ref_roles["products"] + _par_ref_roles["logos"]
+            _par_total = (1 if req.reference_image_url else 0) + (len(req.extra_image_urls) if req.extra_image_urls else 0)
+            _par_ref_roles["extras"] = max(0, _par_total - _par_named)
+
+            _par_captions: Dict[str, List[str]] = {}
+            _par_cap_input = {
+                "people":   req.reference_people   or [],
+                "products": req.reference_products or [],
+                "logos":    req.reference_logos    or [],
+            }
+            if any(_par_cap_input.values()):
+                try:
+                    from app.services.smart.reference_captioner import caption_references
+                    _par_captions = await caption_references(_par_cap_input)
+                    if _par_captions:
+                        logger.info(
+                            "[parallel][%s] ref-captioner produced %s",
+                            trace_id,
+                            ", ".join(f"{r}={len(c)}" for r, c in _par_captions.items()),
+                        )
+                except Exception as _rc_err:
+                    logger.warning("[parallel][%s] ref-captioner failed (non-fatal): %s",
+                                   trace_id, _rc_err)
+
+            _par_style_desc = ""
+            if req.reference_image_url and not (req.style or "").strip():
+                try:
+                    from app.services.smart.style_extractor import extract_style_description
+                    _par_style_desc = await extract_style_description(req.reference_image_url)
+                except Exception as _se_err:
+                    logger.warning("[parallel][%s] style-extractor failed (non-fatal): %s",
+                                   trace_id, _se_err)
+
             enrich = await simple_engine.enrich(
                 user_prompt=req.prompt,
                 bucket=db_bucket,
@@ -1668,6 +1712,10 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
                 width=req.width,
                 height=req.height,
                 style=req.style,
+                brand_kit=req.brand_kit,
+                style_reference_description=_par_style_desc or None,
+                reference_roles=_par_ref_roles if any(_par_ref_roles.values()) else None,
+                reference_captions=_par_captions or None,
             )
             enriched_prompt = enrich.get("prompt") or req.prompt
             enriched_neg = enrich.get("negative_prompt") or (req.negative_prompt or "")
