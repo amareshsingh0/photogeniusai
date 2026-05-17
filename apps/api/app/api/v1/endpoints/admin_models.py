@@ -237,6 +237,39 @@ DEFAULT_MODELS = [
         "isActive": True,
         "isTestingEnabled": True,
     },
+    # Edit-variant models (May 17 2026) — surfaced as first-class admin entries
+    # so testing-mode parallel can include 2 or 3 different edit providers
+    # when a reference image is attached. Buckets list "image_to_image" so
+    # they only appear in the picker for ref-image flows; admin can additionally
+    # tag them to specific buckets (typography, photorealism) to participate in
+    # those bucket's testing comparison too.
+    {
+        "modelId": "gpt_image_2_edit",
+        "provider": "openai.com",
+        "displayName": "GPT Image 2 (edit)",
+        "buckets": ["image_to_image", "typography", "photorealism", "artistic"],
+        "costPerImage": 0.053,
+        "isActive": True,
+        "isTestingEnabled": True,
+    },
+    {
+        "modelId": "gemini_flash_edit",
+        "provider": "google.ai",
+        "displayName": "Gemini 2.5 Flash Image (edit)",
+        "buckets": ["image_to_image", "typography", "photorealism", "artistic"],
+        "costPerImage": 0.04,
+        "isActive": True,
+        "isTestingEnabled": True,
+    },
+    {
+        "modelId": "flux_kontext",
+        "provider": "fal.ai",
+        "displayName": "Flux Kontext (edit)",
+        "buckets": ["image_to_image", "typography", "photorealism", "artistic"],
+        "costPerImage": 0.04,
+        "isActive": True,
+        "isTestingEnabled": True,
+    },
 ]
 
 DEFAULT_MODELS_BY_ID = {model["modelId"]: model for model in DEFAULT_MODELS}

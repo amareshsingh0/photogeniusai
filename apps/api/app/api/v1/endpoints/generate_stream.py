@@ -1566,21 +1566,41 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
             )
             if not bucket_models:
                 # No img2img-native models in admin DB for this bucket.
-                # Previously we collapsed to a single gpt_image_2_edit call —
-                # but that loses the parallel testing UX (admin compares
-                # multiple providers) AND falls over when OpenAI billing /
-                # quota is exhausted (the entire request returns no image).
-                #
-                # Instead: run the 3 universal edit endpoints in parallel —
-                # gpt_image_2_edit (OpenAI), gemini_flash_edit (Google),
-                # flux_kontext (fal). Each handles refs natively and produces
-                # distinct outputs admin can compare. If one fails (billing,
-                # safety filter, etc.) the other two still ship results.
-                _universal_edit_models = ["gpt_image_2_edit", "gemini_flash_edit", "flux_kontext"]
+                # Look up which edit-variant models admin has enabled in DB
+                # (isActive AND isTestingEnabled), so admin retains control —
+                # toggle gpt_image_2_edit / gemini_flash_edit / flux_kontext
+                # on/off in Models tab to include/exclude from this parallel.
+                _edit_candidates = ["gpt_image_2_edit", "gemini_flash_edit", "flux_kontext"]
+                _enabled_set: set = set()
+                try:
+                    _prisma2 = Prisma()
+                    await _prisma2.connect()
+                    _rows = await _prisma2.modelconfig.find_many(
+                        where={"modelId": {"in": _edit_candidates},
+                               "isActive": True, "isTestingEnabled": True},
+                    )
+                    _enabled_set = {r.modelId for r in _rows}
+                    await _prisma2.disconnect()
+                except Exception as _db_err:
+                    logger.warning("[parallel][%s] edit-variant DB lookup failed: %s — "
+                                   "using all 3 candidates", trace_id, _db_err)
+                    _enabled_set = set(_edit_candidates)
+                # Preserve preferred order: gpt → gemini → flux
+                _universal_edit_models = [m for m in _edit_candidates if m in _enabled_set]
+                if not _universal_edit_models:
+                    # Admin explicitly disabled all 3 — respect that, fail
+                    # cleanly rather than silently picking one.
+                    yield _sse("error", {
+                        "message": "No edit-capable models enabled in admin. "
+                                   "Enable at least one of: gpt_image_2_edit, "
+                                   "gemini_flash_edit, flux_kontext in Models tab.",
+                        "trace_id": trace_id,
+                    })
+                    return
                 logger.warning(
-                    "[parallel][%s] No img2img-capable models in DB for bucket=%s — "
-                    "falling back to 3-way universal edit parallel (%s)",
-                    trace_id, bucket, _universal_edit_models,
+                    "[parallel][%s] No img2img-native models in DB for bucket=%s — "
+                    "falling back to admin-enabled edit variants: %s (out of candidates %s)",
+                    trace_id, bucket, _universal_edit_models, _edit_candidates,
                 )
                 yield _sse("testing_started", {
                     "bucket": bucket,
