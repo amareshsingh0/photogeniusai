@@ -437,6 +437,13 @@ Other buckets (photorealism, photorealism_portrait/humans, photorealism_product,
 
 ---
 
+## MAY 17 2026 — Production fixes
+
+1. **OpenAI multi-image edits**: `/v1/images/edits` requires `image[]` field for 2+ images, plain `image` for single. Repeated `image` parts returned HTTP 400 "Duplicate parameter" and broke every multi-ref generation (every gpt_image_2_edit call fell through to gemini_flash_edit, which also failed → no image returned). Fixed in [multi_provider_client.py:_call_openai_edit](apps/api/app/services/external/multi_provider_client.py). This corrects the May 8 note which had the field rule backwards.
+2. **Admin thumbnails 404**: `brandedImageUrl()` now detects when called from a host other than `NEXT_PUBLIC_APP_URL`'s host and emits absolute URLs (admin runs at `api.*` where the Next proxy `/api/img/*` doesn't exist). Same-host callers keep relative URLs.
+3. **Admin generations table**: defensive parse for legacy double-encoded `outputUrls` (string-of-array `'["https://..."]'`). Also normalized at the `/api/generations` boundary so all consumers get clean `string[]`.
+4. **Sticky prompt bar overlap**: generate page now measures sticky bar with `ResizeObserver` and feeds height back as outer wrapper's `paddingBottom`. Replaces static `pb-[88px]` which under-reserved when refs/suggestions/error banner expanded the bar past ~90px. Canvas card + columns now always clear the bar.
+
 ## MULTI-REFERENCE + GPT IMAGE 2 EDIT (May 5 2026)
 
 Generate page now supports up to **5 reference images** (was 1). UI: `+` button with badge showing count, gallery thumbnails, individual X-to-remove + "Clear all".

@@ -331,6 +331,36 @@ def _format_for_gpt_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
         "Single unified composition - no panels, no variants, no collage."
     )
 
+    # Reference handling (May 17 2026) — see _format_for_gpt for rationale.
+    ref_roles_payload_s = payload.get("reference_roles") or {}
+    n_people_ref_s   = int(ref_roles_payload_s.get("people")   or 0) if isinstance(ref_roles_payload_s, dict) else 0
+    n_products_ref_s = int(ref_roles_payload_s.get("products") or 0) if isinstance(ref_roles_payload_s, dict) else 0
+    if n_people_ref_s or n_products_ref_s:
+        ref_bits_s: list[str] = []
+        if n_people_ref_s == 1:
+            ref_bits_s.append(
+                "- The PERSON reference is an IDENTITY ANCHOR ONLY (face, skin tone, hair, "
+                "general build). Do NOT copy pose, expression, hands, body angle, outfit, "
+                "or background. Invent a fresh pose and action that fits the scene below."
+            )
+            ref_bits_s.append(
+                "- Wardrobe and accessories follow this prompt — render any glasses, "
+                "sunglasses, cap, hat, dress, watch, jewelry, or other items mentioned, "
+                "regardless of what the reference person wore."
+            )
+        elif n_people_ref_s >= 2:
+            ref_bits_s.append(
+                f"- The {n_people_ref_s} PERSON references are IDENTITY ANCHORS ONLY. "
+                "Match each face; invent a NEW group composition with fresh poses and "
+                "outfits per this prompt."
+            )
+        if n_products_ref_s >= 1:
+            ref_bits_s.append(
+                "- PRODUCT reference(s) define exact packaging/label/color/shape; "
+                "placement and lighting come from this prompt."
+            )
+        sections.append("REFERENCE IMAGE HANDLING:\n" + "\n".join(ref_bits_s))
+
     # Scene description - directly from Haiku.
     if scene:
         sections.append(f"SCENE DESCRIPTION:\n{scene}")
@@ -451,6 +481,15 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     visual_metaphor = (visual.get("visual_metaphor") or "").strip()
     micro_details   = [str(d).strip() for d in (visual.get("micro_details") or []) if str(d).strip()]
 
+    # Reference image roles (May 17 2026) — when the user supplied people /
+    # product refs, GPT Image 2 /edits will otherwise copy the reference's
+    # pose/expression/clothing verbatim. Inject explicit identity-only +
+    # new-pose + free-styling guidance so the model treats refs as a headshot,
+    # not a storyboard, and allows accessory/outfit overrides from the prompt.
+    ref_roles_payload = payload.get("reference_roles") or {}
+    n_people_ref   = int(ref_roles_payload.get("people")   or 0) if isinstance(ref_roles_payload, dict) else 0
+    n_products_ref = int(ref_roles_payload.get("products") or 0) if isinstance(ref_roles_payload, dict) else 0
+
     persona_specialty = {
         "beauty":      "luxury beauty and cosmetics campaigns",
         "tech":        "premium consumer electronics campaigns",
@@ -501,6 +540,59 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
     if campaign_type and campaign_type != "general":
         strategy_bits.append(f"- CAMPAIGN TYPE: {campaign_type.replace('_', ' ')}")
     sections.append("STRATEGY BRIEF:\n" + "\n".join(strategy_bits))
+
+    # REFERENCE IMAGE HANDLING (only when refs are present) — critical for
+    # GPT Image 2 /edits. Without this section, /edits defaults to near-verbatim
+    # reproduction of the reference's pose, expression, outfit, and accessories,
+    # producing the "face transplanted onto same body" look the user complained
+    # about. Force identity-only + scene-driven pose + prompt-driven wardrobe.
+    if n_people_ref or n_products_ref:
+        ref_bits: list[str] = []
+        if n_people_ref == 1:
+            ref_bits.append(
+                "- The PERSON reference is an IDENTITY ANCHOR ONLY. Match the face, "
+                "skin tone, hair color/length, and general build. Do NOT copy pose, "
+                "expression, hand position, body angle, outfit, jewelry, makeup, or "
+                "background from the reference image."
+            )
+            ref_bits.append(
+                "- Pose, expression, and action MUST come from this prompt and the "
+                "scene description below — invent a fresh natural pose that fits the "
+                "ad's action (e.g. holding the product, mid-laugh, looking off-camera, "
+                "interacting with the scene). Treat the reference like a passport "
+                "photo, not a storyboard frame."
+            )
+            ref_bits.append(
+                "- Wardrobe and accessories are FULLY OVERRIDABLE by this prompt. If "
+                "the prompt mentions a dress, outfit, glasses, sunglasses, cap, hat, "
+                "watch, jewelry, scarf, or any item, render THAT item — ignore what "
+                "the reference person was wearing. If the prompt is silent on outfit, "
+                "choose something appropriate to the scene (do not default to the "
+                "reference's clothes)."
+            )
+        elif n_people_ref >= 2:
+            ref_bits.append(
+                f"- The {n_people_ref} PERSON references are IDENTITY ANCHORS ONLY. "
+                "Match each face/skin tone/hair, but invent a NEW group composition "
+                "with fresh poses, interactions, and expressions suited to the scene. "
+                "Do NOT preserve any reference's original pose or outfit."
+            )
+            ref_bits.append(
+                "- Wardrobe and accessories follow this prompt, not the references."
+            )
+        if n_products_ref == 1:
+            ref_bits.append(
+                "- The PRODUCT reference defines the exact item: packaging, label "
+                "typography, colors, shape, branding must all match. Placement, "
+                "angle, lighting, and surrounding scene are dictated by this prompt."
+            )
+        elif n_products_ref >= 2:
+            ref_bits.append(
+                f"- The {n_products_ref} PRODUCT references are a lineup — feature "
+                "all variants together with matching packaging fidelity, but arrange "
+                "and light them per this prompt."
+            )
+        sections.append("REFERENCE IMAGE HANDLING (read carefully):\n" + "\n".join(ref_bits))
 
     # PRIMARY COMMAND
     subject_phrase = f"the {cat_label} category" if cat_label != "consumer" else "a consumer brand"

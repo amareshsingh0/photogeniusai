@@ -2849,14 +2849,14 @@ def _build_user_message(
         n_extras   = int(reference_roles.get("extras")   or 0)
         if n_people:
             if n_people == 1:
-                role_bits.append("1 person reference (hero subject — match face/look)")
+                role_bits.append("1 person reference (hero subject — match face/identity ONLY; invent a NEW pose, expression, hand position, and body angle that fits the scene's action)")
             elif n_people == 2:
-                role_bits.append("2 people references (likely couple / pair — match both faces, place together in scene)")
+                role_bits.append("2 people references (likely couple / pair — match both faces, invent a fresh interaction/pose between them; do NOT preserve either reference's original pose)")
             else:
-                role_bits.append(f"{n_people} people references (group / ensemble — match all faces, frame all together)")
+                role_bits.append(f"{n_people} people references (group / ensemble — match all faces, arrange them in a NEW group composition with varied poses suited to the scene)")
         if n_products:
             if n_products == 1:
-                role_bits.append("1 product reference (feature this exact item)")
+                role_bits.append("1 product reference (feature this exact item — packaging/label/colors must match; placement and angle should suit the new scene)")
             else:
                 role_bits.append(f"{n_products} product references (variants / lineup — show all together unless prompt says otherwise)")
         if n_logos:
@@ -2868,8 +2868,15 @@ def _build_user_message(
             role_bits.append(f"{n_extras} other reference(s) (background / mood / style — see user prompt for role)")
         if role_bits:
             parts.append(
-                "REFERENCE IMAGES PROVIDED (numbered in this order — match identity / appearance):\n"
+                "REFERENCE IMAGES PROVIDED (numbered in this order):\n"
                 "  " + "\n  ".join(f"- {b}" for b in role_bits)
+                + "\n\nIDENTITY-vs-POSE RULE (critical for people refs): the reference image gives "
+                "FACE / SKIN TONE / HAIR / GENERAL LOOK only. It does NOT dictate pose, expression, "
+                "hand position, body angle, outfit, or framing. Your `depicted_subject` MUST describe "
+                "a NEW pose and action that fits the ad scene (e.g. 'holding an ice-cream cone mid-bite, "
+                "joyful laugh, eyes closed in delight, free hand gesturing'). NEVER write 'same pose as "
+                "reference', 'preserve pose', 'in the pose shown', or any phrasing that copies the "
+                "reference's stance. Treat the reference like a headshot, not a storyboard."
             )
 
     parts.append("Now produce the JSON object. Output JSON only.")
@@ -3379,6 +3386,12 @@ class SimplePromptEngine:
                 # Stage-1 classifier output (Gemini) -- generate_stream uses
                 # `classification.bucket` to override keyword-based detection.
                 "classification":       classification,
+                # Pass reference role counts through so model_prompt_formatter
+                # can inject identity-only / new-pose / accessory-mutation
+                # guidance into the per-model prompt (people refs especially —
+                # GPT Image 2 /edits defaults to pose-copy without explicit
+                # instruction to vary).
+                "reference_roles":      dict(reference_roles) if reference_roles else None,
                 "_recipe_key":          (recipe or {}).get("key"),
                 "_elapsed":             time.time() - start,
                 "_source":              "simple_engine",
