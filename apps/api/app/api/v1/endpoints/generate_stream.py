@@ -1551,63 +1551,102 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
         # showing parallel results from Flux family models that respect the ref.
         if req.reference_image_url:
             before = len(bucket_models)
+            _pre_filter = [(m.modelId, _canonical_model_key(m.modelId, default=m.modelId)) for m in bucket_models]
             bucket_models = [
                 m for m in bucket_models
                 if _canonical_model_key(m.modelId, default=m.modelId) in _IMG2IMG_CAPABLE_MODELS
             ]
+            _kept = {_canonical_model_key(m.modelId, default=m.modelId) for m in bucket_models}
+            _dropped = [(orig, canon) for (orig, canon) in _pre_filter if canon not in _kept]
             logger.info(
-                "[parallel][%s] Img2Img filter: %d → %d capable models for bucket=%s",
+                "[parallel][%s] Img2Img filter: %d → %d capable models for bucket=%s | kept=%s | dropped=%s",
                 trace_id, before, len(bucket_models), bucket,
+                sorted(_kept),
+                [f"{o}(→{c})" for o, c in _dropped],
             )
             if not bucket_models:
-                # No capable models in admin DB — fall back to single Kontext
-                # variant rather than failing the request.
-                fallback_key = _pick_img2img_model(req.quality)
+                # No img2img-native models in admin DB for this bucket.
+                # Previously we collapsed to a single gpt_image_2_edit call —
+                # but that loses the parallel testing UX (admin compares
+                # multiple providers) AND falls over when OpenAI billing /
+                # quota is exhausted (the entire request returns no image).
+                #
+                # Instead: run the 3 universal edit endpoints in parallel —
+                # gpt_image_2_edit (OpenAI), gemini_flash_edit (Google),
+                # flux_kontext (fal). Each handles refs natively and produces
+                # distinct outputs admin can compare. If one fails (billing,
+                # safety filter, etc.) the other two still ship results.
+                _universal_edit_models = ["gpt_image_2_edit", "gemini_flash_edit", "flux_kontext"]
                 logger.warning(
                     "[parallel][%s] No img2img-capable models in DB for bucket=%s — "
-                    "falling back to single %s",
-                    trace_id, bucket, fallback_key,
+                    "falling back to 3-way universal edit parallel (%s)",
+                    trace_id, bucket, _universal_edit_models,
                 )
                 yield _sse("testing_started", {
-                    "bucket": bucket, "total": 1, "models": [fallback_key],
-                    "trace_id": trace_id, "img2img_fallback": True,
+                    "bucket": bucket,
+                    "total":  len(_universal_edit_models),
+                    "models": _universal_edit_models,
+                    "trace_id": trace_id,
+                    "img2img_fallback": True,
                 })
-                # Wrap in heartbeat loop — GPT Image 2 edit can take 60s+ and
-                # nginx default proxy_read_timeout=60s would drop the connection.
-                _fb_task = asyncio.create_task(
-                    _generate_with_model(req, fallback_key, trace_id, quality_override=req.quality)
-                )
+                # Launch all in parallel, interleave heartbeats while any
+                # pending. Edit endpoints can take 60s+; nginx kills idle
+                # connections at 60s without keepalive.
+                _fb_tasks = {
+                    mk: asyncio.create_task(
+                        _generate_with_model(req, mk, trace_id, quality_override=req.quality)
+                    )
+                    for mk in _universal_edit_models
+                }
                 _fb_started = time.time()
-                while not _fb_task.done():
+                _fb_results: Dict[str, Any] = {}
+                _fb_completed = 0
+                _fb_total = len(_fb_tasks)
+                while _fb_tasks:
+                    done_keys = [k for k, t in _fb_tasks.items() if t.done()]
+                    if done_keys:
+                        for k in done_keys:
+                            try:
+                                _fb_results[k] = _fb_tasks[k].result()
+                            except Exception as _exc:
+                                logger.warning("[parallel][%s] %s raised: %s", trace_id, k, _exc)
+                                _fb_results[k] = None
+                            del _fb_tasks[k]
+                        for k in done_keys:
+                            r = _fb_results.get(k)
+                            if r:
+                                _fb_completed += 1
+                                yield _sse("model_result", {
+                                    "generationId":   r.get("generation_id"),
+                                    "imageUrl":       r.get("image_url"),
+                                    "modelId":        r.get("model_id"),
+                                    "tier":           r.get("tier"),
+                                    "latency":        r.get("latency"),
+                                    "cost":           r.get("cost"),
+                                    "textValidation": r.get("text_validation"),
+                                    "completed":      _fb_completed,
+                                    "total":          _fb_total,
+                                    "trace_id":       trace_id,
+                                })
+                        continue
                     try:
-                        result = await asyncio.wait_for(asyncio.shield(_fb_task), timeout=15.0)
-                        break
+                        await asyncio.wait_for(
+                            asyncio.shield(asyncio.wait(_fb_tasks.values(), return_when=asyncio.FIRST_COMPLETED)),
+                            timeout=15.0,
+                        )
                     except asyncio.TimeoutError:
                         yield _sse("heartbeat", {
                             "t":         int(time.time()),
                             "elapsed":   int(time.time() - _fb_started),
-                            "completed": 0,
-                            "total":     1,
+                            "completed": _fb_completed,
+                            "total":     _fb_total,
                             "trace_id":  trace_id,
                         })
-                else:
-                    result = _fb_task.result()
-                if result:
-                    yield _sse("model_result", {
-                        "generationId": result.get("generation_id"),
-                        "imageUrl":     result.get("image_url"),
-                        "modelId":      result.get("model_id"),
-                        "tier":         result.get("tier"),
-                        "latency":      result.get("latency"),
-                        "cost":         result.get("cost"),
-                        "textValidation": result.get("text_validation"),
-                        "completed":    1,
-                        "total":        1,
-                        "trace_id":     trace_id,
-                    })
                 yield _sse("testing_complete", {
-                    "total": 1, "completed": 1 if result else 0,
-                    "bucket": bucket, "trace_id": trace_id,
+                    "total":     _fb_total,
+                    "completed": _fb_completed,
+                    "bucket":    bucket,
+                    "trace_id":  trace_id,
                 })
                 return
 
