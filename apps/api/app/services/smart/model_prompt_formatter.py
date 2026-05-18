@@ -462,7 +462,7 @@ def _format_for_gpt_edit(base_prompt: str, payload: Dict[str, Any]) -> str:
        for accuracy.
     4. **No "reserve 35% blank copy space" instruction** - the model treats
        it as "leave area empty" and fails to render text in the reserved
-       zone (the exact blank-bottom-half failure seen in the Vadilal ad).
+       zone (the blank-bottom-half failure mode for multi-reference ads).
     5. **Reduce text strings**: 1-2 max for edit mode. Multi-line headline +
        subhead + CTA + footer all together overwhelms the parser and the
        reserved space stays blank when rendering fails.
@@ -582,16 +582,39 @@ def _format_for_gpt_edit(base_prompt: str, payload: Dict[str, Any]) -> str:
     text_lines: list[str] = []
     # Pick the ONE primary text. Prefer headline, fall back to tagline.
     primary_text = headline or tagline
+
+    # Detect if ANY text string contains non-Latin script. gpt-image-2 renders
+    # Devanagari (Hindi/Marathi), Bengali, Tamil, Telugu, Kannada, Malayalam,
+    # Gurmukhi (Punjabi), Gujarati, CJK, Arabic, etc. at 95%+ accuracy when
+    # the prompt gives the actual native characters (not transliteration).
+    # The Devanagari unicode block is U+0900-U+097F; we use a broad "any
+    # non-ASCII char" check which covers ALL non-Latin scripts in one pass.
+    def _has_non_latin(s: str) -> bool:
+        return any(ord(c) > 127 for c in (s or ""))
+
+    multilingual_hint = ""
+    if _has_non_latin(primary_text) or _has_non_latin(cta) or _has_non_latin(brand_name):
+        multilingual_hint = (
+            " IMPORTANT: the text above contains native-script characters "
+            "(such as Devanagari for Hindi/Marathi, Bengali, Tamil, Telugu, "
+            "Kannada, Malayalam, Gurmukhi/Punjabi, Gujarati, CJK, Arabic, "
+            "or similar). Render every character EXACTLY as given in the "
+            "native script with correct conjuncts, matras/diacritics, and "
+            "letter shapes - do NOT romanize, transliterate, or substitute "
+            "Latin letters. Use a font that supports the script; the rendered "
+            "text must be readable to a native speaker."
+        )
+
     if primary_text:
         text_lines.append(
             f'Render this exact text ONCE in the image, in clear bold sans-serif: "{primary_text}". '
             "No extra words. No duplicate text. No reflow. The text must appear exactly once and be "
             "perfectly legible. Place the text on a clean uncluttered area of the canvas; do NOT "
             "leave the area blank if rendering is uncertain - shrink the text or move it before "
-            "omitting it. If the text contains non-English characters, render them exactly as given."
+            "omitting it." + multilingual_hint
         )
     # CTA only if it's a clear short action verb AND we have headroom.
-    if cta and primary_text and len(cta) <= 20:
+    if cta and primary_text and len(cta) <= 30:
         text_lines.append(
             f'Also render a small call-to-action button at the bottom-right with the exact text: "{cta}". '
             "Same rule: no extra words, appears once, legible."
@@ -600,7 +623,7 @@ def _format_for_gpt_edit(base_prompt: str, payload: Dict[str, Any]) -> str:
         # No headline but a CTA -> treat CTA as the single text element.
         text_lines.append(
             f'Render this exact text ONCE on the image as a short button: "{cta}". '
-            "No extra words, no duplicate text, perfectly legible."
+            "No extra words, no duplicate text, perfectly legible." + multilingual_hint
         )
     if text_lines:
         sections.append("Text rendering:\n" + "\n".join(text_lines))
@@ -1114,15 +1137,43 @@ def _format_for_gpt(base_prompt: str, payload: Dict[str, Any]) -> str:
 
     sections.append("VISUAL AND LAYOUT INSTRUCTIONS:\n" + "\n".join(layout_lines))
 
-    # Final non-negotiable directives
-    sections.append(
+    # Final non-negotiable directives. Detect if any rendered text string
+    # contains native (non-Latin) script characters - gpt-image-2 renders
+    # Devanagari (Hindi/Marathi), Bengali, Tamil, Telugu, Kannada, Malayalam,
+    # Gurmukhi (Punjabi), Gujarati, CJK, Arabic and similar at 95%+ accuracy
+    # WHEN given the actual native characters (not Latin transliteration).
+    # Any non-ASCII char on any text field flips on the explicit hint.
+    def _txt(*vals: str) -> bool:
+        return any(ord(c) > 127 for v in vals if v for c in v)
+    has_native = _txt(
+        headline, subhead, cta, brand_name, tagline,
+        " ".join(benefits) if benefits else "",
+        " ".join(signals) if signals else "",
+        legal_disclaimer,
+    )
+    if any(_txt(item) for item in lineup_items):
+        has_native = True
+
+    quality_block = (
         "QUALITY REQUIREMENTS: All text must be perfectly legible and correctly spelled - "
         "no garbled letters, no extra characters, no fragmented words. "
         "Render every element listed above. Single unified image, no multiple panels."
     )
+    if has_native:
+        quality_block += (
+            " The text above contains native-script characters (Devanagari for "
+            "Hindi/Marathi, Bengali, Tamil, Telugu, Kannada, Malayalam, "
+            "Gurmukhi/Punjabi, Gujarati, CJK, Arabic, or similar). Render every "
+            "character EXACTLY in the native script with correct conjuncts, "
+            "matras/diacritics, and letter shapes - do NOT romanize, "
+            "transliterate, or substitute Latin letters. Pick a font that "
+            "supports the script; rendered text must be readable to a native "
+            "speaker."
+        )
+    sections.append(quality_block)
 
     result = "\n\n".join(s for s in sections if s)
-    logger.info("[formatter][gpt_image_2] %d->%d chars", len(base_prompt), len(result))
+    logger.info("[formatter][gpt_image_2] %d->%d chars native_script=%s", len(base_prompt), len(result), has_native)
     return result
 
 
