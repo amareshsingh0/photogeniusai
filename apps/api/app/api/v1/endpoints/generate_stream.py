@@ -766,6 +766,16 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                     logger.warning("[stream][%s] ref-captioner failed (non-fatal): %s",
                                    trace_id, _rc_err)
 
+            # Build the list of reference image URLs for the web research
+            # agent (multimodal — Gemini Vision looks at them to decide what
+            # to search for: style match, similar compositions, palette
+            # references, etc).
+            _wr_image_urls: List[str] = []
+            if req.reference_image_url:
+                _wr_image_urls.append(req.reference_image_url)
+            if req.extra_image_urls:
+                _wr_image_urls.extend(u for u in req.extra_image_urls if u)
+
             simple_out = await simple_engine.enrich(
                 user_prompt=req.prompt,
                 bucket=bucket,
@@ -777,6 +787,7 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
                 style_reference_description=style_reference_description or None,
                 reference_roles=ref_roles if any(ref_roles.values()) else None,
                 reference_captions=reference_captions or None,
+                reference_image_urls=_wr_image_urls or None,
             )
             logger.info(
                 "[stream][%s] SimpleEngine done in %.2fs intent=%s aspect=%s",
@@ -1769,6 +1780,12 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
                     logger.warning("[parallel][%s] style-extractor failed (non-fatal): %s",
                                    trace_id, _se_err)
 
+            _par_wr_image_urls: List[str] = []
+            if req.reference_image_url:
+                _par_wr_image_urls.append(req.reference_image_url)
+            if req.extra_image_urls:
+                _par_wr_image_urls.extend(u for u in req.extra_image_urls if u)
+
             enrich = await simple_engine.enrich(
                 user_prompt=req.prompt,
                 bucket=db_bucket,
@@ -1780,6 +1797,7 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
                 style_reference_description=_par_style_desc or None,
                 reference_roles=_par_ref_roles if any(_par_ref_roles.values()) else None,
                 reference_captions=_par_captions or None,
+                reference_image_urls=_par_wr_image_urls or None,
             )
             enriched_prompt = enrich.get("prompt") or req.prompt
             enriched_neg = enrich.get("negative_prompt") or (req.negative_prompt or "")

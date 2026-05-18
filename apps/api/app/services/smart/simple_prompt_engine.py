@@ -3315,6 +3315,7 @@ class SimplePromptEngine:
         style_reference_description: Optional[str] = None,
         reference_roles: Optional[Dict[str, int]] = None,
         reference_captions: Optional[Dict[str, List[str]]] = None,
+        reference_image_urls: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Enrich a user prompt into a production-ready image-gen prompt.
 
@@ -3346,13 +3347,50 @@ class SimplePromptEngine:
             # classification result via the returned dict.
             effective_bucket = classification.get("bucket") or bucket
 
-            # STAGE 2 - Haiku enrichment with recipe-pre-injected user message.
+            # STAGE 1.5 — Live web research (Gemini 2.5 Flash + Google Search
+            # Grounding). One free-form multimodal call that reads the prompt,
+            # any uploaded reference images, and what we already have on hand,
+            # then decides whether to search and what to look up. Returns a
+            # 'WEB RESEARCH CONTEXT' block to inject into the user message
+            # (cached system prompt stays warm). Non-fatal — returns None on
+            # disable / skip / failure.
+            web_research_block: Optional[str] = None
+            try:
+                from app.services.smart.web_research import gather_research
+                existing_assets = {
+                    "has_recipe":      recipe is not None,
+                    "has_bucket_hint": effective_bucket in _BUCKET_HINTS,
+                    "cached_brand":    "",
+                    "recipe_summary":  (
+                        ", ".join((recipe.get("key", ""),)) if recipe else ""
+                    ),
+                }
+                web_research_block = await gather_research(
+                    user_prompt=user_prompt,
+                    classification=classification,
+                    reference_image_urls=reference_image_urls,
+                    existing_assets=existing_assets,
+                )
+                if web_research_block:
+                    logger.info(
+                        "[simple-engine] web research injected: %d chars",
+                        len(web_research_block),
+                    )
+            except Exception as _wr_err:  # noqa: BLE001
+                logger.warning(
+                    "[simple-engine] web research failed (non-fatal): %s",
+                    _wr_err,
+                )
+
+            # STAGE 2 - GPT-4o-mini enrichment with recipe + web research
+            # injected into the user message.
             user_msg = _build_user_message(
                 user_prompt, effective_bucket, tier, width, height, style, brand_kit,
                 style_reference_description=style_reference_description,
                 recipe=recipe,
                 reference_roles=reference_roles,
                 reference_captions=reference_captions,
+                web_research=web_research_block,
             )
             # Instructor returns a validated Pydantic instance (or raises after
             # max_retries exhausts). No more loose-JSON parsing.
