@@ -44,7 +44,7 @@ FEATURE_FLAGS = [
     {
         "key": "USE_SIMPLE_ENGINE",
         "category": "Prompt Engine",
-        "description": "Single Claude Haiku 4.5 call enriches the prompt. Recommended ON — fastest path with the cleanest output.",
+        "description": "Single GPT-4o mini call enriches the prompt. Recommended ON — fastest path with the cleanest output.",
         "type": "boolean",
         "default": "true",
     },

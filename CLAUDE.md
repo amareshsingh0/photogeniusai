@@ -40,7 +40,7 @@
 | Database | Prisma ORM → Supabase PostgreSQL |
 | Auth | DEV_USER pattern (Clerk removed; JWT pending Sprint 8) |
 | Process | PM2 (both web + api) |
-| AI — Prompt Engine | Claude Haiku 4.5 (extended thinking for briefs, standard for params) |
+| AI — Prompt Engine | **GPT-4o mini** (primary, simple_prompt_engine, May 19 2026); Claude Haiku 4.5 retained for design_agent_chain legacy + claude_prompt_engine_v2 fallback |
 | AI — Copy Writer | Gemini 2.5 Flash |
 | AI — Quality Judge | Gemini Vision (12 dims) |
 
@@ -230,7 +230,7 @@ USER PROMPT
    v
 [Recipe lookup] direct key match in category_recipes JSON (no alias substring scan)
    v
-[Stage 2] Haiku 4.5 enrichment with recipe pre-injected into user message
+[Stage 2] GPT-4o mini enrichment with recipe pre-injected into user message
    v
 Per-model formatter (GPT/Imagen/Wan/Flux dialects)
    v
@@ -357,11 +357,11 @@ The full ad-creator mental model now baked into the system prompt + schema + for
 | Stage | Model | Purpose |
 |---|---|---|
 | 1. Intent classification | Gemini 2.5 Flash | bucket + category_key + has_text + is_ad + platform |
-| 2. Prompt enrichment | Claude Haiku 4.5 | structured ad brief generation (the ONLY Haiku call) |
-| 2.5. Critique pass | Gemini 2.5 Flash | 10-point ad-creator checklist review of Haiku draft |
+| 2. Prompt enrichment | GPT-4o mini (May 19 2026) | structured ad brief generation (was Claude Haiku 4.5) |
+| 2.5. Critique pass | Gemini 2.5 Flash | 10-point ad-creator checklist review of draft |
 | 3. Per-model formatting | (deterministic Python) | model dialect translation |
 
-Rule: Haiku owns prompt enrichment ONLY. Every other LLM step (classification, critique, future review/judging tasks) uses Gemini.
+Rule: GPT-4o mini owns prompt enrichment ONLY. Every other LLM step (classification, critique, future review/judging tasks) uses Gemini.
 
 ---
 

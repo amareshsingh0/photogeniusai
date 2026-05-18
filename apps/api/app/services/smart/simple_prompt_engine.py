@@ -1,9 +1,9 @@
 """
-Simple Prompt Engine — One-shot Haiku 4.5 prompt enrichment.
+Simple Prompt Engine — One-shot GPT-4o mini prompt enrichment.
 
 Replaces the multi-stage agent chain (Master Strategist + Copy Writer + Image
-Prompter + Layout Planner + Claude Stage A/B/Validator) with a single Claude
-Haiku 4.5 call that:
+Prompter + Layout Planner + Claude Stage A/B/Validator) with a single
+GPT-4o mini call that:
 
   1. Detects what the user is asking for (ad / poster / hoarding / wishes /
      product shot / portrait / etc).
@@ -427,7 +427,7 @@ def _format_recipe_for_prompt(rec: Dict[str, Any]) -> str:
 
     return "\n".join(bits)
 
-_CLAUDE_MODEL = os.getenv("SIMPLE_ENGINE_MODEL", "claude-haiku-4-5-20251001")
+_CLAUDE_MODEL = os.getenv("SIMPLE_ENGINE_MODEL", "gpt-4o-mini")
 _MAX_TOKENS   = int(os.getenv("SIMPLE_ENGINE_MAX_TOKENS", "4000"))
 _TEMPERATURE  = float(os.getenv("SIMPLE_ENGINE_TEMPERATURE", "0.7"))
 
@@ -454,8 +454,8 @@ _QUALITY_CRITIQUE_BUCKETS = {
     "interior_arch", "artistic", "anime", "vector",
     "multiperson", "character_consistency",
 }
-_USE_CACHING  = os.getenv("USE_PROMPT_CACHING", "true").lower() != "false"
-# Instructor auto-retries up to N times when Haiku violates the schema
+_USE_CACHING  = False  # OpenAI does not support Anthropic-style prompt caching
+# Instructor auto-retries up to N times when GPT-4o mini violates the schema
 # (each retry appends the validation error to the conversation, so the model
 # self-corrects). 2 retries = 3 total attempts which is plenty.
 _INSTRUCTOR_MAX_RETRIES = int(os.getenv("SIMPLE_ENGINE_MAX_RETRIES", "2"))
@@ -2787,11 +2787,19 @@ def _build_user_message(
     recipe: Optional[Dict[str, Any]] = None,
     reference_roles: Optional[Dict[str, int]] = None,
     reference_captions: Optional[Dict[str, List[str]]] = None,
+    web_research: Optional[str] = None,
 ) -> str:
     parts = [f"USER REQUEST:\n{user_prompt.strip()}"]
     bucket_hint = _BUCKET_HINTS.get(bucket)
     if bucket_hint:
         parts.append(f"BUCKET: {bucket} - {bucket_hint}")
+
+    # Live web research (Gemini Search Grounding) — brand identity + current
+    # category design trends + typography trends. Always goes in the dynamic
+    # user message so the cached system prompt stays warm. None when the
+    # feature is disabled or all lanes returned empty.
+    if web_research:
+        parts.append(web_research.strip())
 
     # Category recipe injection. Recipe is pre-resolved by the Stage-1 Gemini
     # classifier (see _classify_intent_gemini). Goes in the dynamic user
@@ -3272,27 +3280,27 @@ def _parse_json_loose(text: str) -> Dict[str, Any]:
 
 
 class SimplePromptEngine:
-    """Single-call Haiku 4.5 prompt enricher with Pydantic-validated output."""
+    """Single-call GPT-4o mini prompt enricher with Pydantic-validated output."""
 
     def __init__(self):
         self._model = _CLAUDE_MODEL
-        self._client = None  # lazy — Instructor-wrapped Anthropic client
+        self._client = None  # lazy — Instructor-wrapped OpenAI client
 
     def _get_client(self):
-        """Return an Instructor-wrapped Anthropic client.
+        """Return an Instructor-wrapped OpenAI client.
 
         Instructor patches the client so calls with `response_model=...` enforce
-        the Pydantic schema via Anthropic tool-calling. Schema violations trigger
+        the Pydantic schema via OpenAI tool-calling. Schema violations trigger
         automatic retries (max_retries) with the validation error appended to the
         conversation — the model corrects its own output before we see it.
         """
         if self._client is None:
-            import anthropic
             import instructor
-            key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+            from openai import OpenAI
+            key = os.getenv("OPENAI_API_KEY", "").strip()
             if not key:
-                raise RuntimeError("ANTHROPIC_API_KEY not set — required for simple_prompt_engine")
-            self._client = instructor.from_anthropic(anthropic.Anthropic(api_key=key))
+                raise RuntimeError("OPENAI_API_KEY not set — required for simple_prompt_engine")
+            self._client = instructor.from_openai(OpenAI(api_key=key))
         return self._client
 
     async def enrich(
@@ -3474,29 +3482,21 @@ class SimplePromptEngine:
         }
 
     def _call_sync(self, user_msg: str) -> SimpleEngineOutput:
-        """Single Claude call with Pydantic validation — runs in worker thread."""
+        """Single GPT-4o mini call with Pydantic validation — runs in worker thread."""
         client = self._get_client()
 
-        if _USE_CACHING:
-            # Static system prompt cached; user message stays dynamic.
-            # Instructor passes through to Anthropic, so cache_control still works.
-            system = [{
-                "type": "text",
-                "text": _SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},
-            }]
-        else:
-            system = _SYSTEM_PROMPT
-
-        # response_model + max_retries = automatic schema enforcement.
-        # If Haiku returns malformed output, Instructor re-prompts with the
+        # OpenAI uses messages array with system role — no separate system param.
+        # response_model + max_retries = automatic schema enforcement via Instructor.
+        # If GPT-4o mini returns malformed output, Instructor re-prompts with the
         # validation error appended, up to max_retries times.
-        return client.messages.create(
+        return client.chat.completions.create(
             model=self._model,
             max_tokens=_MAX_TOKENS,
-            system=system,
             temperature=_TEMPERATURE,
-            messages=[{"role": "user", "content": user_msg}],
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user",   "content": user_msg},
+            ],
             response_model=SimpleEngineOutput,
             max_retries=_INSTRUCTOR_MAX_RETRIES,
         )
@@ -3534,7 +3534,7 @@ class SimplePromptEngine:
             f"  bucket={classification.get('bucket')}, category={classification.get('category_key')}, "
             f"is_ad={classification.get('is_ad')}, has_text={classification.get('has_text')}, "
             f"platform={classification.get('platform')}\n\n"
-            f"HAIKU FIRST DRAFT (review and improve - DO NOT start over):\n"
+            f"GPT-4o mini FIRST DRAFT (review and improve - DO NOT start over):\n"
             f"=== prompt (image-gen prompt) ===\n{draft.prompt[:2000]}\n\n"
             f"=== ad_copy ===\n"
             f"  headline:              {(ac.headline if ac else '') or '(empty)'}\n"
@@ -3843,7 +3843,7 @@ class SimplePromptEngine:
             f"USER ORIGINAL REQUEST:\n{user_prompt.strip()}\n\n"
             f"INTENT CLASSIFIER:\n  bucket={bucket}, category={classification.get('category_key')}, "
             f"has_text={classification.get('has_text')}, platform={classification.get('platform')}\n\n"
-            f"HAIKU FIRST DRAFT (review and improve - DO NOT start over):\n"
+            f"GPT-4o mini FIRST DRAFT (review and improve - DO NOT start over):\n"
             f"=== prompt (image-gen prompt) ===\n{(draft.prompt or '')[:2400]}\n\n"
             f"=== negative_prompt ===\n{draft.negative_prompt or '(empty)'}\n\n"
             f"=== visual ===\n"
