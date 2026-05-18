@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Models that need special formatting at the generate_stream level.
 # Google/Imagen models are excluded  -  _distill_for_imagen runs inside _call_google().
-_GPT_MODELS     = {"gpt_image_2"}
+_GPT_MODELS     = {"gpt_image_2", "gpt_image_2_edit"}
 _FLUX_MODELS    = {"flux_2_flex", "flux_2_pro", "flux_kontext", "flux_kontext_max",
                    "flux_2_dev", "flux_2_turbo", "flux_2_max", "flux_fill"}
 _GOOGLE_MODELS  = {"gemini_3_imagen", "gemini_3_1_imagen", "imagen_4_base",
@@ -173,6 +173,13 @@ def format_prompt_for_model(
         return base_prompt
 
     if model_key in _GPT_MODELS:
+        # Edit-mode (gpt_image_2_edit) has a fundamentally different prompt
+        # contract than generation-mode per OpenAI's cookbook: 3-sentence
+        # Replace/Preserve/Match pattern with single text line, vs the
+        # full sectioned ad-brief used for /v1/images/generations. Route
+        # based on model variant.
+        if model_key == "gpt_image_2_edit":
+            return _format_for_gpt_edit(base_prompt, simple_payload)
         return _format_for_gpt(base_prompt, simple_payload)
 
     if model_key in _FLUX_MODELS:
@@ -437,6 +444,191 @@ def _format_for_gpt_scene(base_prompt: str, payload: Dict[str, Any]) -> str:
     result = "\n\n".join(s for s in sections if s)
     mode = "typographic-scene" if is_typographic_scene else "scene"
     logger.info("[formatter][gpt_image_2][%s] %d->%d chars", mode, len(base_prompt), len(result))
+    return result
+
+
+def _format_for_gpt_edit(base_prompt: str, payload: Dict[str, Any]) -> str:
+    """Edit-mode formatter for gpt-image-2 /v1/images/edits.
+
+    Different contract than generation-mode (_format_for_gpt). Per OpenAI's
+    official cookbook (image-gen-models-prompting-guide):
+
+    1. **3-sentence structure**: Replace [change]. Preserve [locked elements].
+       Match [physical realism / lighting / perspective].
+    2. **Reference each input by index**: "Image 1: ... Image 2: ...".
+    3. **Text rendering**: put literal text in quotes, ALL CAPS for emphasis,
+       "no extra words, no duplicate text, no reflow", "ensure text appears
+       once and is perfectly legible". Brand names: spell letter-by-letter
+       for accuracy.
+    4. **No "reserve 35% blank copy space" instruction** - the model treats
+       it as "leave area empty" and fails to render text in the reserved
+       zone (the exact blank-bottom-half failure seen in the Vadilal ad).
+    5. **Reduce text strings**: 1-2 max for edit mode. Multi-line headline +
+       subhead + CTA + footer all together overwhelms the parser and the
+       reserved space stays blank when rendering fails.
+    6. **Skip non-Latin script** for now: transliterated Hindi ("Zara
+       Muskuraiye") + English subhead combo is unreliable; community guides
+       and OpenAI docs don't validate it. We send the headline as-given but
+       constrain to a SINGLE primary line.
+
+    This produces ~1500-2500 char prompts vs ~5000+ for the generation-mode
+    template, which matches the playbook length (50-150 word range).
+    """
+    ad_copy: Dict[str, Any] = payload.get("ad_copy") or {}
+    visual:  Dict[str, Any] = payload.get("visual") or {}
+
+    headline   = (ad_copy.get("headline") or "").strip()
+    subhead    = (ad_copy.get("subhead") or "").strip()
+    cta        = (ad_copy.get("cta") or "").strip()
+    brand_name = (ad_copy.get("brand_name") or "").strip()
+    tagline    = (ad_copy.get("emotional_tagline") or "").strip()
+
+    mood        = (visual.get("mood") or "").strip()
+    palette     = (visual.get("color_palette") or "").strip()
+    lighting    = (visual.get("lighting") or "").strip()
+    background  = (visual.get("background") or "").strip()
+
+    ref_roles_payload = payload.get("reference_roles") or {}
+    if not isinstance(ref_roles_payload, dict):
+        ref_roles_payload = {}
+    n_people   = int(ref_roles_payload.get("people")   or 0)
+    n_products = int(ref_roles_payload.get("products") or 0)
+    n_logos    = int(ref_roles_payload.get("logos")    or 0)
+
+    ref_captions_payload = payload.get("reference_captions") or {}
+    if not isinstance(ref_captions_payload, dict):
+        ref_captions_payload = {}
+    people_caps  = ref_captions_payload.get("people")   or []
+    product_caps = ref_captions_payload.get("products") or []
+    logo_caps    = ref_captions_payload.get("logos")    or []
+
+    sections: list[str] = []
+
+    # ---- SECTION 1: REPLACE / COMPOSE INSTRUCTION ---------------------
+    # State what the new image should depict in ONE concise sentence.
+    # Build it from depicted_subject + scene cues, no design jargon.
+    depicted_subject = (visual.get("depicted_subject") or "").strip()
+    scene_bits: list[str] = []
+    if depicted_subject:
+        scene_bits.append(depicted_subject)
+    elif n_people and n_products:
+        scene_bits.append("the person holding/using the product in a polished commercial scene")
+    elif n_products:
+        scene_bits.append("the product as the hero of a polished commercial scene")
+    elif n_people:
+        scene_bits.append("the person in a polished commercial scene")
+    if background:
+        scene_bits.append(f"set against {background}")
+    if mood:
+        scene_bits.append(f"with a {mood} mood")
+    compose_sentence = "Compose a single cohesive advertisement image showing " + ", ".join(scene_bits) + "."
+    sections.append(compose_sentence)
+
+    # ---- SECTION 2: REFERENCE IMAGE INDEX + ROLES ---------------------
+    # OpenAI cookbook prescribes "Image 1: ... Image 2: ..." indexing.
+    ref_lines: list[str] = []
+    idx = 1
+    for cap in people_caps[:n_people or len(people_caps)]:
+        cap = (cap or "").strip()
+        if cap:
+            ref_lines.append(f"Image {idx} is the PERSON whose identity must be preserved: {cap}")
+            idx += 1
+    for cap in product_caps[:n_products or len(product_caps)]:
+        cap = (cap or "").strip()
+        if cap:
+            ref_lines.append(f"Image {idx} is the PRODUCT whose packaging/shape/colors must be preserved exactly: {cap}")
+            idx += 1
+    for cap in logo_caps[:n_logos or len(logo_caps)]:
+        cap = (cap or "").strip()
+        if cap:
+            ref_lines.append(f"Image {idx} is the LOGO/WORDMARK to render verbatim with correct spelling: {cap}")
+            idx += 1
+    if ref_lines:
+        sections.append("\n".join(ref_lines))
+
+    # ---- SECTION 3: PRESERVE LIST (per cookbook "repeat preserve list") -
+    preserve_lines: list[str] = []
+    if n_people:
+        preserve_lines.append(
+            "Preserve from the person reference ONLY the face, skin tone, hair color and length, "
+            "and general build. Invent a fresh natural pose, expression, and outfit that fits the "
+            "scene; do NOT copy the reference's pose, gaze, hand position, clothing, or background."
+        )
+    if n_products:
+        preserve_lines.append(
+            "Preserve the product's exact packaging, label typography, shape, and colors. "
+            "Place it naturally into the new scene with lighting/angle dictated by this prompt."
+        )
+    if n_logos:
+        if brand_name:
+            # Letter-by-letter brand-name spelling per cookbook tip for tricky words.
+            spelled = " ".join(list(brand_name))
+            preserve_lines.append(
+                f'Preserve the logo wordmark verbatim with correct spelling "{brand_name}" '
+                f"(letters: {spelled}). Place it naturally in the layout, do NOT distort, "
+                f"crop, or re-style the logo."
+            )
+        else:
+            preserve_lines.append(
+                "Preserve the logo wordmark verbatim with correct spelling. Do NOT distort, "
+                "crop, or re-style the logo."
+            )
+    if preserve_lines:
+        sections.append("Preserve list: " + " ".join(preserve_lines))
+
+    # ---- SECTION 4: TEXT TO RENDER (1 primary line, optional small CTA) -
+    # Per cookbook: quotes + ALL CAPS hint + "no extra words, no duplicate
+    # text, text appears once, perfectly legible". Edit mode = max 1-2 strings.
+    text_lines: list[str] = []
+    # Pick the ONE primary text. Prefer headline, fall back to tagline.
+    primary_text = headline or tagline
+    if primary_text:
+        text_lines.append(
+            f'Render this exact text ONCE in the image, in clear bold sans-serif: "{primary_text}". '
+            "No extra words. No duplicate text. No reflow. The text must appear exactly once and be "
+            "perfectly legible. Place the text on a clean uncluttered area of the canvas; do NOT "
+            "leave the area blank if rendering is uncertain - shrink the text or move it before "
+            "omitting it. If the text contains non-English characters, render them exactly as given."
+        )
+    # CTA only if it's a clear short action verb AND we have headroom.
+    if cta and primary_text and len(cta) <= 20:
+        text_lines.append(
+            f'Also render a small call-to-action button at the bottom-right with the exact text: "{cta}". '
+            "Same rule: no extra words, appears once, legible."
+        )
+    elif cta and not primary_text:
+        # No headline but a CTA -> treat CTA as the single text element.
+        text_lines.append(
+            f'Render this exact text ONCE on the image as a short button: "{cta}". '
+            "No extra words, no duplicate text, perfectly legible."
+        )
+    if text_lines:
+        sections.append("Text rendering:\n" + "\n".join(text_lines))
+    else:
+        # When we have NO text, tell the model explicitly so it doesn't
+        # invent placeholder text on its own.
+        sections.append("Text rendering: do not render any text on the image except the logo wordmark already covered above.")
+
+    # ---- SECTION 5: MATCH (physical realism) --------------------------
+    match_bits: list[str] = []
+    if lighting:
+        match_bits.append(f"lighting: {lighting}")
+    if palette:
+        match_bits.append(f"color palette: {palette}")
+    match_bits.append("photorealistic skin texture and natural shadows")
+    match_bits.append("premium commercial photography quality, sharp focus on the hero element")
+    sections.append("Match: " + "; ".join(match_bits) + ".")
+
+    # ---- SECTION 6: HARD CONSTRAINTS (cookbook style) ----------------
+    sections.append(
+        "Constraints: single unified image, no panels, no collage, no grid, no variants. "
+        "No watermarks. No extra logos or trademarks beyond the one provided. "
+        "No placeholder text like '[Brand]' or 'Lorem Ipsum'. No floating quotation marks. "
+        "Final output must read as a finished print-ready advertisement, not a draft."
+    )
+
+    result = "\n\n".join(s for s in sections if s)
+    logger.info("[formatter][gpt_image_2_edit] %d->%d chars (edit mode)", len(base_prompt), len(result))
     return result
 
 
