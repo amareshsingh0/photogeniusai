@@ -715,7 +715,7 @@ export default function AdminDashboard() {
                     disabled={settingsRestarting}
                     className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-4 py-2 text-sm text-amber-100 hover:bg-amber-500/25 disabled:opacity-50"
                   >
-                    {settingsRestarting ? "Restarting…" : "⚠️ Pending changes — Restart API"}
+                    {settingsRestarting ? "Restarting..." : "Pending changes - Restart API"}
                   </button>
                 )}
               </div>
