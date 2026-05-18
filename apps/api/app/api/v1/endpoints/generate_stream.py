@@ -325,6 +325,39 @@ def _sse_keepalive() -> str:
     return ": keepalive\n\n"
 
 
+async def _await_with_keepalive(coro, *, interval: float = 10.0):
+    """Drive a long-running awaitable while emitting periodic SSE keepalives.
+
+    Yields the literal SSE keepalive frame every `interval` seconds and then
+    yields a final ('result', value) tuple so callers can pull the result
+    out. nginx kills idle proxied connections at 60s by default; web-research
+    + enrichment + critique can run 30-50s with zero downstream events,
+    triggering 'client disconnected, aborting pipeline'. This wrapper closes
+    that gap without changing the underlying coroutine's API.
+
+    Usage in an async-generator that yields SSE strings:
+        result = None
+        async for chunk in _await_with_keepalive(slow_coro(), interval=10):
+            if isinstance(chunk, tuple) and chunk[0] == "_result":
+                result = chunk[1]
+            else:
+                yield chunk
+    """
+    task = asyncio.ensure_future(coro)
+    try:
+        while not task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=interval)
+            except asyncio.TimeoutError:
+                yield _sse_keepalive()
+        # Surface the result (or re-raise the task's exception).
+        yield ("_result", task.result())
+    except BaseException:
+        if not task.done():
+            task.cancel()
+        raise
+
+
 def _pick_image_size(width: int, height: int) -> str:
     if width == height:
         return "square_hd"
@@ -714,7 +747,14 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             if req.reference_image_url and not (req.style or "").strip():
                 try:
                     from app.services.smart.style_extractor import extract_style_description
-                    style_reference_description = await extract_style_description(req.reference_image_url)
+                    async for _chunk in _await_with_keepalive(
+                        extract_style_description(req.reference_image_url),
+                        interval=10.0,
+                    ):
+                        if isinstance(_chunk, tuple) and _chunk[0] == "_result":
+                            style_reference_description = _chunk[1]
+                        else:
+                            yield _chunk
                     if style_reference_description:
                         logger.info(
                             "[stream][%s] style-extractor produced %d chars",
@@ -753,7 +793,14 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             if any(ref_caption_input.values()):
                 try:
                     from app.services.smart.reference_captioner import caption_references
-                    reference_captions = await caption_references(ref_caption_input)
+                    async for _chunk in _await_with_keepalive(
+                        caption_references(ref_caption_input),
+                        interval=10.0,
+                    ):
+                        if isinstance(_chunk, tuple) and _chunk[0] == "_result":
+                            reference_captions = _chunk[1]
+                        else:
+                            yield _chunk
                     if reference_captions:
                         cap_summary = ", ".join(
                             f"{r}={len(c)}" for r, c in reference_captions.items()
@@ -776,19 +823,27 @@ async def _stream_pipeline(req: StreamRequest, trace_id: str) -> AsyncIterator[s
             if req.extra_image_urls:
                 _wr_image_urls.extend(u for u in req.extra_image_urls if u)
 
-            simple_out = await simple_engine.enrich(
-                user_prompt=req.prompt,
-                bucket=bucket,
-                tier=quality,
-                width=req.width,
-                height=req.height,
-                style=req.style,
-                brand_kit=req.brand_kit,
-                style_reference_description=style_reference_description or None,
-                reference_roles=ref_roles if any(ref_roles.values()) else None,
-                reference_captions=reference_captions or None,
-                reference_image_urls=_wr_image_urls or None,
-            )
+            simple_out = None
+            async for _chunk in _await_with_keepalive(
+                simple_engine.enrich(
+                    user_prompt=req.prompt,
+                    bucket=bucket,
+                    tier=quality,
+                    width=req.width,
+                    height=req.height,
+                    style=req.style,
+                    brand_kit=req.brand_kit,
+                    style_reference_description=style_reference_description or None,
+                    reference_roles=ref_roles if any(ref_roles.values()) else None,
+                    reference_captions=reference_captions or None,
+                    reference_image_urls=_wr_image_urls or None,
+                ),
+                interval=10.0,
+            ):
+                if isinstance(_chunk, tuple) and _chunk[0] == "_result":
+                    simple_out = _chunk[1]
+                else:
+                    yield _chunk
             logger.info(
                 "[stream][%s] SimpleEngine done in %.2fs intent=%s aspect=%s",
                 trace_id, simple_out.get("_elapsed", 0),
@@ -1760,7 +1815,14 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
             if any(_par_cap_input.values()):
                 try:
                     from app.services.smart.reference_captioner import caption_references
-                    _par_captions = await caption_references(_par_cap_input)
+                    async for _chunk in _await_with_keepalive(
+                        caption_references(_par_cap_input),
+                        interval=10.0,
+                    ):
+                        if isinstance(_chunk, tuple) and _chunk[0] == "_result":
+                            _par_captions = _chunk[1]
+                        else:
+                            yield _chunk
                     if _par_captions:
                         logger.info(
                             "[parallel][%s] ref-captioner produced %s",
@@ -1775,7 +1837,14 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
             if req.reference_image_url and not (req.style or "").strip():
                 try:
                     from app.services.smart.style_extractor import extract_style_description
-                    _par_style_desc = await extract_style_description(req.reference_image_url)
+                    async for _chunk in _await_with_keepalive(
+                        extract_style_description(req.reference_image_url),
+                        interval=10.0,
+                    ):
+                        if isinstance(_chunk, tuple) and _chunk[0] == "_result":
+                            _par_style_desc = _chunk[1]
+                        else:
+                            yield _chunk
                 except Exception as _se_err:
                     logger.warning("[parallel][%s] style-extractor failed (non-fatal): %s",
                                    trace_id, _se_err)
@@ -1786,19 +1855,28 @@ async def _parallel_model_stream(req: StreamRequest, trace_id: str) -> AsyncIter
             if req.extra_image_urls:
                 _par_wr_image_urls.extend(u for u in req.extra_image_urls if u)
 
-            enrich = await simple_engine.enrich(
-                user_prompt=req.prompt,
-                bucket=db_bucket,
-                tier=requested_tier,
-                width=req.width,
-                height=req.height,
-                style=req.style,
-                brand_kit=req.brand_kit,
-                style_reference_description=_par_style_desc or None,
-                reference_roles=_par_ref_roles if any(_par_ref_roles.values()) else None,
-                reference_captions=_par_captions or None,
-                reference_image_urls=_par_wr_image_urls or None,
-            )
+            enrich = None
+            async for _chunk in _await_with_keepalive(
+                simple_engine.enrich(
+                    user_prompt=req.prompt,
+                    bucket=db_bucket,
+                    tier=requested_tier,
+                    width=req.width,
+                    height=req.height,
+                    style=req.style,
+                    brand_kit=req.brand_kit,
+                    style_reference_description=_par_style_desc or None,
+                    reference_roles=_par_ref_roles if any(_par_ref_roles.values()) else None,
+                    reference_captions=_par_captions or None,
+                    reference_image_urls=_par_wr_image_urls or None,
+                ),
+                interval=10.0,
+            ):
+                if isinstance(_chunk, tuple) and _chunk[0] == "_result":
+                    enrich = _chunk[1]
+                else:
+                    yield _chunk
+            enrich = enrich or {}
             enriched_prompt = enrich.get("prompt") or req.prompt
             enriched_neg = enrich.get("negative_prompt") or (req.negative_prompt or "")
             logger.info(

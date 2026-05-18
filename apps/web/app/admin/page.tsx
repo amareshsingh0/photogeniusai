@@ -275,8 +275,12 @@ export default function AdminDashboard() {
   };
 
   const handleToggleSetting = async (category: string, key: string, currentValue: boolean) => {
+    // Setting toggles write to .env and require a process restart to take
+    // effect. Auto-restarting on every toggle caused a restart storm during
+    // admin sessions (each toggle = 12s downtime). Toggles now save silently;
+    // user clicks the explicit Restart button in Feature Config tab when
+    // ready to apply all queued changes at once.
     try {
-      // Update setting
       const res = await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -288,21 +292,7 @@ export default function AdminDashboard() {
       });
 
       if (!res.ok) throw new Error("Failed to update setting");
-
-      // Auto-restart API to apply changes
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.creatives.bimoraai.com";
-      const restartRes = await fetch(`${apiUrl}/api/v1/admin/config/restart`, {
-        method: "POST",
-      });
-
-      if (!restartRes.ok) {
-        console.warn("Failed to auto-restart API:", await restartRes.text());
-      }
-
-      // Refresh settings after restart
-      setTimeout(() => {
-        fetchSettings();
-      }, 3000);
+      await fetchSettings();
     } catch (err: any) {
       setError(err.message);
     }

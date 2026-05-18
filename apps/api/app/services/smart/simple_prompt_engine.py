@@ -3551,13 +3551,20 @@ class SimplePromptEngine:
         }
 
     def _call_sync(self, user_msg: str) -> SimpleEngineOutput:
-        """Single GPT-4o mini call with Pydantic validation — runs in worker thread."""
-        client = self._get_client()
+        """Single GPT-4o mini call with Pydantic validation — runs in worker thread.
 
-        # OpenAI uses messages array with system role — no separate system param.
-        # response_model + max_retries = automatic schema enforcement via Instructor.
-        # If GPT-4o mini returns malformed output, Instructor re-prompts with the
-        # validation error appended, up to max_retries times.
+        OpenAI automatic prompt caching: when the message sequence's leading
+        1024+ tokens are identical across requests, OpenAI caches them
+        server-side and bills cached input tokens at 50% (gpt-4o-mini) for up
+        to 5-10 minutes. Our ~78K-char `_SYSTEM_PROMPT` is the first message
+        and never changes per call, so every subsequent call within the cache
+        TTL hits the cache. The `user=` parameter improves cache routing —
+        OpenAI uses it as a hash key to keep requests on the same backend
+        replica, raising hit-rate. We pin a single stable id ("simple_engine")
+        because every call should hit the same cached prefix; we are not
+        partitioning by end-user.
+        """
+        client = self._get_client()
         return client.chat.completions.create(
             model=self._model,
             max_tokens=_MAX_TOKENS,
@@ -3568,6 +3575,7 @@ class SimplePromptEngine:
             ],
             response_model=SimpleEngineOutput,
             max_retries=_INSTRUCTOR_MAX_RETRIES,
+            user="simple_engine",
         )
 
     async def _critique_with_gemini(
