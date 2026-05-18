@@ -135,11 +135,11 @@ Calculate total as: (palette*0.30) + (emotional*0.25) + (forbidden*0.20) + (comp
             ),
         )
         raw = (resp.text or "{}").strip()
-        # Strip markdown fences
+        # Strip markdown fences then parse with LLM-tolerant repair.
         import re
         raw = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`").strip()
-        import json
-        scores = json.loads(raw)
+        from app.services.smart.simple_prompt_engine import _parse_llm_json
+        scores = _parse_llm_json(raw)
 
         total = float(scores.get("total") or (
             scores.get("palette_score", 70) * 0.30 +

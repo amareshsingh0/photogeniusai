@@ -292,6 +292,35 @@ async def _get_prompt_lock(prompt: str) -> asyncio.Lock:
         return lock
 
 
+def _parse_llm_json(raw: str) -> Dict[str, Any]:
+    """Parse JSON from an LLM response, repairing common malformations.
+
+    LLMs (Gemini, GPT-4o-mini, Haiku, etc.) emit JSON that breaks in dozens
+    of ways: truncation by max_output_tokens, trailing commas, single quotes,
+    unescaped inner quotes, unquoted keys, missing closing braces, leading
+    chatter before the `{`, code-fence wrappers, etc. Hand-rolling repair
+    logic per failure mode is a treadmill — every new case needs a new patch.
+
+    Strategy: try strict json.loads first (fastest, ~99% of well-formed
+    outputs). On failure, fall back to `json_repair` which is purpose-built
+    for LLM outputs and handles every common malformation we've seen across
+    the codebase. Single dependency, zero per-case patches.
+    """
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # json_repair is permissive: returns {} for completely garbled input
+        # rather than raising. That's the right behavior here — caller will
+        # treat empty dict the same as a parse failure (sanitization step
+        # filters fields against an allowlist, so empty falls back).
+        from json_repair import repair_json
+        repaired = repair_json(raw, return_objects=True)
+        if not isinstance(repaired, dict):
+            # repair_json returned a list / scalar / "" — not a valid object.
+            raise ValueError(f"json_repair produced non-dict: {type(repaired).__name__}")
+        return repaired
+
+
 async def classify_intent(user_prompt: str) -> Dict[str, Any]:
     """Public async classifier - cached per prompt with per-prompt locking.
 
@@ -339,18 +368,30 @@ async def _classify_intent_gemini(user_prompt: str) -> Dict[str, Any]:
 
     try:
         client = _get_gemini_client()
+        # Disable thinking for classifier — it's a 5-key structured output, not
+        # a reasoning task. Gemini 2.5 Flash with response_mime_type=json was
+        # burning ~1000-1400 thinking tokens before emitting, then getting
+        # truncated mid-JSON when the budget hit. thinking_budget=0 sends the
+        # full 4000 tokens straight to output. Bumped ceiling 1500 -> 4000 for
+        # safety (5-key payload fits in <200, but list-of-keys recipes block
+        # injected by _build_classifier_prompt can push input → some models
+        # still pad output). Verified: gemini-2.5-flash supports both knobs.
+        gen_cfg_kwargs: Dict[str, Any] = dict(
+            temperature=0.1,
+            max_output_tokens=4000,
+            response_mime_type="application/json",
+        )
+        try:
+            gen_cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+        except Exception:
+            # Older google-genai SDK versions lack ThinkingConfig — fine, just
+            # rely on raised max_output_tokens to absorb the thinking burn.
+            pass
+
         resp = await client.aio.models.generate_content(
             model=_CLASSIFIER_MODEL,
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-                # Gemini 2.5 Flash with response_mime_type=json sometimes burns
-                # ~1000 tokens of internal "thinking" before emitting the JSON.
-                # 1500 = safe ceiling for our 5-key payload, well under the
-                # model's 8192 hard cap.
-                max_output_tokens=1500,
-                response_mime_type="application/json",
-            ),
+            config=types.GenerateContentConfig(**gen_cfg_kwargs),
         )
         raw = (resp.text or "").strip()
         if not raw:
@@ -365,7 +406,7 @@ async def _classify_intent_gemini(user_prompt: str) -> Dict[str, Any]:
         first, last = raw.find("{"), raw.rfind("}")
         if first != -1 and last != -1 and last > first:
             raw = raw[first:last + 1]
-        data = json.loads(raw)
+        data = _parse_llm_json(raw)
     except Exception as e:
         logger.warning("[classifier] gemini call failed: %s -- raw=%r -- using fallback",
                        e, (raw[:200] if 'raw' in locals() else "<no response>"))
@@ -3259,15 +3300,14 @@ def _fill_empty_quotes_from_adcopy(prompt: str, ad_copy: Optional["AdCopy"]) -> 
 
 
 def _parse_json_loose(text: str) -> Dict[str, Any]:
-    """Extract a JSON object from the model output, tolerating stray fences."""
+    """Extract a JSON object from model output. Delegates to _parse_llm_json
+    for repair-on-failure behavior across all LLM JSON failure modes."""
     cleaned = _JSON_FENCE_RE.sub("", text).strip()
-    # Find the first { and last } — model sometimes adds a stray comment
     first = cleaned.find("{")
     last  = cleaned.rfind("}")
-    if first == -1 or last == -1 or last <= first:
-        raise ValueError("No JSON object found in model output")
-    candidate = cleaned[first:last + 1]
-    return json.loads(candidate)
+    if first != -1 and last > first:
+        cleaned = cleaned[first:last + 1]
+    return _parse_llm_json(cleaned)
 
 
 class SimplePromptEngine:
@@ -3672,7 +3712,7 @@ class SimplePromptEngine:
             first, last = raw.find("{"), raw.rfind("}")
             if first != -1 and last != -1 and last > first:
                 raw = raw[first:last + 1]
-            data = json.loads(raw)
+            data = _parse_llm_json(raw)
         except Exception as e:  # noqa: BLE001
             logger.warning("[critique] gemini call failed: %s -- keeping draft", e)
             return draft
@@ -3950,7 +3990,7 @@ class SimplePromptEngine:
             first, last = raw.find("{"), raw.rfind("}")
             if first != -1 and last != -1 and last > first:
                 raw = raw[first:last + 1]
-            data = json.loads(raw)
+            data = _parse_llm_json(raw)
         except Exception as e:  # noqa: BLE001
             logger.warning("[critique-quality] gemini call failed: %s -- keeping draft", e)
             return draft

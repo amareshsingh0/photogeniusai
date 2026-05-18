@@ -24,6 +24,7 @@ google-genai>=1.0.0             # Gemini 2.5 Flash — prompt engine (NEW SDK)
 anthropic>=0.40.0               # Claude — design_agent_chain legacy typography path only
 openai>=1.30.0                  # GPT-4o mini — simple_prompt_engine primary enrichment path
 instructor>=1.6.0               # Pydantic-validated structured output (works with both Anthropic + OpenAI)
+json-repair>=0.35.0             # Tolerant LLM-JSON parser — handles truncation, trailing commas, unescaped quotes, missing braces, code-fence wrappers, etc.
 # fal-client NOT needed — we call fal.ai REST API directly via httpx
 # Together AI:   httpx to api.together.xyz  (set TOGETHER_API_KEY in .env.local)
 # Fireworks AI:  httpx to api.fireworks.ai  (set FIREWORKS_API_KEY in .env.local)

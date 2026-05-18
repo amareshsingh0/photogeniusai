@@ -75,15 +75,16 @@ Return ONLY valid JSON, no markdown fences:
 
 
 def _extract_json(text: str) -> Dict:
-    """Extract first JSON object from LLM response, even if wrapped in markdown."""
-    # Strip markdown fences if present
+    """Extract first JSON object from LLM response. Tolerates markdown
+    fences, truncation, trailing commas, and other common LLM malformations
+    via json_repair fallback (see simple_prompt_engine._parse_llm_json)."""
     text = re.sub(r"```(?:json)?\s*", "", text).strip()
-    # Find first { ... }
     start = text.find("{")
     end = text.rfind("}") + 1
     if start == -1 or end == 0:
         raise ValueError("No JSON object found in LLM response")
-    return json.loads(text[start:end])
+    from app.services.smart.simple_prompt_engine import _parse_llm_json
+    return _parse_llm_json(text[start:end])
 
 
 class ClaudePromptEngine:
