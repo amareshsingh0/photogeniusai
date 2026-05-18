@@ -94,6 +94,12 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Settings-tab restart banner. Toggles no longer auto-restart; we mark
+  // pending=true on each save so the banner appears, then admin clicks
+  // Restart once to apply the whole batch.
+  const [settingsRestartPending, setSettingsRestartPending] = useState(false);
+  const [settingsRestarting, setSettingsRestarting] = useState(false);
+
   // Users state
   const [users, setUsers] = useState<User[]>([]);
   const [usersPage, setUsersPage] = useState(1);
@@ -277,9 +283,10 @@ export default function AdminDashboard() {
   const handleToggleSetting = async (category: string, key: string, currentValue: boolean) => {
     // Setting toggles write to .env and require a process restart to take
     // effect. Auto-restarting on every toggle caused a restart storm during
-    // admin sessions (each toggle = 12s downtime). Toggles now save silently;
-    // user clicks the explicit Restart button in Feature Config tab when
-    // ready to apply all queued changes at once.
+    // admin sessions (each toggle = 12s downtime). Toggles now save silently
+    // and mark `settingsRestartPending=true`; the banner at the top of the
+    // Settings tab surfaces a "Restart now" button so admin applies all
+    // queued changes in one restart.
     try {
       const res = await fetch("/api/admin/settings", {
         method: "PATCH",
@@ -292,9 +299,29 @@ export default function AdminDashboard() {
       });
 
       if (!res.ok) throw new Error("Failed to update setting");
+      setSettingsRestartPending(true);
       await fetchSettings();
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const restartAPIFromSettings = async () => {
+    if (!confirm("Restart the API to apply queued setting changes? ~12s downtime.")) {
+      return;
+    }
+    try {
+      setSettingsRestarting(true);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.creatives.bimoraai.com";
+      const res = await fetch(`${apiUrl}/api/v1/admin/config/restart`, { method: "POST" });
+      if (!res.ok) throw new Error(`Restart failed: ${await res.text()}`);
+      setSettingsRestartPending(false);
+      // Give PM2 a few seconds to come back before refreshing
+      setTimeout(() => fetchSettings(), 4000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSettingsRestarting(false);
     }
   };
 
@@ -680,7 +707,18 @@ export default function AdminDashboard() {
           {/* Settings Tab */}
           {activeTab === "settings" && settings && (
             <div className="space-y-6">
-              <h2 className="font-display text-2xl tracking-tight">System Settings</h2>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h2 className="font-display text-2xl tracking-tight">System Settings</h2>
+                {settingsRestartPending && (
+                  <button
+                    onClick={restartAPIFromSettings}
+                    disabled={settingsRestarting}
+                    className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-4 py-2 text-sm text-amber-100 hover:bg-amber-500/25 disabled:opacity-50"
+                  >
+                    {settingsRestarting ? "Restarting…" : "⚠️ Pending changes — Restart API"}
+                  </button>
+                )}
+              </div>
 
               <div className="glass-panel rounded-2xl p-5">
                 <p className="kerned text-white/40 mb-4">GENERATION BACKEND</p>
