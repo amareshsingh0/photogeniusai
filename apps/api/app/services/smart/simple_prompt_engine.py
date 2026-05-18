@@ -542,29 +542,20 @@ class AdCopy(BaseModel):
         "Empty for tech/SaaS/minimal brands where wordmark alone is enough. Renders in the layout TOP-CENTER above the headline OR top-left as a corner mark."
     ))
     website_url: Optional[str] = Field(default=None, max_length=120, description=(
-        "Website URL to render in the ad footer/CTA strip. POPULATE for D2C / brand / event / "
-        "service ads — these all carry a website on real-world posters and feel unfinished without one. "
-        "If the user provided a URL, use it verbatim. If not, generate a plausible placeholder of the form "
-        "'www.{brand_or_event_slug}.com' or '.in' (e.g. 'www.bhajansandhya.com', 'www.glamour.in', "
-        "'www.spiritualharmony.org'). Use '.org' for non-profits/spiritual, '.in' for India D2C, "
-        "'.com' for global brands. Empty ONLY for personal-use posts (wishes, greetings, family events) "
-        "where a website is genuinely not expected."
+        "Website URL to render in the ad. OPT-IN ONLY: leave EMPTY unless the user explicitly "
+        "provided a URL or explicitly asked for one (e.g. 'add website www.foo.com', 'include our site'). "
+        "DO NOT invent placeholder URLs. Real ads often omit a URL; an invented placeholder makes the ad look fake."
     ))
     contact_info: Optional[str] = Field(default=None, max_length=200, description=(
-        "Phone, address, social handle, or location footer — POPULATE for events / restaurants / "
-        "real estate / local services / D2C brands where a venue or contact is expected by genre convention. "
-        "If user provided specifics, use verbatim. If not, generate plausible placeholders that make the poster "
-        "feel finished: phone in correct country format ('+91 98765 43210' for India, '+1 (212) 555-0182' for US), "
-        "address with city/state/PIN ('Shree Ram Bhajan Hall, 123 Bhakti Path, Vrindavan, UP – 281121', "
-        "'42 Anna Salai, Chennai – 600002'), social handle ('@brandname.official'). "
-        "Use multi-line format separated by ' | '. Empty ONLY for personal posts where contact isn't expected."
+        "Phone, address, or location footer. OPT-IN ONLY: leave EMPTY unless the user explicitly "
+        "provided contact details (phone / address / venue) or explicitly asked for them. "
+        "DO NOT invent placeholder phone numbers or addresses. Invented contact info on a real brand ad is misleading."
     ))
     footer_strip: list[str] = Field(default_factory=list, description=(
-        "0–4 short footer-strip badges that anchor the bottom of the ad — these are the 'credibility close' line typical of D2C / e-commerce / festival ads. "
-        "Examples: ['FREE SHIPPING PAN INDIA', 'COD AVAILABLE', '7-DAY RETURNS', 'DIRECTLY FROM WEAVERS'] for D2C apparel; "
-        "['DINE-IN • TAKEAWAY • DELIVERY', 'OPEN 11 AM – 11 PM'] for restaurants; "
-        "['EARLY-BIRD ENDS THURSDAY', 'GROUP DISCOUNTS'] for events. "
-        "MAX 2-4 words each. Each renders as a separate icon+label pair in a horizontal strip at the bottom of the ad. Empty for minimalist/luxury ads where extra info dilutes the mood."
+        "0–4 short footer-strip badges (e.g. ['FREE SHIPPING', 'COD AVAILABLE']). "
+        "OPT-IN ONLY: leave EMPTY list `[]` unless the user explicitly listed badges or explicitly asked for them "
+        "('add free shipping badge', 'show COD and returns'). DO NOT auto-generate trust badges. "
+        "Inventing 'FREE SHIPPING' / 'COD' / 'RETURNS' for a brand without verifying is misleading."
     ))
 
     # Event/lineup schedule (May 6 2026 — for multi-act event posters: bhajan series,
@@ -2038,17 +2029,17 @@ When the output needs words on the image:
 
 - **USER-STATED COLORS / FONTS / LANGUAGE / VISUAL DIRECTIONS ARE LAW — NEVER OVERRIDE.** When the user explicitly states a color ("use white orange color", "in blue and gold", "pastel pink palette"), a font ("in serif", "use script lettering"), a language ("Hindi", "Hinglish", "include English and Tamil"), an aspect ratio, or any concrete visual direction — that instruction is NON-NEGOTIABLE and overrides all default industry-color logic, archetype defaults, and atmospheric mood mappings. The 60-30-10 ratio, color psychology guides, and industry-chromatic-logic exist to fill the GAPS when the user is silent — they NEVER override an explicit user instruction. If the user said "white and orange" for a devotional poster, the palette is "warm cream/off-white 60% (background), saffron orange 30% (accent panels), deep marigold orange 10% (CTA/dates)" — NOT maroon, NOT red, NOT gold-on-burgundy even if "devotional/temple" archetype suggests those. If the user says "Hindi welcome line included", at least one prominent Hindi line MUST appear on canvas verbatim. If the user names specific people/dates/times ("Pandit X on May 4 at 6:30 PM"), every name/date/time renders verbatim in the layout — no swapping for fictional alternatives, no dropping the time. Direct user words are the floor; archetype guidance only applies above that floor.
 
-- **POPULATE THE FULL BRAND-IDENTITY LAYER FOR D2C / E-COMMERCE / EVENT / SERVICE ADS.** A real-world ad is incomplete without 4 elements that ChatGPT/Midjourney always include but AI ad engines often skip. You MUST populate these schema fields whenever the ad is for a brand/business/event:
+- **BRAND-IDENTITY LAYER IS OPT-IN, NEVER AUTO-FILLED.** The 4 brand-identity fields below are powerful when the user wants them, but inventing placeholders for them clutters the ad and can be misleading. Treat each one as STRICTLY OPT-IN — populate ONLY when the user explicitly provides the value OR explicitly asks for it in the prompt. Otherwise leave the field empty / null / `[]`.
 
-  • `brand_emblem_description` — describe a small decorative crest/mandala/diamond/circle-emblem to render ABOVE the wordmark or in the top-left corner. Real ads pair the brand name with a tiny ornate mark. For luxury fashion: "small ornate gold diamond emblem with stylized first-letter monogram inside, lotus motif accents". For organic: "minimalist circular badge with leaf icon". For events/spiritual: "small mandala with om symbol". Empty ONLY for tech/SaaS where wordmark alone fits the minimal aesthetic.
+  • `brand_emblem_description` — populate ONLY if the user explicitly describes an emblem/crest/mandala/monogram, or asks for one. Do NOT auto-invent decorative marks for "real-world ad feel".
 
-  • `website_url` — generate a plausible URL for D2C/brand/event ads. Format: `www.{brandslug}.in` for Indian brands, `.com` for global, `.org` for non-profits/spiritual. Examples: `www.glamour.in`, `www.bhajansandhya.com`, `www.spiritualharmony.org`. Renders in the CTA strip. Empty ONLY for personal posts (wishes, family events).
+  • `website_url` — populate ONLY if the user explicitly provides a URL (e.g. "add www.vadilal.com") or explicitly asks for one ("include our website"). NEVER invent placeholder URLs like `www.brandname.in`. An invented URL on a real brand ad is misleading.
 
-  • `contact_info` — generate plausible phone + address for events/restaurants/local services/D2C heritage brands. Format: `+91 98765 43210 | <Venue/Office>, <Area>, <City> – <PIN>`. Real-feel placeholder makes the poster finished. Empty for personal posts only.
+  • `contact_info` — populate ONLY if the user explicitly provides phone / address / venue details, or explicitly asks for them. NEVER invent placeholder phone numbers, addresses, PINs, or social handles. Invented contact info on a real brand poster is misleading.
 
-  • `footer_strip` — 3-4 short footer-strip badges for the bottom credibility close. For D2C: `["FREE SHIPPING PAN INDIA", "COD AVAILABLE", "7-DAY RETURNS", "DIRECTLY FROM WEAVERS"]`. For events: `["FAMILY WELCOME", "PARKING AVAILABLE", "ENTRY FREE", "ALL AGES"]`. For restaurants: `["DINE-IN • TAKEAWAY • DELIVERY", "OPEN 11 AM – 11 PM"]`. EMPTY footer = poster looks like an unfinished draft.
+  • `footer_strip` — populate ONLY if the user explicitly lists footer badges (e.g. "show FREE SHIPPING and COD") or asks for them. NEVER auto-generate trust badges like `FREE SHIPPING / COD / RETURNS / AUTHENTIC` — these are claims the brand may not actually offer.
 
-  TEST: if your output has only `headline` + `subhead` + `cta` + `benefit_lines` + `trust_signals`, the ad is INCOMPLETE. The brand-identity layer (emblem + website + contact + footer) is what separates an unfinished AI draft from a real-world ChatGPT-class poster.
+  DEFAULT BEHAVIOR: leave all 4 fields empty unless the user opted in. A poster with just `headline` + `subhead` + `cta` + `benefit_lines` + `trust_signals` is a complete, clean ad. The brand-identity layer is an enhancement the user requests, not a requirement.
 
 - **QUOTED TEXT IS A FLOOR, NOT A CEILING — STILL INVENT THE FULL AD FRAMEWORK.** When the user writes `"with text 'BEAT FEST 2026' and 'March 15'"` or `"with text 'GRAND OPENING' and 'Free Dessert'"`, those quoted strings are the **mandatory** copy — but the ad is NOT complete with just those. A real festival/restaurant/event poster also needs: a fictional **brand name** (e.g. "PULSE PRESENTS", "EMBER & SAGE"), 2-4 short **benefit_lines** (e.g. "60+ Artists", "3 Stages", "Food Trucks" / "Hand-Crafted", "Local Sourcing", "Live Music"), 2-3 **trust_signals** (e.g. "Sold Out 2025", "Press Pick" / "Zomato 4.7★", "Time Out Approved"), an **emotional_tagline** (e.g. "One Night. Pure Sound." / "Where every plate becomes a story."), and a **cta** (e.g. "Get Tickets", "Reserve Now"). User-quoted text fills `headline` + maybe `subhead`; you fill EVERYTHING ELSE. A poster with only a giant headline + date and nothing else looks like a placeholder, not a finished ad. Compare: ❌ `BEAT FEST 2026 / March 15` (3 elements, looks like a draft) vs ✅ `BEAT FEST 2026 / March 15 / 60+ Artists • 3 Stages • Food Trucks / "Pulse Presents" wordmark / Get Tickets button / "One Night. Pure Sound." tagline / Sold Out 2025 trust badge` (8 elements, finished poster).
 - Use straight double quotes for exact render: `"Mornings, Upgraded"`.
@@ -2154,11 +2145,11 @@ _BUCKET_HINTS = {
         "  5. TYPOGRAPHY — MAX 2 fonts (1 display + 1 body). Format: 'display: <font> / body: "
         "<font>'. Specify weight + tracking + per-element styling (headline_typography / "
         "subhead_typography / cta_typography). 3+ fonts = amateur.\n"
-        "  6. BRAND-IDENTITY LAYER — for D2C / event / heritage / spiritual / fashion / food brands "
-        "ALWAYS populate: brand_emblem_description (small ornate crest above wordmark), website_url "
-        "(www.brand.in/.com), contact_info (phone | venue | @social), footer_strip (3-4 trust "
-        "badges: FREE SHIPPING / COD / RETURNS / AUTHENTIC). Without these, output looks unfinished "
-        "vs ChatGPT-quality ads.\n"
+        "  6. BRAND-IDENTITY LAYER — OPT-IN ONLY. Populate brand_emblem_description / website_url / "
+        "contact_info / footer_strip ONLY when the user explicitly provided the value OR explicitly "
+        "asked for it ('add website www.foo.com', 'show COD and free shipping badges', 'add phone "
+        "and address'). NEVER invent placeholder URLs, phone numbers, addresses, or trust badges — "
+        "auto-generated brand-identity data is misleading on a real brand ad. Default = empty/null/[].\n"
         "  7. ANTI-PATTERNS in negative_prompt: 'collage, multi-panel, design sheet, pitch deck, "
         "Option 1/2/3, lorem ipsum, garbled letters, misspelled words, fake placeholder text, "
         "overlapping text, text on busy background, more than 3 focal points, watermark, "
@@ -3624,10 +3615,10 @@ class SimplePromptEngine:
             " 14. cta: 2-3 WORDS, action verb. CONVERT generic to Call-to-Value ('Buy Now' -> 'Start Saving Today'). For conversion objective MUST be present.\n"
             " 15. benefit_lines: each 2-3 words MAX (icon-badge format). Reject sentences.\n"
             " 16. legal_disclaimer: MANDATORY for alcohol / tobacco / pharma / financial / gambling / supplements. If category is regulated and field is empty, FILL IT.\n"
-            " 17. brand_emblem_description: MANDATORY for D2C / luxury / fashion / food / hospitality / event / spiritual / heritage brands. Real ads have a small ornate crest/mandala/diamond/circle-emblem above the wordmark. If empty, INVENT one matching the brand archetype (luxury -> ornate gold diamond; organic -> leaf badge; spiritual -> mandala+om; tech -> minimalist geometric mark). Empty ONLY for pure tech/SaaS where wordmark alone fits.\n"
-            " 18. website_url: MANDATORY for any brand/D2C/event/service ad. If empty, GENERATE a plausible URL: `www.{brandslug}.in` for Indian brands, `.com` for global, `.org` for non-profits/spiritual. Empty ONLY for personal posts (wishes, family events).\n"
-            " 19. contact_info: MANDATORY for events / restaurants / real-estate / local-services / D2C heritage brands. If empty, GENERATE plausible '+91 98765 XXXXX | <Venue/Office>, <Area>, <City> – <PIN> | @brandname.official'. Empty ONLY for personal posts.\n"
-            " 20. footer_strip: MANDATORY for D2C / e-commerce / event / service ads — 3-4 short footer badges that anchor the bottom credibility close. If empty, GENERATE per genre: D2C -> ['FREE SHIPPING', 'COD AVAILABLE', 'EASY RETURNS', 'AUTHENTIC']; events -> ['FAMILY WELCOME', 'PARKING AVAILABLE', 'ALL AGES']. Empty ONLY for minimalist luxury where extra info dilutes mood.\n"
+            " 17. brand_emblem_description: OPT-IN ONLY. Keep populated ONLY if the user explicitly described an emblem/crest/mandala/monogram or asked for one. Otherwise, STRIP this field to null. Do NOT invent decorative marks.\n"
+            " 18. website_url: OPT-IN ONLY. Keep populated ONLY if the user explicitly provided a URL or asked for one. Otherwise, STRIP this field to null — invented URLs like `www.brandname.in` are misleading on real brand ads.\n"
+            " 19. contact_info: OPT-IN ONLY. Keep populated ONLY if the user explicitly provided phone/address/venue or asked for them. Otherwise, STRIP this field to null — invented contact info is misleading.\n"
+            " 20. footer_strip: OPT-IN ONLY. Keep populated ONLY if the user explicitly listed badges (e.g. 'show FREE SHIPPING') or asked for them. Otherwise, STRIP this list to []. Do NOT auto-generate FREE SHIPPING / COD / RETURNS / AUTHENTIC — these are unverified brand claims.\n"
             " 21. lineup_items: MANDATORY when prompt mentions 'lineup', 'series', 'schedule', 'sessions', 'speakers', 'concerts', 'performances', 'workshops', 'sermons', 'festival days'. Each entry format: '<DATE> | <NAME or TITLE> | <TIME> | <LOCATION optional>'. If user listed names/dates, use VERBATIM. If user said 'lineup of N artists' without specifics, INVENT N plausible names from that genre with sequential weekly dates and consistent time. Generic 3-pill benefit collapse for a lineup prompt = REJECT and rewrite as proper lineup_items array.\n\n"
             "===== HARD ANTI-PATTERNS (must remove) =====\n"
             "  A. NO markdown chars (#, *, _, `, ~) inside any \"...\" quoted text in the prompt.\n"
